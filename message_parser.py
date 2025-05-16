@@ -945,6 +945,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
     try:
         now = datetime.now(pytz.timezone('Asia/Tokyo'))
         lines = [line.strip() for line in message.splitlines() if line.strip()]
+        
         # 1. 明示的な日付＋時刻パターン
         for line in lines:
             # 5/16 13:00
@@ -960,6 +961,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 start_time = datetime(year, month, day, hour, minute, tzinfo=pytz.timezone('Asia/Tokyo'))
                 end_time = start_time + timedelta(hours=1)
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
+            
             # 5/16 13時
             match = re.search(r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2})時', line)
             if match:
@@ -972,6 +974,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 start_time = datetime(year, month, day, hour, 0, tzinfo=pytz.timezone('Asia/Tokyo'))
                 end_time = start_time + timedelta(hours=1)
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
+            
             # 5月16日13:00
             match = re.search(r'(\d{1,2})月(\d{1,2})日[\s　]*(\d{1,2}):(\d{2})', line)
             if match:
@@ -985,6 +988,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 start_time = datetime(year, month, day, hour, minute, tzinfo=pytz.timezone('Asia/Tokyo'))
                 end_time = start_time + timedelta(hours=1)
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
+            
             # 5月16日13時
             match = re.search(r'(\d{1,2})月(\d{1,2})日[\s　]*(\d{1,2})時', line)
             if match:
@@ -997,6 +1001,21 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 start_time = datetime(year, month, day, hour, 0, tzinfo=pytz.timezone('Asia/Tokyo'))
                 end_time = start_time + timedelta(hours=1)
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
+            
+            # 5月16日13時30分
+            match = re.search(r'(\d{1,2})月(\d{1,2})日[\s　]*(\d{1,2})時(\d{1,2})分', line)
+            if match:
+                month = int(match.group(1))
+                day = int(match.group(2))
+                hour = int(match.group(3))
+                minute = int(match.group(4))
+                year = now.year
+                if (month < now.month) or (month == now.month and day < now.day):
+                    year += 1
+                start_time = datetime(year, month, day, hour, minute, tzinfo=pytz.timezone('Asia/Tokyo'))
+                end_time = start_time + timedelta(hours=1)
+                return {'success': True, 'start_time': start_time, 'end_time': end_time}
+        
         # 2. 相対日付＋時刻パターン
         for line in lines:
             rel = None
@@ -1010,6 +1029,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 rel = (now - timedelta(days=1)).date()
             elif '一昨日' in line:
                 rel = (now - timedelta(days=2)).date()
+            
             if rel:
                 # 13:00
                 t1 = re.search(r'(\d{1,2}):(\d{2})', line)
@@ -1017,6 +1037,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 t2 = re.search(r'(\d{1,2})時(\d{1,2})分?', line)
                 # 13時
                 t3 = re.search(r'(\d{1,2})時', line)
+                
                 if t1:
                     hour = int(t1.group(1))
                     minute = int(t1.group(2))
@@ -1028,9 +1049,11 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                     minute = 0
                 else:
                     continue
+                
                 start_time = datetime.combine(rel, time(hour, minute), tzinfo=pytz.timezone('Asia/Tokyo'))
                 end_time = start_time + timedelta(hours=1)
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
+        
         # 3. 日付のみ（終日）
         for line in lines:
             # 5/16
@@ -1045,6 +1068,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 start_time = datetime.combine(target_date, time(0, 0), tzinfo=pytz.timezone('Asia/Tokyo'))
                 end_time = datetime.combine(target_date, time(23, 59), tzinfo=pytz.timezone('Asia/Tokyo'))
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
+            
             # 5月16日
             match = re.search(r'(\d{1,2})月(\d{1,2})日', line)
             if match:
@@ -1057,11 +1081,13 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 start_time = datetime.combine(target_date, time(0, 0), tzinfo=pytz.timezone('Asia/Tokyo'))
                 end_time = datetime.combine(target_date, time(23, 59), tzinfo=pytz.timezone('Asia/Tokyo'))
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
+        
         # 4. 時刻のみ（今日の日付で補完）
         for line in lines:
             t1 = re.search(r'(\d{1,2}):(\d{2})', line)
             t2 = re.search(r'(\d{1,2})時(\d{1,2})分?', line)
             t3 = re.search(r'(\d{1,2})時', line)
+            
             if t1:
                 hour = int(t1.group(1))
                 minute = int(t1.group(2))
@@ -1073,11 +1099,14 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 minute = 0
             else:
                 continue
+            
             start_time = datetime.combine(now.date(), time(hour, minute), tzinfo=pytz.timezone('Asia/Tokyo'))
             end_time = start_time + timedelta(hours=1)
             return {'success': True, 'start_time': start_time, 'end_time': end_time}
+        
         # どれにも該当しない場合
         return {'success': False, 'error': '日時情報が特定できません。明確な日付と時刻を指定してください。'}
+        
     except Exception as e:
         logger.error(f"日時抽出エラー: {str(e)}")
         logger.error(traceback.format_exc())
