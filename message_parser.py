@@ -944,8 +944,8 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
     """
     try:
         now = datetime.now(pytz.timezone('Asia/Tokyo'))
-        # 全行を走査して最初に見つかった明示的な日付＋時刻パターンを優先
         lines = [line.strip() for line in message.splitlines() if line.strip()]
+        # 1. 明示的な日付＋時刻パターン
         for line in lines:
             # 5/16 13:00
             match = re.search(r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2}):(\d{2})', line)
@@ -961,11 +961,11 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 end_time = start_time + timedelta(hours=1)
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
             # 5/16 13時
-            match2 = re.search(r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2})時', line)
-            if match2:
-                month = int(match2.group(1))
-                day = int(match2.group(2))
-                hour = int(match2.group(3))
+            match = re.search(r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2})時', line)
+            if match:
+                month = int(match.group(1))
+                day = int(match.group(2))
+                hour = int(match.group(3))
                 year = now.year
                 if (month < now.month) or (month == now.month and day < now.day):
                     year += 1
@@ -973,12 +973,12 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 end_time = start_time + timedelta(hours=1)
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
             # 5月16日13:00
-            match3 = re.search(r'(\d{1,2})月(\d{1,2})日[\s　]*(\d{1,2}):(\d{2})', line)
-            if match3:
-                month = int(match3.group(1))
-                day = int(match3.group(2))
-                hour = int(match3.group(3))
-                minute = int(match3.group(4))
+            match = re.search(r'(\d{1,2})月(\d{1,2})日[\s　]*(\d{1,2}):(\d{2})', line)
+            if match:
+                month = int(match.group(1))
+                day = int(match.group(2))
+                hour = int(match.group(3))
+                minute = int(match.group(4))
                 year = now.year
                 if (month < now.month) or (month == now.month and day < now.day):
                     year += 1
@@ -986,18 +986,97 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 end_time = start_time + timedelta(hours=1)
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
             # 5月16日13時
-            match4 = re.search(r'(\d{1,2})月(\d{1,2})日[\s　]*(\d{1,2})時', line)
-            if match4:
-                month = int(match4.group(1))
-                day = int(match4.group(2))
-                hour = int(match4.group(3))
+            match = re.search(r'(\d{1,2})月(\d{1,2})日[\s　]*(\d{1,2})時', line)
+            if match:
+                month = int(match.group(1))
+                day = int(match.group(2))
+                hour = int(match.group(3))
                 year = now.year
                 if (month < now.month) or (month == now.month and day < now.day):
                     year += 1
                 start_time = datetime(year, month, day, hour, 0, tzinfo=pytz.timezone('Asia/Tokyo'))
                 end_time = start_time + timedelta(hours=1)
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
-        # 明示的なパターンがなければエラーを返す（fallbackしない）
+        # 2. 相対日付＋時刻パターン
+        for line in lines:
+            rel = None
+            if '今日' in line:
+                rel = now.date()
+            elif '明日' in line:
+                rel = (now + timedelta(days=1)).date()
+            elif '明後日' in line:
+                rel = (now + timedelta(days=2)).date()
+            elif '昨日' in line:
+                rel = (now - timedelta(days=1)).date()
+            elif '一昨日' in line:
+                rel = (now - timedelta(days=2)).date()
+            if rel:
+                # 13:00
+                t1 = re.search(r'(\d{1,2}):(\d{2})', line)
+                # 13時30分
+                t2 = re.search(r'(\d{1,2})時(\d{1,2})分?', line)
+                # 13時
+                t3 = re.search(r'(\d{1,2})時', line)
+                if t1:
+                    hour = int(t1.group(1))
+                    minute = int(t1.group(2))
+                elif t2:
+                    hour = int(t2.group(1))
+                    minute = int(t2.group(2)) if t2.group(2) else 0
+                elif t3:
+                    hour = int(t3.group(1))
+                    minute = 0
+                else:
+                    continue
+                start_time = datetime.combine(rel, time(hour, minute), tzinfo=pytz.timezone('Asia/Tokyo'))
+                end_time = start_time + timedelta(hours=1)
+                return {'success': True, 'start_time': start_time, 'end_time': end_time}
+        # 3. 日付のみ（終日）
+        for line in lines:
+            # 5/16
+            match = re.search(r'(\d{1,2})/(\d{1,2})', line)
+            if match:
+                month = int(match.group(1))
+                day = int(match.group(2))
+                year = now.year
+                if (month < now.month) or (month == now.month and day < now.day):
+                    year += 1
+                target_date = date(year, month, day)
+                start_time = datetime.combine(target_date, time(0, 0), tzinfo=pytz.timezone('Asia/Tokyo'))
+                end_time = datetime.combine(target_date, time(23, 59), tzinfo=pytz.timezone('Asia/Tokyo'))
+                return {'success': True, 'start_time': start_time, 'end_time': end_time}
+            # 5月16日
+            match = re.search(r'(\d{1,2})月(\d{1,2})日', line)
+            if match:
+                month = int(match.group(1))
+                day = int(match.group(2))
+                year = now.year
+                if (month < now.month) or (month == now.month and day < now.day):
+                    year += 1
+                target_date = date(year, month, day)
+                start_time = datetime.combine(target_date, time(0, 0), tzinfo=pytz.timezone('Asia/Tokyo'))
+                end_time = datetime.combine(target_date, time(23, 59), tzinfo=pytz.timezone('Asia/Tokyo'))
+                return {'success': True, 'start_time': start_time, 'end_time': end_time}
+        # 4. 時刻のみ（今日の日付で補完）
+        for line in lines:
+            t1 = re.search(r'(\d{1,2}):(\d{2})', line)
+            t2 = re.search(r'(\d{1,2})時(\d{1,2})分?', line)
+            t3 = re.search(r'(\d{1,2})時', line)
+            if t1:
+                hour = int(t1.group(1))
+                minute = int(t1.group(2))
+            elif t2:
+                hour = int(t2.group(1))
+                minute = int(t2.group(2)) if t2.group(2) else 0
+            elif t3:
+                hour = int(t3.group(1))
+                minute = 0
+            else:
+                continue
+            start_time = datetime.combine(now.date(), time(hour, minute), tzinfo=pytz.timezone('Asia/Tokyo'))
+            end_time = start_time + timedelta(hours=1)
+            return {'success': True, 'start_time': start_time, 'end_time': end_time}
+        # どれにも該当しない場合
         return {'success': False, 'error': '日時情報が特定できません。明確な日付と時刻を指定してください。'}
     except Exception as e:
         logger.error(f"日時抽出エラー: {str(e)}")
