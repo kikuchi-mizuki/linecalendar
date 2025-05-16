@@ -561,8 +561,7 @@ def format_event_list(events: List[Dict], start_time: datetime = None, end_time:
             date_obj = day
             weekday = WEEKDAYS[date_obj.weekday()]
             response_text += f"🗓 {date_obj.strftime('%Y/%m/%d')}（{weekday}）\n"
-            response_text += "────────────\n"
-            response_text += "────────────\n"
+            response_text += "━━━━━━━━━━\n"  # 太い罫線を1本だけ
             day_events = sorted(date_events.get(date_str, []), key=lambda x: x['start'].get('dateTime', x['start'].get('date')))
             if day_events:
                 for j, event in enumerate(day_events, 1):
@@ -578,7 +577,7 @@ def format_event_list(events: List[Dict], start_time: datetime = None, end_time:
                     response_text += f"{j}. {title}\n{time_str}\n\n"
             else:
                 response_text += "予定はありません。\n"
-            response_text += "────────────\n"
+            response_text += "━━━━━━━━━━\n"  # 日付ごとに太い罫線
     else:
         # 期間指定がなければ予定がある日だけ
         sorted_dates = sorted(date_events.keys())
@@ -586,7 +585,7 @@ def format_event_list(events: List[Dict], start_time: datetime = None, end_time:
             date_obj = datetime.strptime(date, '%Y-%m-%d')
             weekday = WEEKDAYS[date_obj.weekday()]
             response_text += f"🗓 {date_obj.strftime('%Y/%m/%d')}（{weekday}）\n"
-            response_text += "────────────\n"
+            response_text += "━━━━━━━━━━\n"
             sorted_events = sorted(date_events[date], key=lambda x: x['start'].get('dateTime', x['start'].get('date')))
             if sorted_events:
                 for i, event in enumerate(sorted_events, 1):
@@ -602,7 +601,7 @@ def format_event_list(events: List[Dict], start_time: datetime = None, end_time:
                     response_text += f"{i}. {title}\n{time_str}\n\n"
             else:
                 response_text += "予定はありません。\n"
-            response_text += "────────────\n"
+            response_text += "━━━━━━━━━━\n"
     return response_text.strip()
 
 def format_overlapping_events(events):
