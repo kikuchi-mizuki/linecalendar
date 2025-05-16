@@ -545,6 +545,7 @@ def format_event_list(events: List[Dict], start_time: datetime = None, end_time:
     予定一覧をカレンダー風に整形して返す（LINEの吹き出し画像のような見やすい形式）
     """
     from collections import defaultdict
+    JST = pytz.timezone('Asia/Tokyo')
     date_events = defaultdict(list)
     for event in events:
         date = event['start'].get('dateTime', event['start'].get('date'))
@@ -560,7 +561,7 @@ def format_event_list(events: List[Dict], start_time: datetime = None, end_time:
             date_str = day.strftime('%Y-%m-%d')
             date_obj = day
             weekday = WEEKDAYS[date_obj.weekday()]
-            response_text += f"🗓 {date_obj.strftime('%Y/%m/%d')}（{weekday}）\n"
+            response_text += f"\U0001F4C5 {date_obj.strftime('%Y/%m/%d')}（{weekday}）\n"
             response_text += "━━━━━━━━━━\n"  # 太い罫線を1本だけ
             day_events = sorted(date_events.get(date_str, []), key=lambda x: x['start'].get('dateTime', x['start'].get('date')))
             if day_events:
@@ -569,8 +570,8 @@ def format_event_list(events: List[Dict], start_time: datetime = None, end_time:
                     start = event['start'].get('dateTime', event['start'].get('date'))
                     end = event['end'].get('dateTime', event['end'].get('date'))
                     if 'T' in start:
-                        start_time_dt = datetime.strptime(start, '%Y-%m-%dT%H:%M:%S%z')
-                        end_time_dt = datetime.strptime(end, '%Y-%m-%dT%H:%M:%S%z')
+                        start_time_dt = datetime.strptime(start, '%Y-%m-%dT%H:%M:%S%z').astimezone(JST)
+                        end_time_dt = datetime.strptime(end, '%Y-%m-%dT%H:%M:%S%z').astimezone(JST)
                         time_str = f"⏰ {start_time_dt.strftime('%H:%M')}～{end_time_dt.strftime('%H:%M')}"
                     else:
                         time_str = "終日"
@@ -584,7 +585,7 @@ def format_event_list(events: List[Dict], start_time: datetime = None, end_time:
         for date in sorted_dates:
             date_obj = datetime.strptime(date, '%Y-%m-%d')
             weekday = WEEKDAYS[date_obj.weekday()]
-            response_text += f"🗓 {date_obj.strftime('%Y/%m/%d')}（{weekday}）\n"
+            response_text += f"\U0001F4C5 {date_obj.strftime('%Y/%m/%d')}（{weekday}）\n"
             response_text += "━━━━━━━━━━\n"
             sorted_events = sorted(date_events[date], key=lambda x: x['start'].get('dateTime', x['start'].get('date')))
             if sorted_events:
@@ -593,8 +594,8 @@ def format_event_list(events: List[Dict], start_time: datetime = None, end_time:
                     start = event['start'].get('dateTime', event['start'].get('date'))
                     end = event['end'].get('dateTime', event['end'].get('date'))
                     if 'T' in start:
-                        start_time_dt = datetime.strptime(start, '%Y-%m-%dT%H:%M:%S%z')
-                        end_time_dt = datetime.strptime(end, '%Y-%m-%dT%H:%M:%S%z')
+                        start_time_dt = datetime.strptime(start, '%Y-%m-%dT%H:%M:%S%z').astimezone(JST)
+                        end_time_dt = datetime.strptime(end, '%Y-%m-%dT%H:%M:%S%z').astimezone(JST)
                         time_str = f"⏰ {start_time_dt.strftime('%H:%M')}～{end_time_dt.strftime('%H:%M')}"
                     else:
                         time_str = "終日"
