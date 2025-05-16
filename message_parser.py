@@ -968,6 +968,31 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 start_time = datetime(year, month, day, hour, 0, tzinfo=pytz.timezone('Asia/Tokyo'))
                 end_time = start_time + timedelta(hours=1)
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
+            # 5月16日10:00
+            match3 = re.search(r'(\d{1,2})月(\d{1,2})日[\s　]*(\d{1,2}):(\d{2})', line)
+            if match3:
+                month = int(match3.group(1))
+                day = int(match3.group(2))
+                hour = int(match3.group(3))
+                minute = int(match3.group(4))
+                year = now.year
+                if (month < now.month) or (month == now.month and day < now.day):
+                    year += 1
+                start_time = datetime(year, month, day, hour, minute, tzinfo=pytz.timezone('Asia/Tokyo'))
+                end_time = start_time + timedelta(hours=1)
+                return {'success': True, 'start_time': start_time, 'end_time': end_time}
+            # 5月16日10時
+            match4 = re.search(r'(\d{1,2})月(\d{1,2})日[\s　]*(\d{1,2})時', line)
+            if match4:
+                month = int(match4.group(1))
+                day = int(match4.group(2))
+                hour = int(match4.group(3))
+                year = now.year
+                if (month < now.month) or (month == now.month and day < now.day):
+                    year += 1
+                start_time = datetime(year, month, day, hour, 0, tzinfo=pytz.timezone('Asia/Tokyo'))
+                end_time = start_time + timedelta(hours=1)
+                return {'success': True, 'start_time': start_time, 'end_time': end_time}
         # ここまででreturnされなければ、他の抽出ロジックへ
         # 日付＋時刻がなければextract_timeで最初の時刻だけを厳密に使う
         start_time, end_time, is_all_day = extract_time(message, now)
