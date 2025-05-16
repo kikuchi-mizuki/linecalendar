@@ -127,6 +127,9 @@ class CalendarManager:
         if start_time is None or end_time is None:
             logger.error("start_timeまたはend_timeがNoneです")
             return []
+        # デバッグ: 取得前の時刻をJSTで出力
+        print(f"[DEBUG][get_events] 取得前: start_time={start_time} end_time={end_time}")
+        logger.info(f"[DEBUG][get_events] 取得前: start_time={start_time} end_time={end_time}")
         # 型チェック追加
         if isinstance(start_time, str):
             start_time = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
@@ -187,6 +190,9 @@ class CalendarManager:
     ) -> Dict:
         """予定を追加する"""
         try:
+            # デバッグ: 追加前の時刻をJSTで出力
+            print(f"[DEBUG][add_event] 追加前: start_time={start_time} end_time={end_time}")
+            logger.info(f"[DEBUG][add_event] 追加前: start_time={start_time} end_time={end_time}")
             # 秒・マイクロ秒を必ず0に丸める
             start_time = start_time.replace(second=0, microsecond=0)
             end_time = end_time.replace(second=0, microsecond=0)
@@ -199,6 +205,9 @@ class CalendarManager:
                 end_time = self.timezone.localize(end_time)
             else:
                 end_time = end_time.astimezone(self.timezone)
+            # デバッグ: 追加直前の時刻をJSTで出力
+            print(f"[DEBUG][add_event] GoogleAPI渡す直前: start_time={start_time} end_time={end_time}")
+            logger.info(f"[DEBUG][add_event] GoogleAPI渡す直前: start_time={start_time} end_time={end_time}")
             
             # 重複チェック（スキップ可能）
             if not skip_overlap_check:
