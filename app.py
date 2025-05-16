@@ -766,7 +766,6 @@ async def handle_message(event):
             if not credentials:
                 # 認証情報が無効な場合は再認証を促す
                 send_one_time_code(user_id)
-                await reply_text(reply_token, "Googleカレンダーとの連携が必要です。\nLINEで届いたワンタイムコードを外部ブラウザで入力してください。\n詳しくはメッセージを確認してください。")
                 return
         except Exception as e:
             logger.error(f"認証情報の取得に失敗: {str(e)}")
@@ -780,7 +779,6 @@ async def handle_message(event):
         except google.auth.exceptions.RefreshError:
             # トークンが期限切れの場合は再認証を促す
             send_one_time_code(user_id)
-            await reply_text(reply_token, "Googleカレンダーとの連携が必要です。\nLINEで届いたワンタイムコードを外部ブラウザで入力してください。\n詳しくはメッセージを確認してください。")
             return
         except Exception as e:
             logger.error(f"カレンダーマネージャーの初期化に失敗: {str(e)}")
