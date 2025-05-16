@@ -187,6 +187,9 @@ class CalendarManager:
     ) -> Dict:
         """予定を追加する"""
         try:
+            # 秒・マイクロ秒を必ず0に丸める
+            start_time = start_time.replace(second=0, microsecond=0)
+            end_time = end_time.replace(second=0, microsecond=0)
             # タイムゾーンの設定
             if start_time.tzinfo is None:
                 start_time = self.timezone.localize(start_time)
