@@ -1048,7 +1048,10 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                     hour = int(t3.group(1))
                     minute = 0
                 else:
-                    continue
+                    # ★時刻が指定されていない場合は、その日1日分の範囲を返す
+                    start_time = datetime.combine(rel, time(0, 0), tzinfo=pytz.timezone('Asia/Tokyo'))
+                    end_time = datetime.combine(rel, time(23, 59), tzinfo=pytz.timezone('Asia/Tokyo'))
+                    return {'success': True, 'start_time': start_time, 'end_time': end_time}
                 
                 start_time = datetime.combine(rel, time(hour, minute), tzinfo=pytz.timezone('Asia/Tokyo'))
                 end_time = start_time + timedelta(hours=1)
@@ -1103,6 +1106,25 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             start_time = datetime.combine(now.date(), time(hour, minute), tzinfo=pytz.timezone('Asia/Tokyo'))
             end_time = start_time + timedelta(hours=1)
             return {'success': True, 'start_time': start_time, 'end_time': end_time}
+        
+        # ★「今日」「明日」などだけのメッセージにも対応（どの行にも該当しない場合）
+        if re.fullmatch(r'.*(今日|明日|明後日|昨日|一昨日).*', message):
+            if '今日' in message:
+                rel = now.date()
+            elif '明日' in message:
+                rel = (now + timedelta(days=1)).date()
+            elif '明後日' in message:
+                rel = (now + timedelta(days=2)).date()
+            elif '昨日' in message:
+                rel = (now - timedelta(days=1)).date()
+            elif '一昨日' in message:
+                rel = (now - timedelta(days=2)).date()
+            else:
+                rel = None
+            if rel:
+                start_time = datetime.combine(rel, time(0, 0), tzinfo=pytz.timezone('Asia/Tokyo'))
+                end_time = datetime.combine(rel, time(23, 59), tzinfo=pytz.timezone('Asia/Tokyo'))
+                return {'success': True, 'start_time': start_time, 'end_time': end_time}
         
         # どれにも該当しない場合
         return {'success': False, 'error': '日時情報が特定できません。明確な日付と時刻を指定してください。'}
