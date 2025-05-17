@@ -278,112 +278,155 @@ def normalize_digits(text: str) -> str:
     """全角数字を半角数字に変換するユーティリティ関数"""
     return text.translate(str.maketrans('０１２３４５６７８９', '0123456789'))
 
-def parse_message(text: str) -> Dict[str, Any]:
-    """メッセージを解析して操作タイプと必要な情報を抽出する"""
+def parse_message(message: str, current_time: datetime = None) -> Dict:
+    """
+    メッセージを解析して操作タイプと必要な情報を抽出する
+    """
     try:
-        normalized_text = normalize_text(text)
-        logger.info(f"正規化後のテキスト: {normalized_text}")
-
-        operation_type = None
-        if any(keyword in normalized_text for keyword in ADD_KEYWORDS):
-            operation_type = "add"
-        elif any(keyword in normalized_text for keyword in DELETE_KEYWORDS):
-            operation_type = "delete"
-        elif any(keyword in normalized_text for keyword in UPDATE_KEYWORDS):
-            operation_type = "update"
-
-        # ★キーワードがなくても日付・時刻・タイトルが揃っていれば追加とみなす
+        if current_time is None:
+            current_time = datetime.now(pytz.timezone('Asia/Tokyo'))
+        
+        # メッセージを正規化
+        normalized_message = normalize_text(message)
+        logger.debug(f"正規化後のメッセージ: {normalized_message}")
+        
+        # まず従来の方法でoperation_typeを抽出
+        operation_type = extract_operation_type(normalized_message)
+        
+        # 操作タイプが特定できない場合、内容から推論
         if not operation_type:
-            date = extract_date(normalized_text)
-            start_time = extract_start_time(normalized_text)
-            end_time = extract_end_time(normalized_text)
-            title = extract_title(text)
-            if date and start_time and end_time and title:
-                operation_type = "add"
-
-        # ★2行メッセージ対応: 1行目が日付＋時刻範囲、2行目がタイトルの場合も追加とみなす
-        if not operation_type:
-            lines = [line.strip() for line in text.splitlines() if line.strip()]
-            if len(lines) == 2:
-                date = extract_date(normalize_text(lines[0]))
-                start_time = extract_start_time(normalize_text(lines[0]))
-                end_time = extract_end_time(normalize_text(lines[0]))
-                title = extract_title(text)
-                if date and start_time and end_time and title:
+            # 日時やタイトルを抽出して推論
+            datetime_info = extract_datetime_from_message(normalized_message)
+            title = extract_title(normalized_message)
+            extracted = {}
+            if datetime_info:
+                extracted["start_time"] = datetime_info.get("start_time")
+            if title:
+                extracted["title"] = title
+            operation_type = detect_operation_type(normalized_message, extracted)
+            
+            # それでも特定できない場合は、メッセージの内容から推測
+            if not operation_type:
+                # 日付や時刻が含まれていれば追加とみなす
+                if re.search(r'\d{1,2}月\d{1,2}日|\d{1,2}/\d{1,2}|\d{1,2}時|\d{1,2}:\d{2}', normalized_message):
                     operation_type = "add"
+                # 確認系のキーワードがあれば確認とみなす
+                elif re.search(r'確認|教えて|見せて|表示|一覧', normalized_message):
+                    operation_type = "read"
+                else:
+                    return {'success': False, 'error': '操作タイプを特定できませんでした。'}
 
-        if not operation_type:
-            logger.warning("操作タイプを特定できませんでした")
-            return {
-                "operation_type": None,
-                "error": "操作タイプを特定できませんでした。追加、削除、変更、確認のいずれかを指定してください。"
-            }
-
-        # --- update処理の複数行対応 ---
-        if operation_type == "update":
-            lines = [line.strip() for line in text.splitlines() if line.strip()]
-            if len(lines) >= 2:
-                # 1行目: 元の予定、2行目: 新しい予定
-                old_line = lines[0]
-                new_line = lines[1]
-                old_date = extract_date(normalize_text(old_line))
-                old_start = extract_start_time(normalize_text(old_line))
-                old_end = extract_end_time(normalize_text(old_line))
-                new_date = extract_date(normalize_text(new_line))
-                new_start = extract_start_time(normalize_text(new_line))
-                new_end = extract_end_time(normalize_text(new_line))
-                title = extract_title(text)
-                location = extract_location(normalize_text(text))
-                result = {
-                    "operation_type": "update",
-                    "date": old_date,
-                    "start_time": old_start,
-                    "end_time": old_end,
-                    "title": title,
-                    "location": location,
-                    "new_date": new_date,
-                    "new_start_time": new_start,
-                    "new_end_time": new_end
-                }
-                # 必須項目チェック
-                if not old_date or not old_start or not old_end or not title:
-                    result["error"] = "元の予定情報が不足しています。"
-                if not new_date or not new_start or not new_end:
-                    result["error"] = "新しい予定情報が不足しています。"
-                return result
-
-        # 通常のadd/delete処理
-        date = extract_date(normalized_text)
-        start_time = extract_start_time(normalized_text)
-        end_time = extract_end_time(normalized_text)
-        logger.info(f"抽出された日付: {date}, 開始時刻: {start_time}, 終了時刻: {end_time}")
-        title = extract_title(text)
-        location = extract_location(normalized_text)
-        result = {
-            "operation_type": operation_type,
-            "date": date,
-            "start_time": start_time,
-            "end_time": end_time,
-            "title": title,
-            "location": location
-        }
-        if operation_type == "update":
-            result["new_start_time"] = None
-            result["new_end_time"] = None
-        if operation_type in ["add", "update"]:
-            if not date:
-                result["error"] = "日付を特定できませんでした。"
-            if not start_time:
-                result["error"] = "開始時刻を特定できませんでした。"
-            if not end_time:
-                result["error"] = "終了時刻を特定できませんでした。"
+        # 操作タイプごとの処理
+        if operation_type == 'add':
+            datetime_info = extract_datetime_from_message(normalized_message, operation_type)
+            if not datetime_info or not datetime_info.get('start_time'):
+                return {'success': False, 'error': '日時情報が特定できません。'}
+            
+            title = extract_title(normalized_message)
             if not title:
-                result["error"] = "タイトルを特定できませんでした。"
-        return result
+                return {'success': False, 'error': 'タイトルを特定できません。'}
+            
+            location = extract_location(normalized_message)
+            person = extract_person(normalized_message)
+            recurrence = extract_recurrence(normalized_message)
+            
+            # durationがあればend_timeを上書き
+            if 'duration' in datetime_info:
+                end_time = datetime_info['start_time'] + datetime_info['duration']
+            else:
+                end_time = datetime_info.get('end_time', datetime_info['start_time'] + timedelta(hours=1))
+            
+            return {
+                'success': True,
+                'operation_type': 'add',
+                'title': title,
+                'start_time': datetime_info['start_time'],
+                'end_time': end_time,
+                'location': location,
+                'person': person,
+                'recurrence': recurrence
+            }
+            
+        elif operation_type == 'delete':
+            title = extract_title(normalized_message)
+            datetime_info = extract_datetime_from_message(normalized_message, operation_type)
+            return {
+                'success': True,
+                'operation_type': 'delete',
+                'title': title,
+                'start_time': datetime_info.get('start_time') if datetime_info else None,
+                'end_time': datetime_info.get('end_time') if datetime_info else None
+            }
+                
+        elif operation_type == 'update':
+            title = extract_title(normalized_message)
+            lines = normalized_message.splitlines()
+            if len(lines) >= 2:
+                dt1 = extract_datetime_from_message(lines[0], 'update')
+                dt2 = extract_datetime_from_message(lines[1], 'update')
+                logger.debug(f"[parse_message][update] 1行目: {lines[0]} => {dt1}")
+                logger.debug(f"[parse_message][update] 2行目: {lines[1]} => {dt2}")
+                
+                new_start_time = dt2.get('start_time')
+                new_end_time = dt2.get('end_time')
+                if 'duration' in dt2 and dt2['start_time']:
+                    new_end_time = dt2['start_time'] + dt2['duration']
+                
+                if dt1.get('start_time') and new_start_time:
+                    if dt1.get('end_time') and dt1.get('start_time'):
+                        original_duration = dt1.get('end_time') - dt1.get('start_time')
+                    else:
+                        original_duration = timedelta(hours=1)
+                    new_end_time = new_start_time + original_duration
+                    
+                    return {
+                        'success': True,
+                        'operation_type': 'update',
+                        'title': title,
+                        'start_time': dt1.get('start_time'),
+                        'end_time': dt1.get('end_time'),
+                        'new_start_time': new_start_time,
+                        'new_end_time': new_end_time
+                    }
+            
+            datetime_info = extract_datetime_from_message(normalized_message, operation_type)
+            if datetime_info.get('new_start_time') and datetime_info.get('new_end_time'):
+                return {
+                    'success': True,
+                    'operation_type': 'update',
+                    'title': title,
+                    'start_time': datetime_info.get('start_time'),
+                    'end_time': datetime_info.get('end_time'),
+                    'new_start_time': datetime_info.get('new_start_time'),
+                    'new_end_time': datetime_info.get('new_end_time')
+                }
+            
+            return {
+                'success': True,
+                'operation_type': 'update',
+                'title': title,
+                'start_time': datetime_info.get('start_time'),
+                'end_time': datetime_info.get('end_time'),
+                'new_start_time': datetime_info.get('new_start_time'),
+                'new_end_time': datetime_info.get('new_end_time')
+            }
+                
+        elif operation_type == 'read':
+            datetime_info = extract_datetime_from_message(normalized_message, operation_type)
+            return {
+                'success': True,
+                'operation_type': 'read',
+                'start_time': datetime_info.get('start_time') if datetime_info else None,
+                'end_time': datetime_info.get('end_time') if datetime_info else None
+            }
+            
+        else:
+            return {'success': False, 'error': '未対応の操作タイプです。'}
+            
     except Exception as e:
-        logger.error(f"メッセージ解析エラー: {str(e)}")
+        logger.error(f"メッセージ解析中にエラーが発生: {str(e)}")
         logger.error(traceback.format_exc())
-        return {"operation_type": None, "error": f"メッセージの解析中にエラーが発生しました: {str(e)}"}
+        return {'success': False, 'error': str(e)}
 
 def extract_update_time(message: str, now: datetime) -> Tuple[Optional[datetime], Optional[datetime], bool]:
     """更新時の新しい時間を抽出する"""
@@ -1352,147 +1395,6 @@ def detect_operation_type(message: str, extracted: dict) -> str:
     if extracted.get("start_time") or extracted.get("title"):
         return "add"
     return None
-
-# parse_messageの中のoperation_type判定部分を修正
-
-def parse_message(message: str, current_time: datetime = None) -> Dict:
-    """
-    メッセージを解析して操作タイプと必要な情報を抽出する
-    """
-    try:
-        if current_time is None:
-            current_time = datetime.now(pytz.timezone('Asia/Tokyo'))
-        operation_type = extract_operation_type(message)
-        # まず従来の方法でoperation_typeを抽出
-        # ここで特定できなければ、内容から推論
-        if not operation_type:
-            # 日時やタイトルを抽出して推論
-            datetime_info = extract_datetime_from_message(message)
-            title = extract_title(message)
-            extracted = {}
-            if datetime_info:
-                extracted["start_time"] = datetime_info.get("start_time")
-            if title:
-                extracted["title"] = title
-            operation_type = detect_operation_type(message, extracted)
-            if not operation_type:
-                return {'success': False, 'error': '操作タイプが特定できません。'}
-        # 以下、従来のoperation_typeごとの処理はそのまま
-        if operation_type == 'confirm':
-            # 確認応答の場合
-            return {
-                'success': True,
-                'operation_type': 'confirm'
-            }
-            
-        elif operation_type == 'add':
-            # 予定追加の場合
-            datetime_info = extract_datetime_from_message(message, operation_type)
-            if not datetime_info or not datetime_info.get('success'):
-                return {'success': False, 'error': datetime_info.get('error', '日時情報が特定できません。') if datetime_info else '日時情報が特定できません。'}
-            if 'start_time' not in datetime_info or 'end_time' not in datetime_info:
-                return {'success': False, 'error': '日付・時刻情報が不足しています（start_time/end_time）'}
-            title = extract_title(message)
-            location = extract_location(message)
-            person = extract_person(message)
-            recurrence = extract_recurrence(message)
-            # durationがあればend_timeを上書き
-            if 'duration' in datetime_info:
-                end_time = datetime_info['start_time'] + datetime_info['duration']
-            else:
-                end_time = datetime_info['end_time']
-            return {
-                'success': True,
-                'operation_type': 'add',
-                'title': title,
-                'start_time': datetime_info['start_time'],
-                'end_time': end_time,
-                'location': location,
-                'person': person,
-                'recurrence': recurrence
-            }
-            
-        elif operation_type == 'delete':
-            # 予定削除の場合
-            title = extract_title(message)
-            datetime_info = extract_datetime_from_message(message, operation_type)
-            return {
-                'success': True,
-                'operation_type': 'delete',
-                'title': title,
-                'start_time': datetime_info.get('start_time') if datetime_info else None,
-                'end_time': datetime_info.get('end_time') if datetime_info else None
-            }
-                
-        elif operation_type == 'update':
-            # 予定更新の場合
-            title = extract_title(message)
-            lines = message.splitlines()
-            if len(lines) >= 2:
-                dt1 = extract_datetime_from_message(lines[0], 'update')
-                dt2 = extract_datetime_from_message(lines[1], 'update')
-                logger.debug(f"[parse_message][update] 1行目: {lines[0]} => {dt1}")
-                logger.debug(f"[parse_message][update] 2行目: {lines[1]} => {dt2}")
-                # 2行目の時刻範囲があればそれを優先
-                new_start_time = dt2.get('start_time')
-                new_end_time = dt2.get('end_time')
-                if 'duration' in dt2 and dt2['start_time']:
-                    new_end_time = dt2['start_time'] + dt2['duration']
-                logger.debug(f"[parse_message][update] pending_event new_start_time={new_start_time}, new_end_time={new_end_time}")
-                if dt1.get('start_time') and new_start_time:
-                    # 元の所要時間を計算
-                    if dt1.get('end_time') and dt1.get('start_time'):
-                        original_duration = dt1.get('end_time') - dt1.get('start_time')
-                    else:
-                        original_duration = timedelta(hours=1)
-                    # new_end_timeはnew_start_time+元の所要時間
-                    new_end_time = new_start_time + original_duration
-                    return {
-                        'operation_type': 'update',
-                        'title': title,
-                        'start_time': dt1.get('start_time'),
-                        'end_time': dt1.get('end_time'),
-                        'new_start_time': new_start_time,
-                        'new_end_time': new_end_time
-                    }
-            # 1行しかない場合もnew_start_time/new_end_timeが抽出されていればそれを優先
-            datetime_info = extract_datetime_from_message(message, operation_type)
-            if datetime_info.get('new_start_time') and datetime_info.get('new_end_time'):
-                return {
-                    'operation_type': 'update',
-                    'title': title,
-                    'start_time': datetime_info.get('start_time'),
-                    'end_time': datetime_info.get('end_time'),
-                    'new_start_time': datetime_info.get('new_start_time'),
-                    'new_end_time': datetime_info.get('new_end_time')
-                }
-            return {
-                'operation_type': 'update',
-                'title': title,
-                'start_time': datetime_info.get('start_time'),
-                'end_time': datetime_info.get('end_time'),
-                'new_start_time': datetime_info.get('new_start_time'),
-                'new_end_time': datetime_info.get('new_end_time')
-            }
-                
-        elif operation_type == 'read':
-            # 予定確認の場合
-            datetime_info = extract_datetime_from_message(message, operation_type)
-            return {
-                'success': True,
-                'operation_type': 'read',
-                'start_time': datetime_info.get('start_time') if datetime_info else None,
-                'end_time': datetime_info.get('end_time') if datetime_info else None
-            }
-            
-        else:
-            return {'success': False, 'error': '未対応の操作タイプです。'}
-            
-    except Exception as e:
-        logger.error(f"メッセージ解析中にエラーが発生: {str(e)}")
-        logger.error(traceback.format_exc())
-        print(f'★parse_message except: {e}')
-        return {'success': False, 'error': str(e)}
 
 # extract_datetime_from_messageのstart_time/end_timeを返すラッパー
 
