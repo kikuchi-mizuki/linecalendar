@@ -1819,7 +1819,12 @@ async def handle_yes_response(calendar_id: str) -> str:
             if not result.get('success', False):
                 logger.error(f"[update_event_by_index][error] {result}")
                 return result.get('error', 'うまくできなかったみたい。ごめんね。')
-            return format_response_message('update', result)
+            # 予定を更新した日の予定一覧も返す
+            day = new_start_time.replace(hour=0, minute=0, second=0, microsecond=0)
+            day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
+            events = await calendar_manager.get_events(start_time=day, end_time=day_end)
+            msg = f"予定を更新しました！\n\n" + format_event_list(events, day, day_end)
+            return msg
         else:
             return "操作タイプを特定できませんでした。もう一度お試しください。"
 
