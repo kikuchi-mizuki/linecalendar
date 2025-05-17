@@ -572,9 +572,7 @@ def format_event_list(events: List[Dict], start_time: datetime = None, end_time:
                     if 'T' in start:
                         start_time_dt = datetime.strptime(start, '%Y-%m-%dT%H:%M:%S%z').astimezone(JST)
                         end_time_dt = datetime.strptime(end, '%Y-%m-%dT%H:%M:%S%z').astimezone(JST)
-                        # 分・秒・マイクロ秒を0に丸める
-                        start_time_dt = start_time_dt.replace(minute=0, second=0, microsecond=0)
-                        end_time_dt = end_time_dt.replace(minute=0, second=0, microsecond=0)
+                        # 分・秒・マイクロ秒を丸めずそのまま表示
                         time_str = f"⏰ {start_time_dt.strftime('%H:%M')}～{end_time_dt.strftime('%H:%M')}"
                     else:
                         time_str = "終日"
@@ -599,9 +597,7 @@ def format_event_list(events: List[Dict], start_time: datetime = None, end_time:
                     if 'T' in start:
                         start_time_dt = datetime.strptime(start, '%Y-%m-%dT%H:%M:%S%z').astimezone(JST)
                         end_time_dt = datetime.strptime(end, '%Y-%m-%dT%H:%M:%S%z').astimezone(JST)
-                        # 分・秒・マイクロ秒を0に丸める
-                        start_time_dt = start_time_dt.replace(minute=0, second=0, microsecond=0)
-                        end_time_dt = end_time_dt.replace(minute=0, second=0, microsecond=0)
+                        # 分・秒・マイクロ秒を丸めずそのまま表示
                         time_str = f"⏰ {start_time_dt.strftime('%H:%M')}～{end_time_dt.strftime('%H:%M')}"
                     else:
                         time_str = "終日"
