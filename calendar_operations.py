@@ -585,15 +585,20 @@ class CalendarManager:
     ) -> List[Dict]:
         """
         条件に一致するイベントを検索（前後1時間も含めて柔軟に）
-        
         Args:
             start_time (datetime): 開始時間
             end_time (datetime): 終了時間
             title (Optional[str]): イベントのタイトル
-            
         Returns:
             List[Dict]: 条件に一致するイベントのリスト
         """
+        import unicodedata
+        def normalize_title(title):
+            if not title:
+                return ''
+            title = unicodedata.normalize('NFKC', title)
+            title = title.replace(' ', '').replace('　', '').lower()
+            return title
         try:
             # タイムゾーンの設定
             if start_time.tzinfo is None:
@@ -611,23 +616,20 @@ class CalendarManager:
             search_end = end_time + timedelta(hours=1)
             events = await self.get_events(search_start, search_end)
             matched = []
-            # イベントが1件だけならタイトルに関係なく削除対象
-            if len(events) == 1:
-                matched = events
-            else:
-                for e in events:
-                    event_title = e.get('summary', '')
-                    if title:
-                        # 部分一致（大文字小文字無視）で判定
-                        if title.lower() not in event_title.lower() and event_title.lower() not in title.lower():
-                            continue
-                    event_start_str = e['start'].get('dateTime') or e['start'].get('date')
-                    if not event_start_str:
+            for e in events:
+                event_title = e.get('summary', '')
+                event_start_str = e['start'].get('dateTime') or e['start'].get('date')
+                if not event_start_str:
+                    continue
+                event_start = datetime.fromisoformat(event_start_str.replace('Z', '+00:00')).astimezone(self.timezone)
+                # 許容範囲（±5分）で一致
+                if abs((event_start - start_time).total_seconds()) > 300:
+                    continue
+                # タイトルが指定されている場合のみタイトルも考慮
+                if title:
+                    if normalize_title(title) not in normalize_title(event_title):
                         continue
-                    event_start = datetime.fromisoformat(event_start_str.replace('Z', '+00:00')).astimezone(self.timezone)
-                    # ★完全一致のみ
-                    if event_start == start_time:
-                        matched.append(e)
+                matched.append(e)
             return matched
         except Exception as e:
             logger.error(f"イベントの検索に失敗: {str(e)}")
