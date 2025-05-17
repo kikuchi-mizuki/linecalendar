@@ -550,7 +550,11 @@ def extract_title(text: str) -> Optional[str]:
                 # 2行目以降で最初に日本語文字列が含まれる行をタイトルとする
                 for line in lines[1:]:
                     if re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z]', line):
-                        return line
+                        title = line
+                        # 操作キーワードのみの場合はNone
+                        if title in DELETE_KEYWORDS or title.strip() == '':
+                            return None
+                        return title
 
         # 既存のロジック
         # 末尾の「を△△で追加してください」「を△△と追加してください」などを除去
@@ -567,6 +571,8 @@ def extract_title(text: str) -> Optional[str]:
             title_candidate = match.group(1).strip()
             # 末尾の不要な語句を除去
             title_candidate = re.sub(r'[。\n].*$', '', title_candidate)
+            if title_candidate in DELETE_KEYWORDS or title_candidate.strip() == '':
+                return None
             if title_candidate:
                 return title_candidate
 
@@ -588,8 +594,8 @@ def extract_title(text: str) -> Optional[str]:
             line = re.sub(r'^(\d{1,2})[\/](\d{1,2})[\s　]*(\d{1,2}):?(\d{2})?', '', line)
             # 先頭の空白や記号を除去
             line = re.sub(r'^[\s　:：,、。]+', '', line)
-            # 日付・時刻だけの場合はNone
-            if not line or re.fullmatch(r'[\d/:年月日時分\s　]+', line):
+            # 日付・時刻だけの場合や操作キーワードのみの場合はNone
+            if not line or re.fullmatch(r'[\d/:年月日時分\s　]+', line) or line in DELETE_KEYWORDS:
                 return None
             return line
 
@@ -599,6 +605,8 @@ def extract_title(text: str) -> Optional[str]:
             if any(re.search(pat, line) for pat in exclude_patterns):
                 continue
             if location and location in line:
+                continue
+            if line in DELETE_KEYWORDS or line.strip() == '':
                 continue
             return line
         return None
