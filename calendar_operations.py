@@ -456,11 +456,11 @@ class CalendarManager:
             
             # 更新対象の予定を取得
             event = events[index - 1]
-            
+            event_id = event['id']
             # 重複チェック（skip_overlap_checkがFalseのときのみ）
             if not skip_overlap_check:
                 logger.info(f"[update_event_by_index] skip_overlap_check is False, doing overlap check")
-                overlapping_events = await self._check_overlapping_events(new_start_time, new_end_time)
+                overlapping_events = await self._check_overlapping_events(new_start_time, new_end_time, exclude_event_id=event_id)
                 if overlapping_events:
                     return {
                         'success': False,
@@ -482,7 +482,7 @@ class CalendarManager:
                 }
                 updated_event = self.service.events().update(
                     calendarId=self.calendar_id,
-                    eventId=event['id'],
+                    eventId=event_id,
                     body=event
                 ).execute()
             except Exception as e:
@@ -506,7 +506,8 @@ class CalendarManager:
         self,
         start_time: datetime,
         end_time: datetime,
-        title: Optional[str] = None
+        title: Optional[str] = None,
+        exclude_event_id: Optional[str] = None
     ) -> List[Dict]:
         """
         重複するイベントをチェック
@@ -515,6 +516,7 @@ class CalendarManager:
             start_time (datetime): 開始時間
             end_time (datetime): 終了時間
             title (Optional[str]): イベントのタイトル
+            exclude_event_id (Optional[str]): 除外するイベントID
             
         Returns:
             List[Dict]: 重複するイベントのリスト
@@ -538,6 +540,9 @@ class CalendarManager:
                 event_end = datetime.fromisoformat(event['end']['dateTime'].replace('Z', '+00:00')).astimezone(self.timezone)
                 # タイトルが指定されている場合は、部分一致も許容
                 if title and title not in event.get('summary', ''):
+                    continue
+                # 自分自身のイベントIDは除外
+                if exclude_event_id and event.get('id') == exclude_event_id:
                     continue
                 # 時間帯が重なっていれば重複とみなす
                 if (event_start < end_time and event_end > start_time):
