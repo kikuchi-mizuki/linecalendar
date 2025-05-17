@@ -1493,3 +1493,19 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
         logger.error(traceback.format_exc())
         print(f'★parse_message except: {e}')
         return {'success': False, 'error': str(e)}
+
+# extract_datetime_from_messageのstart_time/end_timeを返すラッパー
+
+def extract_start_time(message: str) -> Optional[datetime]:
+    """
+    メッセージから開始時刻を抽出する（extract_datetime_from_messageのstart_timeを返す）
+    """
+    result = extract_datetime_from_message(message)
+    return result.get('start_time') if result else None
+
+def extract_end_time(message: str) -> Optional[datetime]:
+    """
+    メッセージから終了時刻を抽出する（extract_datetime_from_messageのend_timeを返す）
+    """
+    result = extract_datetime_from_message(message)
+    return result.get('end_time') if result else None
