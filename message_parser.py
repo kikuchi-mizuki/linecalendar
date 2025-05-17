@@ -1069,7 +1069,27 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 return result
 
         # --- ここから追加: スラッシュ・ハイフン区切り日付パターン ---
-        # 例: 5/19, 5-19
+        # 例: 5/19 13:00, 5-19 13:00
+        date_time_match = re.search(r'(\d{1,2})[/-](\d{1,2})[\s　]*(\d{1,2}):(\d{2})', message)
+        if date_time_match:
+            month = int(date_time_match.group(1))
+            day = int(date_time_match.group(2))
+            hour = int(date_time_match.group(3))
+            minute = int(date_time_match.group(4))
+            year = now.year
+            # 修正: 今日以降は今年、今日より前は来年
+            if datetime(year, month, day, hour, minute) < now:
+                year += 1
+            start_time = JST.localize(datetime(year, month, day, hour, minute))
+            end_time = start_time + timedelta(hours=1)
+            result['start_time'] = start_time
+            result['end_time'] = end_time
+            result['is_time_range'] = False
+            logger.debug(f"スラッシュ・ハイフン日付時刻パターン: {start_time} から {end_time}")
+            logger.debug(f"[datetime_extraction] 入力メッセージ: {message}, 抽出結果: start={result.get('start_time')}, end={result.get('end_time')}")
+            return result
+
+        # 日付のみのパターン（時刻なし）
         date_match = re.search(r'(\d{1,2})[/-](\d{1,2})', message)
         if date_match:
             month = int(date_match.group(1))

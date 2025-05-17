@@ -577,93 +577,69 @@ class CalendarManager:
             logger.error(traceback.format_exc())
             return []
             
-    async def _find_events(
+    def _find_events(
         self,
         start_time: datetime,
         end_time: datetime,
-        title: Optional[str] = None
+        title: Optional[str] = None,
+        ignore_event_id: str = None
     ) -> List[Dict]:
         """
-        条件に一致するイベントを検索（前後1時間も含めて柔軟に）
+        指定された条件に一致するイベントを検索
+        
         Args:
             start_time (datetime): 開始時間
             end_time (datetime): 終了時間
             title (Optional[str]): イベントのタイトル
+            ignore_event_id (Optional[str]): 除外するイベントID
+            
         Returns:
             List[Dict]: 条件に一致するイベントのリスト
         """
-        import unicodedata
-        def normalize_title(title):
-            if not title:
-                return ''
-            title = unicodedata.normalize('NFKC', title)
-            title = title.replace(' ', '').replace('　', '').lower()
-            return title
         try:
-            # タイムゾーンの設定
-            if start_time.tzinfo is None:
-                start_time = self.timezone.localize(start_time)
-            else:
-                start_time = start_time.astimezone(self.timezone)
-            if end_time.tzinfo is None:
-                end_time = self.timezone.localize(end_time)
-            else:
-                end_time = end_time.astimezone(self.timezone)
-
-            from datetime import timedelta
-            # 検索範囲を前後1時間に拡大
-            search_start = start_time - timedelta(hours=1)
-            search_end = end_time + timedelta(hours=1)
-            events = await self.get_events(search_start, search_end)
-            logger.debug(f"[DEBUG][_find_events] 検索範囲: {search_start} ～ {search_end}, ユーザー指定: {start_time}")
-            matched_exact = []
-            matched_range = []
-            for e in events:
-                event_title = e.get('summary', '')
-                event_start_str = e['start'].get('dateTime') or e['start'].get('date')
-                event_end_str = e['end'].get('dateTime') or e['end'].get('date')
-                logger.debug(f"[DEBUG][_find_events] event_title={event_title}, event_start_str={event_start_str}")
-                if not event_start_str or not event_end_str:
-                    continue
-                # 日付のみイベント対応
-                if 'date' in e['start'] and 'dateTime' not in e['start']:
-                    event_start = datetime.fromisoformat(event_start_str)
-                    event_end = datetime.fromisoformat(event_end_str)
-                    logger.debug(f"[DEBUG][_find_events] (date only) event_start={event_start.date()}, user_date={start_time.date()}")
-                    # 日付が一致すればOK
-                    if event_start.date() != start_time.date():
-                        continue
-                    # 日付のみの場合は完全一致も範囲一致も同じ
-                    matched_exact.append(e)
-                else:
-                    event_start = datetime.fromisoformat(event_start_str.replace('Z', '+00:00')).astimezone(self.timezone)
-                    event_end = datetime.fromisoformat(event_end_str.replace('Z', '+00:00')).astimezone(self.timezone)
-                    st = start_time.replace(second=0, microsecond=0)
-                    # 完全一致（分単位で判定）
-                    st_min = st.replace(second=0, microsecond=0)
-                    event_start_min = event_start.replace(second=0, microsecond=0)
-                    if event_start_min == st_min:
-                        matched_exact.append(e)
-                        continue
-                    # 範囲一致
-                    if event_start < st < event_end:
-                        matched_range.append(e)
-                        continue
-                # タイトルが指定されている場合のみタイトルも考慮
-                if title:
-                    norm_title = normalize_title(title)
-                    norm_event_title = normalize_title(event_title)
-                    logger.debug(f"[DEBUG][_find_events] norm_title={norm_title}, norm_event_title={norm_event_title}")
-                    if norm_title not in norm_event_title:
-                        continue
-            # 完全一致があればそれを返す、なければ範囲一致を返す
-            if matched_exact:
-                logger.debug(f"[DEBUG][_find_events] 完全一致件数: {len(matched_exact)}")
-                return matched_exact
-            logger.debug(f"[DEBUG][_find_events] 範囲一致件数: {len(matched_range)}")
-            return matched_range
+            # 検索範囲を広げる（前後30分）
+            search_start = start_time - timedelta(minutes=30)
+            search_end = end_time + timedelta(minutes=30)
+            
+            # イベントを取得
+            events = asyncio.run(self.get_events(
+                start_time=search_start,
+                end_time=search_end,
+                title=title,
+                ignore_event_id=ignore_event_id
+            ))
+            
+            if not events:
+                logger.info(f"指定された期間にイベントが見つかりません: {start_time} - {end_time}")
+                return []
+            
+            # イベントを時間でフィルタリング
+            matching_events = []
+            for event in events:
+                event_start = self._parse_event_time(event['start'])
+                event_end = self._parse_event_time(event['end'])
+                
+                # 完全一致を優先
+                if event_start == start_time and event_end == end_time:
+                    matching_events.insert(0, event)  # 完全一致を先頭に
+                # 部分一致も含める
+                elif (event_start <= start_time and event_end >= start_time) or \
+                     (event_start <= end_time and event_end >= end_time) or \
+                     (event_start >= start_time and event_end <= end_time):
+                    matching_events.append(event)
+            
+            # タイトルが指定されている場合は、タイトルでもフィルタリング
+            if title:
+                matching_events = [
+                    event for event in matching_events
+                    if title.lower() in event.get('summary', '').lower()
+                ]
+            
+            logger.info(f"検索結果: {len(matching_events)}件のイベントが見つかりました")
+            return matching_events
+            
         except Exception as e:
-            logger.error(f"イベントの検索に失敗: {str(e)}")
+            logger.error(f"イベントの検索中にエラーが発生: {str(e)}")
             logger.error(traceback.format_exc())
             return []
 
