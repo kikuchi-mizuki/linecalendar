@@ -615,15 +615,18 @@ class CalendarManager:
             search_start = start_time - timedelta(hours=1)
             search_end = end_time + timedelta(hours=1)
             events = await self.get_events(search_start, search_end)
+            logger.debug(f"[DEBUG][_find_events] 検索範囲: {search_start} ～ {search_end}, ユーザー指定: {start_time}")
             matched = []
             for e in events:
                 event_title = e.get('summary', '')
                 event_start_str = e['start'].get('dateTime') or e['start'].get('date')
+                logger.debug(f"[DEBUG][_find_events] event_title={event_title}, event_start_str={event_start_str}")
                 if not event_start_str:
                     continue
                 # 日付のみイベント対応
                 if 'date' in e['start'] and 'dateTime' not in e['start']:
                     event_start = datetime.fromisoformat(event_start_str)
+                    logger.debug(f"[DEBUG][_find_events] (date only) event_start={event_start.date()}, user_date={start_time.date()}")
                     # 日付が一致すればOK
                     if event_start.date() != start_time.date():
                         continue
@@ -632,13 +635,19 @@ class CalendarManager:
                     # 秒・マイクロ秒を丸めて比較
                     event_start = event_start.replace(second=0, microsecond=0)
                     st = start_time.replace(second=0, microsecond=0)
-                    if abs((event_start - st).total_seconds()) > 300:
+                    diff_sec = abs((event_start - st).total_seconds())
+                    logger.debug(f"[DEBUG][_find_events] (datetime) event_start={event_start}, user_start={st}, diff_sec={diff_sec}")
+                    if diff_sec > 300:
                         continue
                 # タイトルが指定されている場合のみタイトルも考慮
                 if title:
-                    if normalize_title(title) not in normalize_title(event_title):
+                    norm_title = normalize_title(title)
+                    norm_event_title = normalize_title(event_title)
+                    logger.debug(f"[DEBUG][_find_events] norm_title={norm_title}, norm_event_title={norm_event_title}")
+                    if norm_title not in norm_event_title:
                         continue
                 matched.append(e)
+            logger.debug(f"[DEBUG][_find_events] matched件数: {len(matched)}")
             return matched
         except Exception as e:
             logger.error(f"イベントの検索に失敗: {str(e)}")
