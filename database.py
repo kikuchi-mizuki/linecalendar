@@ -78,12 +78,14 @@ class DatabaseManager:
                         user_id TEXT PRIMARY KEY,
                         operation_type TEXT,
                         delete_index INTEGER,
+                        event_index INTEGER,
                         title TEXT,
                         start_time TEXT,
                         end_time TEXT,
                         new_start_time TEXT,
                         new_end_time TEXT,
                         location TEXT,
+                        person TEXT,
                         description TEXT,
                         recurrence TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -94,8 +96,10 @@ class DatabaseManager:
                 for col, typ in [
                     ("operation_type", "TEXT"),
                     ("delete_index", "INTEGER"),
+                    ("event_index", "INTEGER"),
                     ("new_start_time", "TEXT"),
-                    ("new_end_time", "TEXT")
+                    ("new_end_time", "TEXT"),
+                    ("person", "TEXT")
                 ]:
                     try:
                         cursor.execute(f'ALTER TABLE pending_events ADD COLUMN {col} {typ}')
@@ -446,25 +450,29 @@ class DatabaseManager:
                 new_end_time = event_info.get('new_end_time')
                 if isinstance(new_end_time, datetime):
                     new_end_time = new_end_time.isoformat()
-                # 以下は既存のコード
+                # 追加: event_index, person
+                event_index = event_info.get('event_index')
+                person = event_info.get('person')
                 cursor.execute('''
                     INSERT OR REPLACE INTO pending_events (
-                        user_id, operation_type, delete_index,
+                        user_id, operation_type, delete_index, event_index,
                         title, start_time, end_time,
                         new_start_time, new_end_time,
-                        location, description, recurrence
+                        location, person, description, recurrence
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     user_id,
                     event_info.get('operation_type'),
                     event_info.get('delete_index'),
+                    event_index,
                     event_info.get('title'),
                     start_time,
                     end_time,
                     new_start_time,
                     new_end_time,
                     event_info.get('location'),
+                    person,
                     event_info.get('description'),
                     event_info.get('recurrence')
                 ))
@@ -479,17 +487,16 @@ class DatabaseManager:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    SELECT operation_type, delete_index,
+                    SELECT operation_type, delete_index, event_index,
                            title, start_time, end_time,
                            new_start_time, new_end_time,
-                           location, description, recurrence
+                           location, person, description, recurrence
                     FROM pending_events
                     WHERE user_id = ?
                 ''', (user_id,))
                 result = cursor.fetchone()
                 if not result:
                     return None
-                # 各フィールドがdatetime形式の場合のみto_awareで変換
                 def to_aware(dt_str):
                     if not dt_str:
                         return None
@@ -503,14 +510,16 @@ class DatabaseManager:
                 return {
                     'operation_type': result[0],
                     'delete_index': result[1],
-                    'title': result[2],
-                    'start_time': to_aware(result[3]),
-                    'end_time': to_aware(result[4]),
-                    'new_start_time': to_aware(result[5]),
-                    'new_end_time': to_aware(result[6]),
-                    'location': result[7],
-                    'description': result[8],
-                    'recurrence': result[9]
+                    'event_index': result[2],
+                    'title': result[3],
+                    'start_time': to_aware(result[4]),
+                    'end_time': to_aware(result[5]),
+                    'new_start_time': to_aware(result[6]),
+                    'new_end_time': to_aware(result[7]),
+                    'location': result[8],
+                    'person': result[9],
+                    'description': result[10],
+                    'recurrence': result[11]
                 }
         except Exception as e:
             logger.error(f"保留中のイベントの取得に失敗: {str(e)}")
