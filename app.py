@@ -1778,7 +1778,7 @@ async def handle_yes_response(calendar_id: str) -> str:
         # 保留中のイベントを取得
         pending_event = get_pending_event(calendar_id)
         if not pending_event:
-            return "操作タイプを特定できませんでした。もう一度お試しください。"
+            return "確認中の予定がありません。"
 
         # カレンダーマネージャーを取得
         calendar_manager = get_calendar_manager(calendar_id)
@@ -1812,7 +1812,6 @@ async def handle_yes_response(calendar_id: str) -> str:
             if not new_start_time or not new_end_time:
                 return "新しい時間情報が不足しています。もう一度やり直してください。"
             result = await calendar_manager.update_event_by_index(
-                calendar_id=calendar_id,
                 index=event_index,
                 new_start_time=new_start_time,
                 new_end_time=new_end_time,
