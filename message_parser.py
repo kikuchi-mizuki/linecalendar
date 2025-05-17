@@ -1142,6 +1142,36 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             logger.debug(f"[datetime_extraction] dateparser fallback: start={dt}, end={dt + timedelta(hours=1)}")
             return result
 
+        # すべての候補を集めて未来の最も近い日付を選ぶ
+        all_candidates = []
+        # スラッシュ日付＋時刻
+        if 'future_candidates' in locals():
+            for t in future_candidates:
+                all_candidates.append(t)
+        # 日本語日付＋時刻
+        for t in jp_future_candidates:
+            all_candidates.append(t)
+        # dateparser fallback
+        import dateparser
+        settings = {
+            "TIMEZONE": "Asia/Tokyo",
+            "RETURN_AS_TIMEZONE_AWARE": True,
+            "PREFER_DATES_FROM": "future",
+        }
+        dt = dateparser.parse(message, settings=settings)
+        if dt:
+            dt = dt.astimezone(JST)
+            if dt >= now:
+                all_candidates.append(dt)
+        if all_candidates:
+            start_time = min(all_candidates)
+            end_time = start_time + timedelta(hours=1)
+            result['start_time'] = start_time
+            result['end_time'] = end_time
+            result['is_time_range'] = False
+            logger.debug(f"[datetime_extraction] 最終選択(ALL): start={start_time}, end={end_time}")
+            return result
+
         return result
 
     except Exception as e:
