@@ -447,6 +447,10 @@ class CalendarManager:
             
             # 予定を取得
             events = await self.get_events(start_time, end_time)
+            logger.debug(f"[update_event_by_index] 取得イベント一覧:")
+            for idx, ev in enumerate(events):
+                ev_start = ev['start'].get('dateTime', ev['start'].get('date'))
+                logger.debug(f"  idx={idx+1} id={ev.get('id')} title={ev.get('summary')} start={ev_start}")
             if not events:
                 return {'success': False, 'error': '予定が見つかりませんでした'}
             
@@ -458,6 +462,8 @@ class CalendarManager:
             # 更新対象の予定を取得
             event = events[index - 1]
             event_id = event['id']
+            logger.debug(f"[update_event_by_index] 除外するevent_id={event_id}")
+            
             # 重複チェック（skip_overlap_checkがFalseのときのみ）
             if not skip_overlap_check:
                 logger.info(f"[update_event_by_index] skip_overlap_check is False, doing overlap check")

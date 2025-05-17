@@ -441,10 +441,13 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
             if len(lines) >= 2:
                 dt1 = extract_datetime_from_message(lines[0], 'update')
                 dt2 = extract_datetime_from_message(lines[1], 'update')
+                logger.debug(f"[parse_message][update] 1行目: {lines[0]} => {dt1}")
+                logger.debug(f"[parse_message][update] 2行目: {lines[1]} => {dt2}")
                 # 2行目のdurationがあればend_timeを上書き
                 new_end_time = dt2['end_time']
                 if 'duration' in dt2 and dt2['start_time']:
                     new_end_time = dt2['start_time'] + dt2['duration']
+                logger.debug(f"[parse_message][update] pending_event new_start_time={dt2.get('start_time')}, new_end_time={new_end_time}")
                 if dt1.get('start_time') and dt2.get('start_time'):
                     return {
                         'success': True,
@@ -1533,10 +1536,13 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
             if len(lines) >= 2:
                 dt1 = extract_datetime_from_message(lines[0], 'update')
                 dt2 = extract_datetime_from_message(lines[1], 'update')
+                logger.debug(f"[parse_message][update] 1行目: {lines[0]} => {dt1}")
+                logger.debug(f"[parse_message][update] 2行目: {lines[1]} => {dt2}")
                 # 2行目のdurationがあればend_timeを上書き
                 new_end_time = dt2['end_time']
                 if 'duration' in dt2 and dt2['start_time']:
                     new_end_time = dt2['start_time'] + dt2['duration']
+                logger.debug(f"[parse_message][update] pending_event new_start_time={dt2.get('start_time')}, new_end_time={new_end_time}")
                 if dt1.get('start_time') and dt2.get('start_time'):
                     return {
                         'success': True,
