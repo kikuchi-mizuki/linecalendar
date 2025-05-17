@@ -937,6 +937,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
         # まず相対日付表現を優先的に判定
         relative_result = extract_relative_datetime(message, now)
         if relative_result:
+            logger.debug(f"[datetime_extraction] 入力メッセージ: {message}, 抽出結果: start={relative_result.get('start_time')}, end={relative_result.get('end_time')}")
             return relative_result
         result = {
             'start_time': None,
@@ -1011,6 +1012,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 result['start_time'] = start_time
                 result['end_time'] = end_time
                 result['is_time_range'] = True
+                logger.debug(f"[datetime_extraction] 入力メッセージ: {message}, 抽出結果: start={result.get('start_time')}, end={result.get('end_time')}")
                 return result
 
         # 時刻範囲が見つからない場合は、単一の時刻を探す
@@ -1060,6 +1062,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 result['start_time'] = start_time
                 result['end_time'] = end_time
                 result['is_time_range'] = False
+                logger.debug(f"[datetime_extraction] 入力メッセージ: {message}, 抽出結果: start={result.get('start_time')}, end={result.get('end_time')}")
                 return result
 
         # --- ここから追加: スラッシュ・ハイフン区切り日付パターン ---
@@ -1078,6 +1081,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             result['end_time'] = end_time
             result['is_time_range'] = True
             logger.debug(f"スラッシュ・ハイフン日付パターン: {start_time} から {end_time}")
+            logger.debug(f"[datetime_extraction] 入力メッセージ: {message}, 抽出結果: start={result.get('start_time')}, end={result.get('end_time')}")
             return result
         # --- ここまで追加 ---
 
