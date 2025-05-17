@@ -407,37 +407,7 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
         elif operation_type == 'update':
             # 予定更新の場合
             title = extract_title(message)
-            # 2つ以上の日時が含まれている場合は両方抽出
-            date_matches = list(re.finditer(r'(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?', message))
-            if len(date_matches) >= 2:
-                # 1つ目
-                m1 = date_matches[0]
-                month1 = int(m1.group(1))
-                day1 = int(m1.group(2))
-                hour1 = int(m1.group(3))
-                minute1 = int(m1.group(4)) if m1.group(4) else 0
-                year = current_time.year
-                start_time = JST.localize(datetime(year, month1, day1, hour1, minute1))
-                end_time = start_time + timedelta(hours=1)
-                # 2つ目
-                m2 = date_matches[1]
-                month2 = int(m2.group(1))
-                day2 = int(m2.group(2))
-                hour2 = int(m2.group(3))
-                minute2 = int(m2.group(4)) if m2.group(4) else 0
-                new_start_time = JST.localize(datetime(year, month2, day2, hour2, minute2))
-                new_end_time = new_start_time + timedelta(hours=1)
-                return {
-                    'success': True,
-                    'operation_type': 'update',
-                    'title': title,
-                    'start_time': start_time,
-                    'end_time': end_time,
-                    'new_start_time': new_start_time,
-                    'new_end_time': new_end_time
-                }
-            # 1行ずつ分割して2つの時刻がある場合（例: 1行目と2行目）
-            lines = [line.strip() for line in message.splitlines() if line.strip()]
+            lines = message.splitlines()
             if len(lines) >= 2:
                 dt1 = extract_datetime_from_message(lines[0], 'update')
                 dt2 = extract_datetime_from_message(lines[1], 'update')
@@ -451,11 +421,10 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
                 logger.debug(f"[parse_message][update] pending_event new_start_time={new_start_time}, new_end_time={new_end_time}")
                 if dt1.get('start_time') and new_start_time:
                     return {
-                        'success': True,
                         'operation_type': 'update',
                         'title': title,
-                        'start_time': dt1['start_time'],
-                        'end_time': dt1['end_time'],
+                        'start_time': dt1.get('start_time'),
+                        'end_time': dt1.get('end_time'),
                         'new_start_time': new_start_time,
                         'new_end_time': new_end_time
                     }
@@ -1504,37 +1473,7 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
         elif operation_type == 'update':
             # 予定更新の場合
             title = extract_title(message)
-            # 2つ以上の日時が含まれている場合は両方抽出
-            date_matches = list(re.finditer(r'(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?', message))
-            if len(date_matches) >= 2:
-                # 1つ目
-                m1 = date_matches[0]
-                month1 = int(m1.group(1))
-                day1 = int(m1.group(2))
-                hour1 = int(m1.group(3))
-                minute1 = int(m1.group(4)) if m1.group(4) else 0
-                year = current_time.year
-                start_time = JST.localize(datetime(year, month1, day1, hour1, minute1))
-                end_time = start_time + timedelta(hours=1)
-                # 2つ目
-                m2 = date_matches[1]
-                month2 = int(m2.group(1))
-                day2 = int(m2.group(2))
-                hour2 = int(m2.group(3))
-                minute2 = int(m2.group(4)) if m2.group(4) else 0
-                new_start_time = JST.localize(datetime(year, month2, day2, hour2, minute2))
-                new_end_time = new_start_time + timedelta(hours=1)
-                return {
-                    'success': True,
-                    'operation_type': 'update',
-                    'title': title,
-                    'start_time': start_time,
-                    'end_time': end_time,
-                    'new_start_time': new_start_time,
-                    'new_end_time': new_end_time
-                }
-            # 1行ずつ分割して2つの時刻がある場合（例: 1行目と2行目）
-            lines = [line.strip() for line in message.splitlines() if line.strip()]
+            lines = message.splitlines()
             if len(lines) >= 2:
                 dt1 = extract_datetime_from_message(lines[0], 'update')
                 dt2 = extract_datetime_from_message(lines[1], 'update')
@@ -1548,11 +1487,10 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
                 logger.debug(f"[parse_message][update] pending_event new_start_time={new_start_time}, new_end_time={new_end_time}")
                 if dt1.get('start_time') and new_start_time:
                     return {
-                        'success': True,
                         'operation_type': 'update',
                         'title': title,
-                        'start_time': dt1['start_time'],
-                        'end_time': dt1['end_time'],
+                        'start_time': dt1.get('start_time'),
+                        'end_time': dt1.get('end_time'),
                         'new_start_time': new_start_time,
                         'new_end_time': new_end_time
                     }
