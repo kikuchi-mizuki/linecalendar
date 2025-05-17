@@ -1815,9 +1815,7 @@ async def handle_yes_response(calendar_id: str) -> str:
             result = await calendar_manager.update_event_by_index(
                 index=event_index + 1,
                 new_start_time=new_start_time,
-                new_end_time=new_end_time,
-                title=pending_event['title'],
-                description=pending_event.get('description')
+                new_end_time=new_end_time
             )
             clear_pending_event(calendar_id)
             return format_response_message('update', result)
