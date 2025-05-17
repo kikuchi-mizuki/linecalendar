@@ -380,11 +380,12 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
             # それ以外は従来通り
             datetime_info = extract_datetime_from_message(message, operation_type)
             return {
-                'success': True,
                 'operation_type': 'update',
                 'title': title,
-                'start_time': datetime_info.get('start_time') if datetime_info else None,
-                'end_time': datetime_info.get('end_time') if datetime_info else None
+                'start_time': datetime_info.get('start_time'),
+                'end_time': datetime_info.get('end_time'),
+                'new_start_time': datetime_info.get('new_start_time'),
+                'new_end_time': datetime_info.get('new_end_time')
             }
                 
         elif operation_type == 'read':
@@ -1466,11 +1467,12 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
             # それ以外は従来通り
             datetime_info = extract_datetime_from_message(message, operation_type)
             return {
-                'success': True,
                 'operation_type': 'update',
                 'title': title,
-                'start_time': datetime_info.get('start_time') if datetime_info else None,
-                'end_time': datetime_info.get('end_time') if datetime_info else None
+                'start_time': datetime_info.get('start_time'),
+                'end_time': datetime_info.get('end_time'),
+                'new_start_time': datetime_info.get('new_start_time'),
+                'new_end_time': datetime_info.get('new_end_time')
             }
                 
         elif operation_type == 'read':

@@ -362,7 +362,7 @@ class CalendarManager:
                 
             # 重複チェック（スキップ可能）
             if not skip_overlap_check:
-                overlapping_events = await self._check_overlapping_events(new_start_time, new_end_time)
+                overlapping_events = await self._check_overlapping_events(new_start_time, new_end_time, exclude_event_id=events[0]['id'])
                 if overlapping_events:
                     logger.warning(f"更新後の時間帯に重複する予定があります: {len(overlapping_events)}件")
                     warning_message = "⚠️ 更新後の時間帯に既に予定が存在します：\n"
@@ -846,7 +846,6 @@ class CalendarManager:
                 end_time=new_end_time
             )
             for e in events:
-                # event_idの比較を厳密化（str型・空白除去）
                 if str(e.get('id', '')).strip() == str(event_id).strip():
                     continue  # 自分自身は除外
                 e_start = datetime.fromisoformat(e['start']['dateTime'].replace('Z', '+00:00')).astimezone(self.timezone)
