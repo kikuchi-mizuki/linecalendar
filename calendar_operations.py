@@ -616,28 +616,36 @@ class CalendarManager:
             search_end = end_time + timedelta(hours=1)
             events = await self.get_events(search_start, search_end)
             logger.debug(f"[DEBUG][_find_events] 検索範囲: {search_start} ～ {search_end}, ユーザー指定: {start_time}")
-            matched = []
+            matched_exact = []
+            matched_range = []
             for e in events:
                 event_title = e.get('summary', '')
                 event_start_str = e['start'].get('dateTime') or e['start'].get('date')
+                event_end_str = e['end'].get('dateTime') or e['end'].get('date')
                 logger.debug(f"[DEBUG][_find_events] event_title={event_title}, event_start_str={event_start_str}")
-                if not event_start_str:
+                if not event_start_str or not event_end_str:
                     continue
                 # 日付のみイベント対応
                 if 'date' in e['start'] and 'dateTime' not in e['start']:
                     event_start = datetime.fromisoformat(event_start_str)
+                    event_end = datetime.fromisoformat(event_end_str)
                     logger.debug(f"[DEBUG][_find_events] (date only) event_start={event_start.date()}, user_date={start_time.date()}")
                     # 日付が一致すればOK
                     if event_start.date() != start_time.date():
                         continue
+                    # 日付のみの場合は完全一致も範囲一致も同じ
+                    matched_exact.append(e)
                 else:
                     event_start = datetime.fromisoformat(event_start_str.replace('Z', '+00:00')).astimezone(self.timezone)
-                    # 秒・マイクロ秒を丸めて比較
-                    event_start = event_start.replace(second=0, microsecond=0)
+                    event_end = datetime.fromisoformat(event_end_str.replace('Z', '+00:00')).astimezone(self.timezone)
                     st = start_time.replace(second=0, microsecond=0)
-                    diff_sec = abs((event_start - st).total_seconds())
-                    logger.debug(f"[DEBUG][_find_events] (datetime) event_start={event_start}, user_start={st}, diff_sec={diff_sec}")
-                    if diff_sec > 300:
+                    # 完全一致
+                    if event_start == st:
+                        matched_exact.append(e)
+                        continue
+                    # 範囲一致
+                    if event_start < st < event_end:
+                        matched_range.append(e)
                         continue
                 # タイトルが指定されている場合のみタイトルも考慮
                 if title:
@@ -646,9 +654,12 @@ class CalendarManager:
                     logger.debug(f"[DEBUG][_find_events] norm_title={norm_title}, norm_event_title={norm_event_title}")
                     if norm_title not in norm_event_title:
                         continue
-                matched.append(e)
-            logger.debug(f"[DEBUG][_find_events] matched件数: {len(matched)}")
-            return matched
+            # 完全一致があればそれを返す、なければ範囲一致を返す
+            if matched_exact:
+                logger.debug(f"[DEBUG][_find_events] 完全一致件数: {len(matched_exact)}")
+                return matched_exact
+            logger.debug(f"[DEBUG][_find_events] 範囲一致件数: {len(matched_range)}")
+            return matched_range
         except Exception as e:
             logger.error(f"イベントの検索に失敗: {str(e)}")
             logger.error(traceback.format_exc())
