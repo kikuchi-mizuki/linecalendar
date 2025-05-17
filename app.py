@@ -777,7 +777,7 @@ async def handle_message(event):
 
         # 追加: pending_eventが存在する場合は重複登録を防止
         if get_pending_event(user_id):
-            logger.info("既にpending_eventが存在するため、重複登録を防止しました")
+            logger.info(f"[handle_message][pending_event exists] user_id={user_id}, pending_event={get_pending_event(user_id)}")
             return
 
         # ユーザーの認証情報を取得
@@ -837,6 +837,7 @@ async def handle_message(event):
                         recurrence=result.get('recurrence')
                     )
 
+                    logger.info(f"[handle_message][add_result] user_id={user_id}, add_result={add_result}")
                     if add_result['success']:
                         day = result['start_time'].replace(hour=0, minute=0, second=0, microsecond=0)
                         day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
