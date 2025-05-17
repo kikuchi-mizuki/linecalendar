@@ -1079,6 +1079,24 @@ async def handle_message(event):
                         msg = f"予定を更新しました！\n\n" + format_event_list(events, day, day_end)
                         await reply_text(reply_token, msg)
                         return
+                    elif update_result.get('error') == 'duplicate':
+                        # 重複時はpending_eventを保存
+                        pending_event = {
+                            'operation_type': 'update',
+                            'title': result.get('title'),
+                            'start_time': result.get('start_time'),
+                            'end_time': result.get('end_time'),
+                            'new_start_time': result.get('new_start_time'),
+                            'new_end_time': result.get('new_end_time'),
+                            'location': result.get('location'),
+                            'person': result.get('person'),
+                            'description': result.get('description'),
+                            'recurrence': result.get('recurrence')
+                        }
+                        save_pending_event(user_id, pending_event)
+                        msg = f"{update_result.get('message', '更新後の時間帯に重複する予定があります')}"
+                        await reply_text(reply_token, msg)
+                        return
                     else:
                         # 失敗時もその日の予定一覧を返信
                         day = result['new_start_time'].replace(hour=0, minute=0, second=0, microsecond=0)
