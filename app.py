@@ -315,11 +315,17 @@ def handle_text_message(event):
         # --- ここまで追加 ---
         if user_id and is_confirmation_reply(message):
             pending_event = get_pending_event(user_id)
-            if pending_event and pending_event.get('operation_type') == 'add':
-                # 予定追加処理をpending_eventの内容で実行
-                loop.run_until_complete(add_event_from_pending(user_id, reply_token, pending_event))
-                clear_pending_event(user_id)
-                return
+            if pending_event:
+                op_type = pending_event.get('operation_type')
+                if op_type == 'add':
+                    loop.run_until_complete(add_event_from_pending(user_id, reply_token, pending_event))
+                    clear_pending_event(user_id)
+                    return
+                elif op_type == 'update':
+                    result_msg = loop.run_until_complete(handle_yes_response(user_id))
+                    clear_pending_event(user_id)
+                    loop.run_until_complete(reply_text(reply_token, result_msg))
+                    return
         loop.run_until_complete(handle_message(event))
     except Exception as e:
         logger.error(f"メッセージ処理中にエラーが発生: {str(e)}")
