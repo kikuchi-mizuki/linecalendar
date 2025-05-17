@@ -358,10 +358,14 @@ class CalendarManager:
                 overlapping_events = await self._check_overlapping_events(new_start_time, new_end_time)
                 if overlapping_events:
                     logger.warning(f"更新後の時間帯に重複する予定があります: {len(overlapping_events)}件")
+                    warning_message = "⚠️ 更新後の時間帯に既に予定が存在します：\n"
+                    for detail in overlapping_events:
+                        warning_message += f"- {detail['summary']} ({detail['start']}～{detail['end']})\n"
+                    warning_message += "\nそれでも更新しますか？"
                     return {
                         'success': False,
                         'error': 'duplicate',
-                        'message': '更新後の時間帯に重複する予定があります',
+                        'message': warning_message,
                         'duplicate_events': overlapping_events
                     }
             
