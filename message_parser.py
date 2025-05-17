@@ -1069,7 +1069,8 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             month = int(date_match.group(1))
             day = int(date_match.group(2))
             year = now.year
-            if (month < now.month) or (month == now.month and day < now.day):
+            # 修正: 今日以降は今年、今日より前は来年
+            if datetime(year, month, day) < now.replace(hour=0, minute=0, second=0, microsecond=0):
                 year += 1
             start_time = JST.localize(datetime(year, month, day, 0, 0))
             end_time = JST.localize(datetime(year, month, day, 23, 59))
@@ -1183,6 +1184,7 @@ def extract_time(message: str, current_time: datetime) -> Tuple[Optional[datetim
         day = int(match.group(2))
         hour = int(match.group(3))
         year = current_time.year
+        # 修正: 今日と同じ日付なら今年にする
         if (month < current_time.month) or (month == current_time.month and day < current_time.day):
             year += 1
         start_time = JST.localize(datetime(year, month, day, hour, 0))
