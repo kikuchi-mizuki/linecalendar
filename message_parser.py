@@ -1062,6 +1062,24 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 result['is_time_range'] = False
                 return result
 
+        # --- ここから追加: スラッシュ・ハイフン区切り日付パターン ---
+        # 例: 5/19, 5-19
+        date_match = re.search(r'(\d{1,2})[/-](\d{1,2})', message)
+        if date_match:
+            month = int(date_match.group(1))
+            day = int(date_match.group(2))
+            year = now.year
+            if (month < now.month) or (month == now.month and day < now.day):
+                year += 1
+            start_time = JST.localize(datetime(year, month, day, 0, 0))
+            end_time = JST.localize(datetime(year, month, day, 23, 59))
+            result['start_time'] = start_time
+            result['end_time'] = end_time
+            result['is_time_range'] = True
+            logger.debug(f"スラッシュ・ハイフン日付パターン: {start_time} から {end_time}")
+            return result
+        # --- ここまで追加 ---
+
         return result
 
     except Exception as e:
