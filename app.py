@@ -1675,6 +1675,7 @@ async def handle_yes_response(calendar_id: str) -> str:
 
         # 操作タイプに応じて処理を分岐
         operation_type = pending_event.get('operation_type')
+        logger.debug(f"[pending_event] on yes: {pending_event}")
         if operation_type == 'add':
             # 予定追加の処理
             result = await calendar_manager.add_event(
@@ -1694,11 +1695,15 @@ async def handle_yes_response(calendar_id: str) -> str:
                 event_index = pending_event.get('delete_index')
             if event_index is None:
                 return "更新対象の予定を特定できませんでした。もう一度お試しください。"
+            new_start_time = pending_event.get('new_start_time')
+            new_end_time = pending_event.get('new_end_time')
+            if not new_start_time or not new_end_time:
+                return "新しい時間情報が不足しています。もう一度やり直してください。"
             result = await calendar_manager.update_event_by_index(
                 calendar_id=calendar_id,
                 index=event_index,
-                new_start_time=pending_event['start_time'],
-                new_end_time=pending_event['end_time'],
+                new_start_time=new_start_time,
+                new_end_time=new_end_time,
                 new_title=pending_event['title'],
                 new_description=pending_event.get('description'),
                 skip_overlap_check=True  # 重複チェックは既に完了しているため
