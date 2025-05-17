@@ -1102,7 +1102,8 @@ async def handle_message(event):
                             'person': result.get('person'),
                             'description': result.get('description'),
                             'recurrence': result.get('recurrence'),
-                            'event_index': event_index
+                            'event_index': event_index,
+                            'force_update': True
                         }
                         save_pending_event(user_id, pending_event)
                         msg = f"{update_result.get('message', '更新後の時間帯に重複する予定があります')}"
@@ -1811,11 +1812,12 @@ async def handle_yes_response(calendar_id: str) -> str:
             new_end_time = pending_event.get('new_end_time')
             if not new_start_time or not new_end_time:
                 return "新しい時間情報が不足しています。もう一度やり直してください。"
-            # calendar_operations.pyのindexは1始まりなので+1する
+            skip_overlap = pending_event.get('force_update') or pending_event.get('skip_overlap_check') or False
             result = await calendar_manager.update_event_by_index(
                 index=event_index + 1,
                 new_start_time=new_start_time,
-                new_end_time=new_end_time
+                new_end_time=new_end_time,
+                skip_overlap_check=skip_overlap
             )
             clear_pending_event(calendar_id)
             if not result.get('success', False):

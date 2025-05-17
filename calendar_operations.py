@@ -409,7 +409,8 @@ class CalendarManager:
         index: int,
         new_start_time: datetime,
         new_end_time: datetime,
-        start_time: Optional[datetime] = None
+        start_time: Optional[datetime] = None,
+        skip_overlap_check: bool = False
     ) -> Dict:
         """
         インデックスを指定して予定を更新する
@@ -419,7 +420,7 @@ class CalendarManager:
             new_start_time (datetime): 新しい開始時間
             new_end_time (datetime): 新しい終了時間
             start_time (Optional[datetime]): 検索開始時間（指定がない場合はnew_start_timeの日付の0時0分）
-            
+            skip_overlap_check (bool): Trueなら重複チェックをスキップ
         Returns:
             Dict: 更新結果
         """
@@ -456,14 +457,15 @@ class CalendarManager:
             # 更新対象の予定を取得
             event = events[index - 1]
             
-            # 重複チェック
-            overlapping_events = await self._check_overlapping_events(new_start_time, new_end_time)
-            if overlapping_events:
-                return {
-                    'success': False,
-                    'error': '更新後の時間帯に重複する予定があります',
-                    'overlapping_events': overlapping_events
-                }
+            # 重複チェック（skip_overlap_checkがFalseのときのみ）
+            if not skip_overlap_check:
+                overlapping_events = await self._check_overlapping_events(new_start_time, new_end_time)
+                if overlapping_events:
+                    return {
+                        'success': False,
+                        'error': '更新後の時間帯に重複する予定があります',
+                        'overlapping_events': overlapping_events
+                    }
             
             # 予定を更新
             event['start'] = {
