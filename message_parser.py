@@ -196,6 +196,8 @@ DATE_PATTERNS = {
 # タイムゾーンの設定
 JST = pytz.timezone('Asia/Tokyo')
 
+logging.basicConfig(level=logging.DEBUG)
+
 def normalize_text(text: str, keep_katakana: bool = False) -> str:
     """
     テキストを正規化する
