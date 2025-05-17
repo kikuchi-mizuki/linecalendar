@@ -841,22 +841,22 @@ class CalendarManager:
             logger.debug(f"[update_event_by_id] 取得したevent: {event}")
 
             # 重複チェック（自分自身のイベントは除外）
-            conflicting_events = await self.get_events(
+            events = await self.get_events(
                 start_time=new_start_time,
-                end_time=new_end_time,
-                ignore_event_id=event_id
+                end_time=new_end_time
             )
-            logger.debug(f"[update_event_by_id] 重複チェック結果: {conflicting_events}")
-
-            if conflicting_events:
-                return {
-                    'success': False,
-                    'error': '指定された時間に他の予定が存在します。'
-                }
+            for e in events:
+                if e.get('id') == event_id:
+                    continue  # 自分自身は除外
+                e_start = datetime.fromisoformat(e['start']['dateTime'].replace('Z', '+00:00')).astimezone(self.timezone)
+                e_end = datetime.fromisoformat(e['end']['dateTime'].replace('Z', '+00:00')).astimezone(self.timezone)
+                if (new_start_time < e_end and new_end_time > e_start):
+                    logger.warning(f"[update_event_by_id] 重複イベント: {e}")
+                    return {'success': False, 'error': 'duplicate', 'message': '更新後の時間帯に既に予定があります。'}
 
             # 予定を更新
-            event['start'] = {'dateTime': new_start_time.isoformat()}
-            event['end'] = {'dateTime': new_end_time.isoformat()}
+            event['start'] = {'dateTime': new_start_time.isoformat(), 'timeZone': 'Asia/Tokyo'}
+            event['end'] = {'dateTime': new_end_time.isoformat(), 'timeZone': 'Asia/Tokyo'}
             logger.debug(f"[update_event_by_id] 更新前のevent: {event}")
 
             updated_event = self.service.events().update(
