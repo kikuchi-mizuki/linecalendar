@@ -1813,6 +1813,7 @@ async def handle_yes_response(calendar_id: str) -> str:
             if not new_start_time or not new_end_time:
                 return "新しい時間情報が不足しています。もう一度やり直してください。"
             skip_overlap = pending_event.get('force_update') or pending_event.get('skip_overlap_check') or False
+            logger.info(f"[handle_yes_response] skip_overlap={skip_overlap}, pending_event={pending_event}")
             result = await calendar_manager.update_event_by_index(
                 index=event_index + 1,
                 new_start_time=new_start_time,
