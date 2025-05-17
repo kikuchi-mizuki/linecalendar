@@ -1349,7 +1349,7 @@ def extract_time(message: str, current_time: datetime) -> Tuple[Optional[datetim
     # 5/16 10:00形式の抽出
     lines = message.splitlines() if isinstance(message, str) else []
     for line in lines:
-        match = re.search(r'(\d{1,2})/(\d{1,2})[\s　]+(\d{1,2}):(\d{2})', line)
+        match = re.search(r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2}):(\d{2})', line)
         if match:
             month = int(match.group(1))
             day = int(match.group(2))
