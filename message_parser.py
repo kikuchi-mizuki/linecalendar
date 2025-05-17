@@ -962,14 +962,15 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
 
         # 時刻範囲のパターンを最優先で抽出
         time_range_patterns = [
-            r'(?P<start_hour>\d{1,2}):(?P<start_minute>\d{2})[\-〜~](?P<end_hour>\d{1,2}):(?P<end_minute>\d{2})',
-            r'(?P<start_hour>\d{1,2})時(?:(?P<start_minute>\d{1,2})分)?[\-〜~](?P<end_hour>\d{1,2})時(?:(?P<end_minute>\d{1,2})分)?',
-            r'(?P<start_period>午前|午後|朝|夜|夕方|深夜)(?P<start_hour>\d{1,2})時(?:(?P<start_minute>\d{1,2})分)?[\-〜~](?P<end_period>午前|午後|朝|夜|夕方|深夜)?(?P<end_hour>\d{1,2})時(?:(?P<end_minute>\d{1,2})分)?'
+            r'(?P<start_hour>\d{1,2}):(?P<start_minute>\d{2})[\-〜~～](?P<end_hour>\d{1,2}):(?P<end_minute>\d{2})',
+            r'(?P<start_hour>\d{1,2})時(?:(?P<start_minute>\d{1,2})分)?[\-〜~～](?P<end_hour>\d{1,2})時(?:(?P<end_minute>\d{1,2})分)?',
+            r'(?P<start_period>午前|午後|朝|夜|夕方|深夜)(?P<start_hour>\d{1,2})時(?:(?P<start_minute>\d{1,2})分)?[\-〜~～](?P<end_period>午前|午後|朝|夜|夕方|深夜)?(?P<end_hour>\d{1,2})時(?:(?P<end_minute>\d{1,2})分)?'
         ]
 
         for pattern in time_range_patterns:
             match = re.search(pattern, message)
             if match:
+                logger.debug(f"[extract_datetime_from_message] 時刻範囲抽出: {match.groupdict()}")
                 # 開始時刻の処理
                 start_hour = int(match.group('start_hour'))
                 start_minute = int(match.group('start_minute') or 0)
