@@ -831,15 +831,19 @@ class CalendarManager:
 
             # 予定を取得
             event = self.service.events().get(calendarId=self.calendar_id, eventId=event_id).execute()
+            logger.debug(f"[update_event_by_id][DEBUG] event取得直後: id={event_id}, event={event}")
             # 重複チェック（自分自身は除外）
+            logger.debug(f"[update_event_by_id][DEBUG] _check_overlapping_events呼び出し: event_id={event_id}, new_start_time={new_start_time}, new_end_time={new_end_time}, exclude_event_id={event_id}")
             overlapping_events = await self._check_overlapping_events(new_start_time, new_end_time, exclude_event_id=event_id)
             if overlapping_events:
+                logger.warning(f"[update_event_by_id][DEBUG] 重複イベント: {overlapping_events}")
                 return {
                     'success': False,
                     'error': '更新後の時間帯に重複する予定があります',
                     'overlapping_events': overlapping_events
                 }
             # 予定を更新
+            logger.debug(f"[update_event_by_id][DEBUG] 更新直前: event={event}")
             event['start'] = {
                 'dateTime': new_start_time.isoformat(),
                 'timeZone': 'Asia/Tokyo'
@@ -853,6 +857,7 @@ class CalendarManager:
                 eventId=event_id,
                 body=event
             ).execute()
+            logger.debug(f"[update_event_by_id][DEBUG] 更新直後: updated_event={updated_event}")
             logger.info(f"予定を更新しました: {updated_event['id']}")
             return {
                 'success': True,
