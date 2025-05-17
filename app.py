@@ -316,6 +316,7 @@ def handle_text_message(event):
         if user_id and is_confirmation_reply(message):
             pending_event = get_pending_event(user_id)
             logger.debug(f"[pending_event] on yes: user_id={user_id}, pending_event={pending_event}")
+            logger.info(f"[pending_event][YES] user_id={user_id}, pending_event={pending_event}")
             if pending_event:
                 op_type = pending_event.get('operation_type')
                 if op_type == 'add':
@@ -723,6 +724,7 @@ def is_confirmation_reply(text: str) -> bool:
 # 保留中のイベント情報を保存
 def save_pending_event(user_id: str, event_info: dict) -> None:
     logger.debug(f"[save_pending_event] user_id={user_id}, event_info={event_info}")
+    logger.info(f"[save_pending_event][INFO] user_id={user_id}, event_info={event_info}")
     if event_info.get('new_start_time'):
         event_info['start_time'] = event_info['new_start_time']
     if event_info.get('new_end_time'):
@@ -732,11 +734,15 @@ def save_pending_event(user_id: str, event_info: dict) -> None:
     db_manager.save_pending_event(user_id, event_info)
     pending_check = get_pending_event(user_id)
     logger.debug(f"[pending_event] after save: user_id={user_id}, pending_event={pending_check}")
+    logger.info(f"[pending_event][AFTER SAVE] user_id={user_id}, pending_event={pending_check}")
+    if pending_check is None:
+        logger.warning(f"[pending_event][AFTER SAVE][WARNING] pending_event is None for user_id={user_id}")
 
 # 保留中のイベント情報を取得
 def get_pending_event(user_id: str) -> dict:
     pending = db_manager.get_pending_event(user_id)
     logger.debug(f"[get_pending_event] user_id={user_id}, pending_event={pending}")
+    logger.info(f"[get_pending_event][INFO] user_id={user_id}, pending_event={pending}")
     return pending
 
 # 保留中のイベント情報を削除
