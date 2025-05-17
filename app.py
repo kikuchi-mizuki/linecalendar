@@ -846,6 +846,7 @@ async def handle_message(event):
                             events = await calendar_manager.get_events(start_time=day, end_time=day_end)
                             # 重複イベントのインデックスを特定（最初の重複イベントを0番とする）
                             event_index = 0
+                            operation_type = result.get('operation_type', 'add')
                             pending_event = {
                                 'title': result['title'],
                                 'start_time': result['start_time'],
@@ -854,9 +855,12 @@ async def handle_message(event):
                                 'person': result.get('person'),
                                 'description': result.get('description'),
                                 'recurrence': result.get('recurrence'),
-                                'operation_type': 'add',
+                                'operation_type': operation_type,
                                 'event_index': event_index
                             }
+                            if operation_type == 'update':
+                                pending_event['new_start_time'] = result.get('new_start_time')
+                                pending_event['new_end_time'] = result.get('new_end_time')
                             save_pending_event(user_id, pending_event)
                             msg = add_result['message'] + "\n\n" + format_event_list(events, day, day_end)
                             await reply_text(reply_token, msg)
