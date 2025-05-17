@@ -377,8 +377,17 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
                         'new_start_time': new_start_time,
                         'new_end_time': new_end_time
                     }
-            # それ以外は従来通り
+            # 1行しかない場合もnew_start_time/new_end_timeが抽出されていればそれを優先
             datetime_info = extract_datetime_from_message(message, operation_type)
+            if datetime_info.get('new_start_time') and datetime_info.get('new_end_time'):
+                return {
+                    'operation_type': 'update',
+                    'title': title,
+                    'start_time': datetime_info.get('start_time'),
+                    'end_time': datetime_info.get('end_time'),
+                    'new_start_time': datetime_info.get('new_start_time'),
+                    'new_end_time': datetime_info.get('new_end_time')
+                }
             return {
                 'operation_type': 'update',
                 'title': title,
@@ -1464,8 +1473,17 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
                         'new_start_time': new_start_time,
                         'new_end_time': new_end_time
                     }
-            # それ以外は従来通り
+            # 1行しかない場合もnew_start_time/new_end_timeが抽出されていればそれを優先
             datetime_info = extract_datetime_from_message(message, operation_type)
+            if datetime_info.get('new_start_time') and datetime_info.get('new_end_time'):
+                return {
+                    'operation_type': 'update',
+                    'title': title,
+                    'start_time': datetime_info.get('start_time'),
+                    'end_time': datetime_info.get('end_time'),
+                    'new_start_time': datetime_info.get('new_start_time'),
+                    'new_end_time': datetime_info.get('new_end_time')
+                }
             return {
                 'operation_type': 'update',
                 'title': title,
