@@ -639,8 +639,10 @@ class CalendarManager:
                     event_start = datetime.fromisoformat(event_start_str.replace('Z', '+00:00')).astimezone(self.timezone)
                     event_end = datetime.fromisoformat(event_end_str.replace('Z', '+00:00')).astimezone(self.timezone)
                     st = start_time.replace(second=0, microsecond=0)
-                    # 完全一致
-                    if event_start == st:
+                    # 完全一致（分単位で判定）
+                    st_min = st.replace(second=0, microsecond=0)
+                    event_start_min = event_start.replace(second=0, microsecond=0)
+                    if event_start_min == st_min:
                         matched_exact.append(e)
                         continue
                     # 範囲一致
