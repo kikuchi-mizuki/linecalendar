@@ -866,6 +866,7 @@ async def handle_message(event):
                             if operation_type == 'update':
                                 pending_event['new_start_time'] = result.get('new_start_time')
                                 pending_event['new_end_time'] = result.get('new_end_time')
+                            logger.info(f"[handle_message][before save_pending_event] user_id={user_id}, pending_event={pending_event}")
                             save_pending_event(user_id, pending_event)
                             msg = add_result['message'] + "\n\n" + format_event_list(events, day, day_end)
                             await reply_text(reply_token, msg)
