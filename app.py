@@ -1081,6 +1081,16 @@ async def handle_message(event):
                         return
                     elif update_result.get('error') == 'duplicate':
                         # 重複時はpending_eventを保存
+                        day = result['new_start_time'].replace(hour=0, minute=0, second=0, microsecond=0)
+                        day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
+                        events = await calendar_manager.get_events(start_time=day, end_time=day_end)
+                        event_index = None
+                        for i, event in enumerate(events):
+                            event_start = datetime.fromisoformat(event['start']['dateTime'].replace('Z', '+00:00')).astimezone(pytz.timezone('Asia/Tokyo'))
+                            event_end = datetime.fromisoformat(event['end']['dateTime'].replace('Z', '+00:00')).astimezone(pytz.timezone('Asia/Tokyo'))
+                            if (result['new_start_time'] < event_end and result['new_end_time'] > event_start):
+                                event_index = i
+                                break
                         pending_event = {
                             'operation_type': 'update',
                             'title': result.get('title'),
@@ -1091,7 +1101,8 @@ async def handle_message(event):
                             'location': result.get('location'),
                             'person': result.get('person'),
                             'description': result.get('description'),
-                            'recurrence': result.get('recurrence')
+                            'recurrence': result.get('recurrence'),
+                            'event_index': event_index
                         }
                         save_pending_event(user_id, pending_event)
                         msg = f"{update_result.get('message', '更新後の時間帯に重複する予定があります')}"
