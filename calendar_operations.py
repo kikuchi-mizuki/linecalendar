@@ -110,7 +110,8 @@ class CalendarManager:
         self,
         start_time: datetime,
         end_time: datetime,
-        title: Optional[str] = None
+        title: Optional[str] = None,
+        ignore_event_id: str = None
     ) -> List[Dict]:
         """
         指定された期間のイベントを取得
@@ -119,6 +120,7 @@ class CalendarManager:
             start_time (datetime): 開始時間
             end_time (datetime): 終了時間
             title (Optional[str]): イベントのタイトル
+            ignore_event_id (Optional[str]): 除外するイベントID
             
         Returns:
             List[Dict]: イベントのリスト
@@ -169,6 +171,11 @@ class CalendarManager:
             ).execute()
             
             events = events_result.get('items', [])
+            
+            # ignore_event_idが指定されている場合、そのイベントを除外
+            if ignore_event_id:
+                events = [event for event in events if event.get('id') != ignore_event_id]
+
             logger.info(f"取得した予定の数: {len(events)}")
             return events
             
@@ -831,44 +838,43 @@ class CalendarManager:
 
             # 予定を取得
             event = self.service.events().get(calendarId=self.calendar_id, eventId=event_id).execute()
-            logger.debug(f"[update_event_by_id][DEBUG] event取得直後: id={event_id}, event={event}")
-            # 重複チェック（自分自身は除外）
-            logger.debug(f"[update_event_by_id][DEBUG] _check_overlapping_events呼び出し: event_id={event_id}, new_start_time={new_start_time}, new_end_time={new_end_time}, exclude_event_id={event_id}")
-            overlapping_events = await self._check_overlapping_events(new_start_time, new_end_time, exclude_event_id=event_id)
-            if overlapping_events:
-                logger.warning(f"[update_event_by_id][DEBUG] 重複イベント: {overlapping_events}")
+            logger.debug(f"[update_event_by_id] 取得したevent: {event}")
+
+            # 重複チェック（自分自身のイベントは除外）
+            conflicting_events = await self.get_events(
+                start_time=new_start_time,
+                end_time=new_end_time,
+                ignore_event_id=event_id
+            )
+            logger.debug(f"[update_event_by_id] 重複チェック結果: {conflicting_events}")
+
+            if conflicting_events:
                 return {
                     'success': False,
-                    'error': '更新後の時間帯に重複する予定があります',
-                    'overlapping_events': overlapping_events
+                    'error': '指定された時間に他の予定が存在します。'
                 }
+
             # 予定を更新
-            logger.debug(f"[update_event_by_id][DEBUG] 更新直前: event={event}")
-            event['start'] = {
-                'dateTime': new_start_time.isoformat(),
-                'timeZone': 'Asia/Tokyo'
-            }
-            event['end'] = {
-                'dateTime': new_end_time.isoformat(),
-                'timeZone': 'Asia/Tokyo'
-            }
+            event['start'] = {'dateTime': new_start_time.isoformat()}
+            event['end'] = {'dateTime': new_end_time.isoformat()}
+            logger.debug(f"[update_event_by_id] 更新前のevent: {event}")
+
             updated_event = self.service.events().update(
                 calendarId=self.calendar_id,
                 eventId=event_id,
                 body=event
             ).execute()
-            logger.debug(f"[update_event_by_id][DEBUG] 更新直後: updated_event={updated_event}")
-            logger.info(f"予定を更新しました: {updated_event['id']}")
+            logger.debug(f"[update_event_by_id] 更新後のevent: {updated_event}")
+
             return {
                 'success': True,
-                'event': updated_event,
-                'message': '予定を更新しました'
+                'event': updated_event
             }
+
         except Exception as e:
-            logger.error(f"予定の更新に失敗: {str(e)}")
+            logger.error(f"予定更新中にエラーが発生: {str(e)}")
             logger.error(traceback.format_exc())
             return {
                 'success': False,
-                'error': str(e),
-                'message': '予定の更新に失敗しました'
+                'error': str(e)
             } 
