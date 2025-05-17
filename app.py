@@ -315,6 +315,7 @@ def handle_text_message(event):
         # --- ここまで追加 ---
         if user_id and is_confirmation_reply(message):
             pending_event = get_pending_event(user_id)
+            logger.debug(f"[pending_event] on yes: user_id={user_id}, pending_event={pending_event}")
             if pending_event:
                 op_type = pending_event.get('operation_type')
                 if op_type == 'add':
@@ -721,24 +722,22 @@ def is_confirmation_reply(text: str) -> bool:
 
 # 保留中のイベント情報を保存
 def save_pending_event(user_id: str, event_info: dict) -> None:
-    """保留中のイベント情報を保存する"""
-    # new_start_time/new_end_timeがあればstart_time/end_timeにコピー
+    logger.debug(f"[save_pending_event] user_id={user_id}, event_info={event_info}")
     if event_info.get('new_start_time'):
         event_info['start_time'] = event_info['new_start_time']
     if event_info.get('new_end_time'):
         event_info['end_time'] = event_info['new_end_time']
-    # 終了時間が指定されていない場合は、開始時間から1時間後をデフォルト値として設定
     if event_info.get('start_time') and not event_info.get('end_time'):
         event_info['end_time'] = event_info['start_time'] + timedelta(hours=1)
     db_manager.save_pending_event(user_id, event_info)
-    # 保存直後に取得して内容をDEBUGログ出力
     pending_check = get_pending_event(user_id)
     logger.debug(f"[pending_event] after save: user_id={user_id}, pending_event={pending_check}")
 
 # 保留中のイベント情報を取得
 def get_pending_event(user_id: str) -> dict:
-    """保留中のイベント情報を取得する"""
-    return db_manager.get_pending_event(user_id)
+    pending = db_manager.get_pending_event(user_id)
+    logger.debug(f"[get_pending_event] user_id={user_id}, pending_event={pending}")
+    return pending
 
 # 保留中のイベント情報を削除
 def clear_pending_event(user_id: str) -> None:
