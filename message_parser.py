@@ -301,6 +301,17 @@ def parse_message(text: str) -> Dict[str, Any]:
             if date and start_time and end_time and title:
                 operation_type = "add"
 
+        # ★2行メッセージ対応: 1行目が日付＋時刻範囲、2行目がタイトルの場合も追加とみなす
+        if not operation_type:
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            if len(lines) == 2:
+                date = extract_date(normalize_text(lines[0]))
+                start_time = extract_start_time(normalize_text(lines[0]))
+                end_time = extract_end_time(normalize_text(lines[0]))
+                title = extract_title(text)
+                if date and start_time and end_time and title:
+                    operation_type = "add"
+
         if not operation_type:
             logger.warning("操作タイプを特定できませんでした")
             return {
