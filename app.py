@@ -957,12 +957,15 @@ async def handle_message(event):
                     return
 
                 try:
+                    logger.info(f"[handle_message][read] user_id={user_id}, start_time={result['start_time']}, end_time={result['end_time']}, title={result.get('title')}")
                     events = await calendar_manager.get_events(
                         start_time=result['start_time'],
                         end_time=result['end_time'],
                         title=result.get('title')
                     )
-
+                    logger.info(f"[handle_message][read] user_id={user_id}, events_count={len(events)}")
+                    for i, event in enumerate(events):
+                        logger.info(f"[handle_message][read] event[{i}]: {event}")
                     # ここを修正: 予定がなくてもカレンダー風で返す
                     message = format_event_list(events, result['start_time'], result['end_time'])
                     user_last_event_list[user_id] = {
