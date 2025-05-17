@@ -513,12 +513,7 @@ def format_response_message(operation_type: str, result: Dict) -> str:
         elif operation_type == 'update':
             event = result.get('event')
             if event:
-                updated_event = calendar_manager.service.events().update(
-                    calendarId=calendar_manager.calendar_id,
-                    eventId=event['id'],
-                    body=event
-                ).execute()
-                return f"予定を更新しました！"
+                return "予定を更新しました！"
             return "予定を更新したよ！"
         
         elif operation_type in ['read', 'check', 'list']:
