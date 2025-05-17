@@ -846,7 +846,8 @@ class CalendarManager:
                 end_time=new_end_time
             )
             for e in events:
-                if e.get('id') == event_id:
+                # event_idの比較を厳密化（str型・空白除去）
+                if str(e.get('id', '')).strip() == str(event_id).strip():
                     continue  # 自分自身は除外
                 e_start = datetime.fromisoformat(e['start']['dateTime'].replace('Z', '+00:00')).astimezone(self.timezone)
                 e_end = datetime.fromisoformat(e['end']['dateTime'].replace('Z', '+00:00')).astimezone(self.timezone)
