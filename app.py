@@ -1811,13 +1811,13 @@ async def handle_yes_response(calendar_id: str) -> str:
             new_end_time = pending_event.get('new_end_time')
             if not new_start_time or not new_end_time:
                 return "新しい時間情報が不足しています。もう一度やり直してください。"
+            # calendar_operations.pyのindexは1始まりなので+1する
             result = await calendar_manager.update_event_by_index(
-                index=event_index,
+                index=event_index + 1,
                 new_start_time=new_start_time,
                 new_end_time=new_end_time,
-                new_title=pending_event['title'],
-                new_description=pending_event.get('description'),
-                skip_overlap_check=True  # 重複チェックは既に完了しているため
+                title=pending_event['title'],
+                description=pending_event.get('description')
             )
             clear_pending_event(calendar_id)
             return format_response_message('update', result)
