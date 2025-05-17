@@ -252,7 +252,7 @@ DATE_PATTERNS = {
 }
 
 # タイムゾーンの設定
-JST = timezone(timedelta(hours=9))
+JST = pytz.timezone('Asia/Tokyo')
 
 def normalize_text(text: str, keep_katakana: bool = False) -> str:
     """
@@ -958,7 +958,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 year = now.year
                 if (month < now.month) or (month == now.month and day < now.day):
                     year += 1
-                start_time = datetime(year, month, day, hour, minute, tzinfo=pytz.timezone('Asia/Tokyo'))
+                start_time = JST.localize(datetime(year, month, day, hour, minute))
                 end_time = start_time + timedelta(hours=1)
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
             
@@ -971,7 +971,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 year = now.year
                 if (month < now.month) or (month == now.month and day < now.day):
                     year += 1
-                start_time = datetime(year, month, day, hour, 0, tzinfo=pytz.timezone('Asia/Tokyo'))
+                start_time = JST.localize(datetime(year, month, day, hour, 0))
                 end_time = start_time + timedelta(hours=1)
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
             
@@ -985,7 +985,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 year = now.year
                 if (month < now.month) or (month == now.month and day < now.day):
                     year += 1
-                start_time = datetime(year, month, day, hour, minute, tzinfo=pytz.timezone('Asia/Tokyo'))
+                start_time = JST.localize(datetime(year, month, day, hour, minute))
                 end_time = start_time + timedelta(hours=1)
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
             
@@ -998,7 +998,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 year = now.year
                 if (month < now.month) or (month == now.month and day < now.day):
                     year += 1
-                start_time = datetime(year, month, day, hour, 0, tzinfo=pytz.timezone('Asia/Tokyo'))
+                start_time = JST.localize(datetime(year, month, day, hour, 0))
                 end_time = start_time + timedelta(hours=1)
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
             
@@ -1012,7 +1012,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 year = now.year
                 if (month < now.month) or (month == now.month and day < now.day):
                     year += 1
-                start_time = datetime(year, month, day, hour, minute, tzinfo=pytz.timezone('Asia/Tokyo'))
+                start_time = JST.localize(datetime(year, month, day, hour, minute))
                 end_time = start_time + timedelta(hours=1)
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
         
@@ -1049,11 +1049,11 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                     minute = 0
                 else:
                     # ★時刻が指定されていない場合は、その日1日分の範囲を返す
-                    start_time = datetime.combine(rel, time(0, 0), tzinfo=pytz.timezone('Asia/Tokyo'))
-                    end_time = datetime.combine(rel, time(23, 59), tzinfo=pytz.timezone('Asia/Tokyo'))
+                    start_time = JST.localize(datetime.combine(rel, time(0, 0)))
+                    end_time = JST.localize(datetime.combine(rel, time(23, 59)))
                     return {'success': True, 'start_time': start_time, 'end_time': end_time}
                 
-                start_time = datetime.combine(rel, time(hour, minute), tzinfo=pytz.timezone('Asia/Tokyo'))
+                start_time = JST.localize(datetime.combine(rel, time(hour, minute)))
                 end_time = start_time + timedelta(hours=1)
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
         
@@ -1068,8 +1068,8 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 if (month < now.month) or (month == now.month and day < now.day):
                     year += 1
                 target_date = date(year, month, day)
-                start_time = datetime.combine(target_date, time(0, 0), tzinfo=pytz.timezone('Asia/Tokyo'))
-                end_time = datetime.combine(target_date, time(23, 59), tzinfo=pytz.timezone('Asia/Tokyo'))
+                start_time = JST.localize(datetime.combine(target_date, time(0, 0)))
+                end_time = JST.localize(datetime.combine(target_date, time(23, 59)))
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
             
             # 5月16日
@@ -1081,8 +1081,8 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 if (month < now.month) or (month == now.month and day < now.day):
                     year += 1
                 target_date = date(year, month, day)
-                start_time = datetime.combine(target_date, time(0, 0), tzinfo=pytz.timezone('Asia/Tokyo'))
-                end_time = datetime.combine(target_date, time(23, 59), tzinfo=pytz.timezone('Asia/Tokyo'))
+                start_time = JST.localize(datetime.combine(target_date, time(0, 0)))
+                end_time = JST.localize(datetime.combine(target_date, time(23, 59)))
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
         
         # 4. 時刻のみ（今日の日付で補完）
@@ -1103,7 +1103,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             else:
                 continue
             
-            start_time = datetime.combine(now.date(), time(hour, minute), tzinfo=pytz.timezone('Asia/Tokyo'))
+            start_time = JST.localize(datetime.combine(now.date(), time(hour, minute)))
             end_time = start_time + timedelta(hours=1)
             return {'success': True, 'start_time': start_time, 'end_time': end_time}
         
@@ -1122,8 +1122,8 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             else:
                 rel = None
             if rel:
-                start_time = datetime.combine(rel, time(0, 0), tzinfo=pytz.timezone('Asia/Tokyo'))
-                end_time = datetime.combine(rel, time(23, 59), tzinfo=pytz.timezone('Asia/Tokyo'))
+                start_time = JST.localize(datetime.combine(rel, time(0, 0)))
+                end_time = JST.localize(datetime.combine(rel, time(23, 59)))
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
         
         # どれにも該当しない場合
