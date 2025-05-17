@@ -1648,108 +1648,57 @@ async def update_event_by_index(calendar_id: str, index: int, new_start_time: da
 
 async def handle_yes_response(calendar_id: str) -> str:
     """
-    「はい」の応答を処理する
+    「はい」の返答を処理する
     """
     try:
+        # 保留中のイベントを取得
         pending_event = get_pending_event(calendar_id)
         if not pending_event:
-            logger.warning(f"保留中の予定が見つかりません: calendar_id={calendar_id}")
-            return "保留中の予定が見つかりません。"
-        logger.debug(f"「はい」応答時のpending_event: {pending_event}")
-        operation_type = pending_event.get("operation_type", "add")
-        if operation_type == "update":
-            try:
-                start_time = pending_event["start_time"]
-                if isinstance(start_time, str):
-                    start_time = datetime.fromisoformat(start_time)
-                end_time = pending_event["end_time"]
-                if isinstance(end_time, str):
-                    end_time = datetime.fromisoformat(end_time)
-                title = pending_event["title"]
-                description = pending_event.get("description")
-                delete_index = pending_event.get("delete_index")
-                if delete_index is not None:
-                    calendar_manager = get_calendar_manager(calendar_id)
-                    if not calendar_manager:
-                        logger.error(f"カレンダーマネージャーの取得に失敗: calendar_id={calendar_id}")
-                        clear_pending_event(calendar_id)
-                        return "カレンダーとの連携に失敗しました。"
-                    result = await update_event_by_index(calendar_id, delete_index, start_time, end_time, title, description, skip_overlap_check=True)
-                    logger.debug(f"update_event_by_index result: type={type(result)}, value={result}")
-                    clear_pending_event(calendar_id)
-                    if result['success']:
-                        reply_message = f"✅ 予定を更新しました：\n{title}\n{start_time.strftime('%m月%d日 %H:%M')}～{end_time.strftime('%H:%M')}"
-                        reply_message += "\n\n"
-                        events = await calendar_manager.get_events(
-                            start_time=start_time.replace(hour=0, minute=0, second=0, microsecond=0),
-                            end_time=start_time.replace(hour=23, minute=59, second=59, microsecond=999999)
-                        )
-                        reply_message += format_event_list(events, start_time.replace(hour=0, minute=0, second=0, microsecond=0), start_time.replace(hour=23, minute=59, second=59, microsecond=999999))
-                        return reply_message
-                    else:
-                        error_msg = result.get('error', '不明なエラー')
-                        logger.error(f"予定の更新に失敗: {error_msg}")
-                        return f"❌ 予定の更新に失敗しました：{error_msg}"
-                else:
-                    logger.error("更新対象のインデックスが見つかりません")
-                    clear_pending_event(calendar_id)
-                    return "更新対象のインデックスが見つかりません。"
-            except Exception as e:
-                logger.error(f"予定の更新中にエラーが発生: {str(e)}")
-                logger.error(traceback.format_exc())
-                clear_pending_event(calendar_id)
-                return f"予定の更新中にエラーが発生しました: {str(e)}"
+            return "操作タイプを特定できませんでした。もう一度お試しください。"
+
+        # カレンダーマネージャーを取得
+        calendar_manager = get_calendar_manager(calendar_id)
+        if not calendar_manager:
+            return "カレンダーへのアクセス権限がありません。認証が必要です。"
+
+        # 操作タイプに応じて処理を分岐
+        operation_type = pending_event.get('operation_type')
+        if operation_type == 'add':
+            # 予定追加の処理
+            result = await calendar_manager.add_event(
+                title=pending_event['title'],
+                start_time=pending_event['start_time'],
+                end_time=pending_event['end_time'],
+                description=pending_event.get('description'),
+                location=pending_event.get('location'),
+                recurrence=pending_event.get('recurrence')
+            )
+            clear_pending_event(calendar_id)
+            return format_response_message('add', result)
+        elif operation_type == 'update':
+            # 予定更新の処理
+            event_index = pending_event.get('event_index')
+            if event_index is None:
+                return "更新対象の予定を特定できませんでした。もう一度お試しください。"
+            
+            result = await calendar_manager.update_event_by_index(
+                calendar_id=calendar_id,
+                index=event_index,
+                new_start_time=pending_event['start_time'],
+                new_end_time=pending_event['end_time'],
+                new_title=pending_event['title'],
+                new_description=pending_event.get('description'),
+                skip_overlap_check=True  # 重複チェックは既に完了しているため
+            )
+            clear_pending_event(calendar_id)
+            return format_response_message('update', result)
         else:
-            try:
-                start_time = pending_event["start_time"]
-                if isinstance(start_time, str):
-                    start_time = datetime.fromisoformat(start_time)
-                end_time = pending_event["end_time"]
-                if isinstance(end_time, str):
-                    end_time = datetime.fromisoformat(end_time)
-                title = pending_event["title"]
-                description = pending_event.get("description")
-                location = pending_event.get("location")
-                person = pending_event.get("person")
-                recurrence = pending_event.get("recurrence")
-                calendar_manager = get_calendar_manager(calendar_id)
-                if not calendar_manager:
-                    logger.error(f"カレンダーマネージャーの取得に失敗: calendar_id={calendar_id}")
-                    clear_pending_event(calendar_id)
-                    return "カレンダーとの連携に失敗しました。"
-                add_result = await calendar_manager.add_event(
-                    title=title,
-                    start_time=start_time,
-                    end_time=end_time,
-                    location=location,
-                    person=person,
-                    description=description,
-                    recurrence=recurrence,
-                    skip_overlap_check=True
-                )
-                clear_pending_event(calendar_id)
-                if add_result and add_result.get('success'):
-                    reply_message = f"✅ 予定を追加しました：\n{title}\n{start_time.strftime('%m月%d日 %H:%M')}～{end_time.strftime('%H:%M')}"
-                    reply_message += "\n\n"
-                    events = await calendar_manager.get_events(
-                        start_time=start_time.replace(hour=0, minute=0, second=0, microsecond=0),
-                        end_time=start_time.replace(hour=23, minute=59, second=59, microsecond=999999)
-                    )
-                    reply_message += format_event_list(events, start_time.replace(hour=0, minute=0, second=0, microsecond=0), start_time.replace(hour=23, minute=59, second=59, microsecond=999999))
-                    return reply_message
-                else:
-                    logger.error(f"予定の追加に失敗: {add_result}")
-                    return f"予定の追加に失敗しました: {add_result.get('message', '不明なエラー')}"
-            except Exception as e:
-                logger.error(f"予定の追加中にエラーが発生: {str(e)}")
-                logger.error(traceback.format_exc())
-                clear_pending_event(calendar_id)
-                return f"予定の追加中にエラーが発生しました: {str(e)}"
+            return "操作タイプを特定できませんでした。もう一度お試しください。"
+
     except Exception as e:
-        logger.error(f"「はい」の応答処理中にエラーが発生しました: {str(e)}")
+        logger.error(f"Error in handle_yes_response: {str(e)}")
         logger.error(traceback.format_exc())
-        clear_pending_event(calendar_id)
-        return f"処理中にエラーが発生しました: {str(e)}"
+        return format_error_message(e, "予定の処理中にエラーが発生しました。")
 
 def get_user_credentials(user_id: str) -> Optional[google.oauth2.credentials.Credentials]:
     """
