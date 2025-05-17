@@ -844,7 +844,8 @@ async def handle_message(event):
                             day = result['start_time'].replace(hour=0, minute=0, second=0, microsecond=0)
                             day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
                             events = await calendar_manager.get_events(start_time=day, end_time=day_end)
-                            # 修正: pending_eventにoperation_type='add'を必ずセット
+                            # 重複イベントのインデックスを特定（最初の重複イベントを0番とする）
+                            event_index = 0
                             pending_event = {
                                 'title': result['title'],
                                 'start_time': result['start_time'],
@@ -853,7 +854,8 @@ async def handle_message(event):
                                 'person': result.get('person'),
                                 'description': result.get('description'),
                                 'recurrence': result.get('recurrence'),
-                                'operation_type': 'add'
+                                'operation_type': 'add',
+                                'event_index': event_index
                             }
                             save_pending_event(user_id, pending_event)
                             msg = add_result['message'] + "\n\n" + format_event_list(events, day, day_end)
@@ -1685,8 +1687,9 @@ async def handle_yes_response(calendar_id: str) -> str:
             # 予定更新の処理
             event_index = pending_event.get('event_index')
             if event_index is None:
+                event_index = pending_event.get('delete_index')
+            if event_index is None:
                 return "更新対象の予定を特定できませんでした。もう一度お試しください。"
-            
             result = await calendar_manager.update_event_by_index(
                 calendar_id=calendar_id,
                 index=event_index,
