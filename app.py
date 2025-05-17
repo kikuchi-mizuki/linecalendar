@@ -845,6 +845,7 @@ async def handle_message(event):
                         await reply_text(reply_token, msg)
                         return
                     else:
+                        logger.info(f"[handle_message][add_result] user_id={user_id}, add_result={add_result}")
                         if add_result.get('error') == 'duplicate':
                             day = result['start_time'].replace(hour=0, minute=0, second=0, microsecond=0)
                             day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
