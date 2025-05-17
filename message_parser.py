@@ -292,6 +292,15 @@ def parse_message(text: str) -> Dict[str, Any]:
         elif any(keyword in normalized_text for keyword in UPDATE_KEYWORDS):
             operation_type = "update"
 
+        # ★キーワードがなくても日付・時刻・タイトルが揃っていれば追加とみなす
+        if not operation_type:
+            date = extract_date(normalized_text)
+            start_time = extract_start_time(normalized_text)
+            end_time = extract_end_time(normalized_text)
+            title = extract_title(text)
+            if date and start_time and end_time and title:
+                operation_type = "add"
+
         if not operation_type:
             logger.warning("操作タイプを特定できませんでした")
             return {
