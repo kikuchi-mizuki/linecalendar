@@ -299,10 +299,20 @@ loop = asyncio.get_event_loop()
 def handle_text_message(event):
     try:
         loop = asyncio.get_event_loop()
-        # --- ここから修正 ---
         user_id = event.source.user_id if hasattr(event.source, 'user_id') else None
         message = event.message.text if hasattr(event.message, 'text') else None
         reply_token = event.reply_token if hasattr(event, 'reply_token') else None
+        # --- 追加: いいえ・キャンセル応答時の処理 ---
+        if user_id and get_pending_event(user_id):
+            cancel_patterns = [
+                'いいえ', 'キャンセル', 'やめる', '中止', 'いらない', 'no', 'NO', 'No', 'cancel', 'CANCEL', 'Cancel'
+            ]
+            normalized_text = message.strip().lower() if message else ''
+            if normalized_text in cancel_patterns:
+                clear_pending_event(user_id)
+                loop.run_until_complete(reply_text(reply_token, '予定の追加をキャンセルしました。'))
+                return
+        # --- ここまで追加 ---
         if user_id and is_confirmation_reply(message):
             pending_event = get_pending_event(user_id)
             if pending_event and pending_event.get('operation_type') == 'add':
@@ -310,15 +320,12 @@ def handle_text_message(event):
                 loop.run_until_complete(add_event_from_pending(user_id, reply_token, pending_event))
                 clear_pending_event(user_id)
                 return
-        # --- ここまで修正 ---
         loop.run_until_complete(handle_message(event))
     except Exception as e:
         logger.error(f"メッセージ処理中にエラーが発生: {str(e)}")
         logger.error(traceback.format_exc())
-        # 必要に応じてエラー応答
         error_message = format_error_message(e, "メッセージの処理中")
         try:
-            # eventの型に応じてreply_tokenを取得
             if isinstance(event, dict):
                 reply_token = event['reply_token']
             else:
