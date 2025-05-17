@@ -847,6 +847,7 @@ async def handle_message(event):
                     else:
                         logger.info(f"[handle_message][add_result] user_id={user_id}, add_result={add_result}")
                         if add_result.get('error') == 'duplicate':
+                            logger.info(f"[handle_message][duplicate branch] user_id={user_id}, result={result}")
                             day = result['start_time'].replace(hour=0, minute=0, second=0, microsecond=0)
                             day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
                             events = await calendar_manager.get_events(start_time=day, end_time=day_end)
@@ -868,7 +869,11 @@ async def handle_message(event):
                                 pending_event['new_start_time'] = result.get('new_start_time')
                                 pending_event['new_end_time'] = result.get('new_end_time')
                             logger.info(f"[handle_message][before save_pending_event] user_id={user_id}, pending_event={pending_event}")
-                            save_pending_event(user_id, pending_event)
+                            try:
+                                save_pending_event(user_id, pending_event)
+                                logger.info(f"[handle_message][after save_pending_event] user_id={user_id}")
+                            except Exception as e:
+                                logger.error(f"[handle_message][save_pending_event exception] user_id={user_id}, error={str(e)}")
                             msg = add_result['message'] + "\n\n" + format_event_list(events, day, day_end)
                             await reply_text(reply_token, msg)
                             return
