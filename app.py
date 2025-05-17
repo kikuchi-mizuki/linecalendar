@@ -1084,8 +1084,12 @@ async def handle_message(event):
                             event_start = datetime.fromisoformat(event['start']['dateTime'].replace('Z', '+00:00')).astimezone(pytz.timezone('Asia/Tokyo'))
                             event_end = datetime.fromisoformat(event['end']['dateTime'].replace('Z', '+00:00')).astimezone(pytz.timezone('Asia/Tokyo'))
                             if (result['new_start_time'] < event_end and result['new_end_time'] > event_start):
-                                event_index = i
+                                event_index = i + 1  # 1始まり
                                 break
+                        if event_index is None or event_index < 1:
+                            logger.error(f"[handle_message][duplicate branch] event_indexが不正: {event_index}")
+                            await reply_text(reply_token, "更新対象の予定を特定できませんでした。もう一度お試しください。")
+                            return
                         pending_event = {
                             'operation_type': 'update',
                             'title': result.get('title'),
@@ -1810,7 +1814,7 @@ async def handle_yes_response(calendar_id: str) -> str:
             skip_overlap = pending_event.get('force_update') or pending_event.get('skip_overlap_check') or False
             logger.info(f"[handle_yes_response] skip_overlap={skip_overlap}, pending_event={pending_event}")
             result = await calendar_manager.update_event_by_index(
-                index=event_index + 1,
+                index=event_index,
                 new_start_time=new_start_time,
                 new_end_time=new_end_time,
                 skip_overlap_check=skip_overlap

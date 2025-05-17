@@ -452,6 +452,7 @@ class CalendarManager:
             
             # インデックスの範囲チェック
             if index < 1 or index > len(events):
+                logger.error(f"[update_event_by_index] event_indexが不正: {index}")
                 return {'success': False, 'error': f'指定されたインデックス（{index}）は範囲外です'}
             
             # 更新対象の予定を取得
