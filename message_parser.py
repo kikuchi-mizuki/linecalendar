@@ -1356,8 +1356,10 @@ def extract_time(message: str, current_time: datetime) -> Tuple[Optional[datetim
     # 5/16 10:00形式の抽出
     lines = message.splitlines() if isinstance(message, str) else []
     for line in lines:
+        logger.debug(f"[datetime_extraction] line内容: {line}")
         match = re.search(r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2}):(\d{2})', line)
         if match:
+            logger.debug(f"[datetime_extraction] マッチ: month={match.group(1)}, day={match.group(2)}, hour={match.group(3)}, minute={match.group(4)}")
             month = int(match.group(1))
             day = int(match.group(2))
             hour = int(match.group(3))
