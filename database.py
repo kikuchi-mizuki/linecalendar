@@ -88,6 +88,7 @@ class DatabaseManager:
                         person TEXT,
                         description TEXT,
                         recurrence TEXT,
+                        force_update INTEGER DEFAULT 0,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 ''')
@@ -99,7 +100,8 @@ class DatabaseManager:
                     ("event_index", "INTEGER"),
                     ("new_start_time", "TEXT"),
                     ("new_end_time", "TEXT"),
-                    ("person", "TEXT")
+                    ("person", "TEXT"),
+                    ("force_update", "INTEGER")
                 ]:
                     try:
                         cursor.execute(f'ALTER TABLE pending_events ADD COLUMN {col} {typ}')
@@ -450,17 +452,18 @@ class DatabaseManager:
                 new_end_time = event_info.get('new_end_time')
                 if isinstance(new_end_time, datetime):
                     new_end_time = new_end_time.isoformat()
-                # 追加: event_index, person
+                # 追加: event_index, person, force_update
                 event_index = event_info.get('event_index')
                 person = event_info.get('person')
+                force_update = 1 if event_info.get('force_update') else 0
                 cursor.execute('''
                     INSERT OR REPLACE INTO pending_events (
                         user_id, operation_type, delete_index, event_index,
                         title, start_time, end_time,
                         new_start_time, new_end_time,
-                        location, person, description, recurrence
+                        location, person, description, recurrence, force_update
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     user_id,
                     event_info.get('operation_type'),
@@ -474,7 +477,8 @@ class DatabaseManager:
                     event_info.get('location'),
                     person,
                     event_info.get('description'),
-                    event_info.get('recurrence')
+                    event_info.get('recurrence'),
+                    force_update
                 ))
                 conn.commit()
                 logger.info(f"保留中のイベントを保存しました: {user_id}")
@@ -490,7 +494,7 @@ class DatabaseManager:
                     SELECT operation_type, delete_index, event_index,
                            title, start_time, end_time,
                            new_start_time, new_end_time,
-                           location, person, description, recurrence
+                           location, person, description, recurrence, force_update
                     FROM pending_events
                     WHERE user_id = ?
                 ''', (user_id,))
@@ -519,7 +523,8 @@ class DatabaseManager:
                     'location': result[8],
                     'person': result[9],
                     'description': result[10],
-                    'recurrence': result[11]
+                    'recurrence': result[11],
+                    'force_update': bool(result[12]) if len(result) > 12 else False
                 }
         except Exception as e:
             logger.error(f"保留中のイベントの取得に失敗: {str(e)}")
