@@ -471,20 +471,24 @@ class CalendarManager:
                 logger.info(f"[update_event_by_index] skip_overlap_check is True, skipping overlap check")
             
             # 予定を更新
-            event['start'] = {
-                'dateTime': new_start_time.isoformat(),
-                'timeZone': 'Asia/Tokyo'
-            }
-            event['end'] = {
-                'dateTime': new_end_time.isoformat(),
-                'timeZone': 'Asia/Tokyo'
-            }
-            
-            updated_event = self.service.events().update(
-                calendarId=self.calendar_id,
-                eventId=event['id'],
-                body=event
-            ).execute()
+            try:
+                event['start'] = {
+                    'dateTime': new_start_time.isoformat(),
+                    'timeZone': 'Asia/Tokyo'
+                }
+                event['end'] = {
+                    'dateTime': new_end_time.isoformat(),
+                    'timeZone': 'Asia/Tokyo'
+                }
+                updated_event = self.service.events().update(
+                    calendarId=self.calendar_id,
+                    eventId=event['id'],
+                    body=event
+                ).execute()
+            except Exception as e:
+                logger.error(f"Google Calendar API更新時にエラー: {str(e)}")
+                logger.error(traceback.format_exc())
+                return {'success': False, 'error': f'Google APIエラー: {str(e)}'}
             
             return {
                 'success': True,

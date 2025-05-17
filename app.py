@@ -1831,7 +1831,7 @@ async def handle_yes_response(calendar_id: str) -> str:
     except Exception as e:
         logger.error(f"Error in handle_yes_response: {str(e)}")
         logger.error(traceback.format_exc())
-        return format_error_message(e, "予定の処理中にエラーが発生しました。")
+        return f"エラーが発生しました: {str(e)}\n\n詳細: 予定の処理中にエラーが発生しました。"
 
 def get_user_credentials(user_id: str) -> Optional[google.oauth2.credentials.Credentials]:
     """
