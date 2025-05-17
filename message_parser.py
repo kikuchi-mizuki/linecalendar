@@ -961,20 +961,32 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 start_time = JST.localize(datetime(year, month, day, hour, minute))
                 end_time = start_time + timedelta(hours=1)
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
-            
+            # 5/16 13時半
+            match = re.search(r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2})時半', line)
+            if match:
+                month = int(match.group(1))
+                day = int(match.group(2))
+                hour = int(match.group(3))
+                minute = 30
+                year = now.year
+                if (month < now.month) or (month == now.month and day < now.day):
+                    year += 1
+                start_time = JST.localize(datetime(year, month, day, hour, minute))
+                end_time = start_time + timedelta(hours=1)
+                return {'success': True, 'start_time': start_time, 'end_time': end_time}
             # 5/16 13時
             match = re.search(r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2})時', line)
             if match:
                 month = int(match.group(1))
                 day = int(match.group(2))
                 hour = int(match.group(3))
+                minute = 0
                 year = now.year
                 if (month < now.month) or (month == now.month and day < now.day):
                     year += 1
-                start_time = JST.localize(datetime(year, month, day, hour, 0))
+                start_time = JST.localize(datetime(year, month, day, hour, minute))
                 end_time = start_time + timedelta(hours=1)
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
-            
             # 5月16日13:00
             match = re.search(r'(\d{1,2})月(\d{1,2})日[\s　]*(\d{1,2}):(\d{2})', line)
             if match:
@@ -988,20 +1000,32 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 start_time = JST.localize(datetime(year, month, day, hour, minute))
                 end_time = start_time + timedelta(hours=1)
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
-            
+            # 5月16日13時半
+            match = re.search(r'(\d{1,2})月(\d{1,2})日[\s　]*(\d{1,2})時半', line)
+            if match:
+                month = int(match.group(1))
+                day = int(match.group(2))
+                hour = int(match.group(3))
+                minute = 30
+                year = now.year
+                if (month < now.month) or (month == now.month and day < now.day):
+                    year += 1
+                start_time = JST.localize(datetime(year, month, day, hour, minute))
+                end_time = start_time + timedelta(hours=1)
+                return {'success': True, 'start_time': start_time, 'end_time': end_time}
             # 5月16日13時
             match = re.search(r'(\d{1,2})月(\d{1,2})日[\s　]*(\d{1,2})時', line)
             if match:
                 month = int(match.group(1))
                 day = int(match.group(2))
                 hour = int(match.group(3))
+                minute = 0
                 year = now.year
                 if (month < now.month) or (month == now.month and day < now.day):
                     year += 1
-                start_time = JST.localize(datetime(year, month, day, hour, 0))
+                start_time = JST.localize(datetime(year, month, day, hour, minute))
                 end_time = start_time + timedelta(hours=1)
                 return {'success': True, 'start_time': start_time, 'end_time': end_time}
-            
             # 5月16日13時30分
             match = re.search(r'(\d{1,2})月(\d{1,2})日[\s　]*(\d{1,2})時(\d{1,2})分', line)
             if match:
