@@ -865,6 +865,10 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
     """
     try:
         now = datetime.now(JST)
+        # まず相対日付表現を優先的に判定
+        relative_result = extract_relative_datetime(message, now)
+        if relative_result:
+            return relative_result
         result = {
             'start_time': None,
             'end_time': None,
