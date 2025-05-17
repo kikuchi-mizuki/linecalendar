@@ -934,6 +934,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
     """
     try:
         now = datetime.now(JST)
+        logger.debug(f"[now] サーバー現在日時: {now}")
         # まず相対日付表現を優先的に判定
         relative_result = extract_relative_datetime(message, now)
         if relative_result:
