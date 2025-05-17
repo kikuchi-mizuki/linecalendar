@@ -1353,8 +1353,9 @@ def extract_time(message: str, current_time: datetime) -> Tuple[Optional[datetim
     logger.debug(f"日付のみの時間情報: {start_time} から {end_time}")
     return start_time, end_time, True
 
-    # 5/16 10:00形式の抽出
+    # 5/16 10:00形式の抽出（全行から未来の日付を優先して選ぶ）
     lines = message.splitlines() if isinstance(message, str) else []
+    future_candidates = []
     for line in lines:
         logger.debug(f"[datetime_extraction] line内容: {line}")
         match = re.search(r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2}):(\d{2})', line)
@@ -1367,13 +1368,17 @@ def extract_time(message: str, current_time: datetime) -> Tuple[Optional[datetim
             year = now.year
             if (month < now.month) or (month == now.month and day < now.day):
                 year += 1
-            start_time = JST.localize(datetime(year, month, day, hour, minute))
-            end_time = start_time + timedelta(hours=1)
-            result['start_time'] = start_time
-            result['end_time'] = end_time
-            result['is_time_range'] = False
-            logger.debug(f"スラッシュ日付＋時刻パターン: {start_time} から {end_time}")
-            return result
+            candidate_time = JST.localize(datetime(year, month, day, hour, minute))
+            if candidate_time >= now:
+                future_candidates.append(candidate_time)
+    if future_candidates:
+        start_time = min(future_candidates)
+        end_time = start_time + timedelta(hours=1)
+        result['start_time'] = start_time
+        result['end_time'] = end_time
+        result['is_time_range'] = False
+        logger.debug(f"[datetime_extraction] 最終選択: start={start_time}, end={end_time}")
+        return result
 
 def extract_duration(message: str) -> Optional[timedelta]:
     """
