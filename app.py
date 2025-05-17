@@ -725,12 +725,39 @@ def is_confirmation_reply(text: str) -> bool:
 def save_pending_event(user_id: str, event_info: dict) -> None:
     logger.debug(f"[save_pending_event] user_id={user_id}, event_info={event_info}")
     logger.info(f"[save_pending_event][INFO] user_id={user_id}, event_info={event_info}")
+    
+    # 日時情報の処理
+    if event_info.get('start_time'):
+        if isinstance(event_info['start_time'], str):
+            event_info['start_time'] = datetime.fromisoformat(event_info['start_time'].replace('Z', '+00:00'))
+        if event_info['start_time'].tzinfo is None:
+            event_info['start_time'] = pytz.timezone('Asia/Tokyo').localize(event_info['start_time'])
+    
+    if event_info.get('end_time'):
+        if isinstance(event_info['end_time'], str):
+            event_info['end_time'] = datetime.fromisoformat(event_info['end_time'].replace('Z', '+00:00'))
+        if event_info['end_time'].tzinfo is None:
+            event_info['end_time'] = pytz.timezone('Asia/Tokyo').localize(event_info['end_time'])
+    
     if event_info.get('new_start_time'):
-        event_info['start_time'] = event_info['new_start_time']
+        if isinstance(event_info['new_start_time'], str):
+            event_info['new_start_time'] = datetime.fromisoformat(event_info['new_start_time'].replace('Z', '+00:00'))
+        if event_info['new_start_time'].tzinfo is None:
+            event_info['new_start_time'] = pytz.timezone('Asia/Tokyo').localize(event_info['new_start_time'])
+    
     if event_info.get('new_end_time'):
-        event_info['end_time'] = event_info['new_end_time']
-    if event_info.get('start_time') and not event_info.get('end_time'):
-        event_info['end_time'] = event_info['start_time'] + timedelta(hours=1)
+        if isinstance(event_info['new_end_time'], str):
+            event_info['new_end_time'] = datetime.fromisoformat(event_info['new_end_time'].replace('Z', '+00:00'))
+        if event_info['new_end_time'].tzinfo is None:
+            event_info['new_end_time'] = pytz.timezone('Asia/Tokyo').localize(event_info['new_end_time'])
+    
+    # 更新操作の場合のみ、新しい時間を設定
+    if event_info.get('operation_type') == 'update':
+        if event_info.get('new_start_time'):
+            event_info['start_time'] = event_info['new_start_time']
+        if event_info.get('new_end_time'):
+            event_info['end_time'] = event_info['new_end_time']
+    
     db_manager.save_pending_event(user_id, event_info)
     pending_check = get_pending_event(user_id)
     logger.debug(f"[pending_event] after save: user_id={user_id}, pending_event={pending_check}")
@@ -740,10 +767,44 @@ def save_pending_event(user_id: str, event_info: dict) -> None:
 
 # 保留中のイベント情報を取得
 def get_pending_event(user_id: str) -> dict:
-    pending = db_manager.get_pending_event(user_id)
-    logger.debug(f"[get_pending_event] user_id={user_id}, pending_event={pending}")
-    logger.info(f"[get_pending_event][INFO] user_id={user_id}, pending_event={pending}")
-    return pending
+    try:
+        pending = db_manager.get_pending_event(user_id)
+        logger.debug(f"[get_pending_event] user_id={user_id}, pending_event={pending}")
+        logger.info(f"[get_pending_event][INFO] user_id={user_id}, pending_event={pending}")
+        
+        if pending is None:
+            return None
+            
+        # 日時情報の処理
+        if pending.get('start_time'):
+            if isinstance(pending['start_time'], str):
+                pending['start_time'] = datetime.fromisoformat(pending['start_time'].replace('Z', '+00:00'))
+            if pending['start_time'].tzinfo is None:
+                pending['start_time'] = pytz.timezone('Asia/Tokyo').localize(pending['start_time'])
+        
+        if pending.get('end_time'):
+            if isinstance(pending['end_time'], str):
+                pending['end_time'] = datetime.fromisoformat(pending['end_time'].replace('Z', '+00:00'))
+            if pending['end_time'].tzinfo is None:
+                pending['end_time'] = pytz.timezone('Asia/Tokyo').localize(pending['end_time'])
+        
+        if pending.get('new_start_time'):
+            if isinstance(pending['new_start_time'], str):
+                pending['new_start_time'] = datetime.fromisoformat(pending['new_start_time'].replace('Z', '+00:00'))
+            if pending['new_start_time'].tzinfo is None:
+                pending['new_start_time'] = pytz.timezone('Asia/Tokyo').localize(pending['new_start_time'])
+        
+        if pending.get('new_end_time'):
+            if isinstance(pending['new_end_time'], str):
+                pending['new_end_time'] = datetime.fromisoformat(pending['new_end_time'].replace('Z', '+00:00'))
+            if pending['new_end_time'].tzinfo is None:
+                pending['new_end_time'] = pytz.timezone('Asia/Tokyo').localize(pending['new_end_time'])
+        
+        return pending
+    except Exception as e:
+        logger.error(f"[get_pending_event][ERROR] user_id={user_id}, error={str(e)}")
+        logger.error(traceback.format_exc())
+        return None
 
 # 保留中のイベント情報を削除
 def clear_pending_event(user_id: str) -> None:
@@ -815,12 +876,14 @@ async def handle_message(event):
 
             # 操作タイプに応じた処理
             operation_type = result.get('operation_type')
+            logger.info(f"[handle_message][operation_type] user_id={user_id}, operation_type={operation_type}, result={result}")
             if not operation_type:
                 await reply_text(reply_token, "操作タイプを特定できませんでした。\n予定の追加、確認、削除などの操作を指定してください。")
                 return
 
             # 各操作タイプの処理
             if operation_type == 'add':
+                logger.info(f"[handle_message][add branch entered] user_id={user_id}, result={result}")
                 # 予定の追加処理
                 if not all(k in result for k in ['title', 'start_time', 'end_time']):
                     await reply_text(reply_token, "予定の追加に必要な情報が不足しています。\nタイトル、開始時間、終了時間を指定してください。")
@@ -854,7 +917,14 @@ async def handle_message(event):
                             events = await calendar_manager.get_events(start_time=day, end_time=day_end)
                             # 重複イベントのインデックスを特定（最初の重複イベントを0番とする）
                             event_index = 0
+                            for i, event in enumerate(events):
+                                event_start = datetime.fromisoformat(event['start']['dateTime'].replace('Z', '+00:00')).astimezone(pytz.timezone('Asia/Tokyo'))
+                                event_end = datetime.fromisoformat(event['end']['dateTime'].replace('Z', '+00:00')).astimezone(pytz.timezone('Asia/Tokyo'))
+                                if (result['start_time'] < event_end and result['end_time'] > event_start):
+                                    event_index = i
+                                    break
                             operation_type = result.get('operation_type', 'add')
+                            logger.info(f"[handle_message][duplicate branch] user_id={user_id}, event_index={event_index}, operation_type={operation_type}")
                             pending_event = {
                                 'title': result['title'],
                                 'start_time': result['start_time'],
