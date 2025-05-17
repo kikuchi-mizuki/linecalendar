@@ -430,56 +430,90 @@ class DatabaseManager:
             raise 
 
     def save_pending_event(self, user_id: str, event_info: dict) -> None:
-        print(f"★save_pending_event呼び出し: user_id={user_id}, event_info={event_info}")
-        logger.debug(f"[pending_event] save_pending_event: user_id={user_id}, event_info={event_info}")
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute('''
-                INSERT OR REPLACE INTO pending_events
-                (user_id, operation_type, delete_index, title, start_time, end_time, new_start_time, new_end_time, location, description, recurrence, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ''', (
-                user_id,
-                event_info.get('operation_type'),
-                event_info.get('delete_index'),
-                event_info.get('title'),
-                event_info.get('start_time').isoformat() if event_info.get('start_time') else None,
-                event_info.get('end_time').isoformat() if event_info.get('end_time') else None,
-                event_info.get('new_start_time').isoformat() if event_info.get('new_start_time') else None,
-                event_info.get('new_end_time').isoformat() if event_info.get('new_end_time') else None,
-                event_info.get('location'),
-                event_info.get('description'),
-                event_info.get('recurrence')
-            ))
-            conn.commit()
-        print(f"★save_pending_event完了: user_id={user_id}")
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                # 各フィールドがdatetimeの場合のみisoformat()を呼ぶ
+                start_time = event_info.get('start_time')
+                if isinstance(start_time, datetime):
+                    start_time = start_time.isoformat()
+                end_time = event_info.get('end_time')
+                if isinstance(end_time, datetime):
+                    end_time = end_time.isoformat()
+                new_start_time = event_info.get('new_start_time')
+                if isinstance(new_start_time, datetime):
+                    new_start_time = new_start_time.isoformat()
+                new_end_time = event_info.get('new_end_time')
+                if isinstance(new_end_time, datetime):
+                    new_end_time = new_end_time.isoformat()
+                # 以下は既存のコード
+                cursor.execute('''
+                    INSERT OR REPLACE INTO pending_events (
+                        user_id, operation_type, delete_index,
+                        title, start_time, end_time,
+                        new_start_time, new_end_time,
+                        location, description, recurrence
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    user_id,
+                    event_info.get('operation_type'),
+                    event_info.get('delete_index'),
+                    event_info.get('title'),
+                    start_time,
+                    end_time,
+                    new_start_time,
+                    new_end_time,
+                    event_info.get('location'),
+                    event_info.get('description'),
+                    event_info.get('recurrence')
+                ))
+                conn.commit()
+                logger.info(f"保留中のイベントを保存しました: {user_id}")
+        except Exception as e:
+            logger.error(f"保留中のイベントの保存に失敗: {str(e)}")
+            raise
 
     def get_pending_event(self, user_id: str) -> dict:
-        logger.debug(f"[pending_event] get_pending_event: user_id={user_id}")
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.cursor()
-            cursor.execute('SELECT operation_type, delete_index, title, start_time, end_time, new_start_time, new_end_time, location, description, recurrence FROM pending_events WHERE user_id = ?', (user_id,))
-            row = cursor.fetchone()
-            logger.debug(f"[pending_event] get_pending_event result: {row}")
-            def to_aware(dt):
-                if dt is None:
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT operation_type, delete_index,
+                           title, start_time, end_time,
+                           new_start_time, new_end_time,
+                           location, description, recurrence
+                    FROM pending_events
+                    WHERE user_id = ?
+                ''', (user_id,))
+                result = cursor.fetchone()
+                if not result:
                     return None
-                if dt.tzinfo is None:
-                    return dt.replace(tzinfo=timezone.utc)
-                return dt
-            if row:
+                # 各フィールドがdatetime形式の場合のみto_awareで変換
+                def to_aware(dt_str):
+                    if not dt_str:
+                        return None
+                    try:
+                        dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                        return dt
+                    except ValueError:
+                        return dt_str
                 return {
-                    'operation_type': row[0],
-                    'delete_index': row[1],
-                    'title': row[2],
-                    'start_time': to_aware(datetime.fromisoformat(row[3])) if row[3] else None,
-                    'end_time': to_aware(datetime.fromisoformat(row[4])) if row[4] else None,
-                    'new_start_time': to_aware(datetime.fromisoformat(row[5])) if row[5] else None,
-                    'new_end_time': to_aware(datetime.fromisoformat(row[6])) if row[6] else None,
-                    'location': row[7],
-                    'description': row[8],
-                    'recurrence': row[9]
+                    'operation_type': result[0],
+                    'delete_index': result[1],
+                    'title': result[2],
+                    'start_time': to_aware(result[3]),
+                    'end_time': to_aware(result[4]),
+                    'new_start_time': to_aware(result[5]),
+                    'new_end_time': to_aware(result[6]),
+                    'location': result[7],
+                    'description': result[8],
+                    'recurrence': result[9]
                 }
+        except Exception as e:
+            logger.error(f"保留中のイベントの取得に失敗: {str(e)}")
             return None
 
     def clear_pending_event(self, user_id: str) -> None:
