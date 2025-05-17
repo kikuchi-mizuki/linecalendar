@@ -443,19 +443,20 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
                 dt2 = extract_datetime_from_message(lines[1], 'update')
                 logger.debug(f"[parse_message][update] 1行目: {lines[0]} => {dt1}")
                 logger.debug(f"[parse_message][update] 2行目: {lines[1]} => {dt2}")
-                # 2行目のdurationがあればend_timeを上書き
-                new_end_time = dt2['end_time']
+                # 2行目の時刻範囲があればそれを優先
+                new_start_time = dt2.get('start_time')
+                new_end_time = dt2.get('end_time')
                 if 'duration' in dt2 and dt2['start_time']:
                     new_end_time = dt2['start_time'] + dt2['duration']
-                logger.debug(f"[parse_message][update] pending_event new_start_time={dt2.get('start_time')}, new_end_time={new_end_time}")
-                if dt1.get('start_time') and dt2.get('start_time'):
+                logger.debug(f"[parse_message][update] pending_event new_start_time={new_start_time}, new_end_time={new_end_time}")
+                if dt1.get('start_time') and new_start_time:
                     return {
                         'success': True,
                         'operation_type': 'update',
                         'title': title,
                         'start_time': dt1['start_time'],
                         'end_time': dt1['end_time'],
-                        'new_start_time': dt2['start_time'],
+                        'new_start_time': new_start_time,
                         'new_end_time': new_end_time
                     }
             # それ以外は従来通り
@@ -1538,19 +1539,20 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
                 dt2 = extract_datetime_from_message(lines[1], 'update')
                 logger.debug(f"[parse_message][update] 1行目: {lines[0]} => {dt1}")
                 logger.debug(f"[parse_message][update] 2行目: {lines[1]} => {dt2}")
-                # 2行目のdurationがあればend_timeを上書き
-                new_end_time = dt2['end_time']
+                # 2行目の時刻範囲があればそれを優先
+                new_start_time = dt2.get('start_time')
+                new_end_time = dt2.get('end_time')
                 if 'duration' in dt2 and dt2['start_time']:
                     new_end_time = dt2['start_time'] + dt2['duration']
-                logger.debug(f"[parse_message][update] pending_event new_start_time={dt2.get('start_time')}, new_end_time={new_end_time}")
-                if dt1.get('start_time') and dt2.get('start_time'):
+                logger.debug(f"[parse_message][update] pending_event new_start_time={new_start_time}, new_end_time={new_end_time}")
+                if dt1.get('start_time') and new_start_time:
                     return {
                         'success': True,
                         'operation_type': 'update',
                         'title': title,
                         'start_time': dt1['start_time'],
                         'end_time': dt1['end_time'],
-                        'new_start_time': dt2['start_time'],
+                        'new_start_time': new_start_time,
                         'new_end_time': new_end_time
                     }
             # それ以外は従来通り
