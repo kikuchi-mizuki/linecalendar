@@ -592,7 +592,8 @@ class CalendarManager:
                     if not event_start_str:
                         continue
                     event_start = datetime.fromisoformat(event_start_str.replace('Z', '+00:00')).astimezone(self.timezone)
-                    if abs((event_start - start_time).total_seconds()) <= 3600:
+                    # ★完全一致のみ
+                    if event_start == start_time:
                         matched.append(e)
             return matched
         except Exception as e:
