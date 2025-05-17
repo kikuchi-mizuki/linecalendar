@@ -368,8 +368,10 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
         elif operation_type == 'add':
             # 予定追加の場合
             datetime_info = extract_datetime_from_message(message, operation_type)
-            if not datetime_info:
-                return {'success': False, 'error': '日時情報が特定できません。'}
+            if not datetime_info or not datetime_info.get('success'):
+                return {'success': False, 'error': datetime_info.get('error', '日時情報が特定できません。') if datetime_info else '日時情報が特定できません。'}
+            if 'start_time' not in datetime_info or 'end_time' not in datetime_info:
+                return {'success': False, 'error': '日付・時刻情報が不足しています（start_time/end_time）'}
             title = extract_title(message)
             location = extract_location(message)
             person = extract_person(message)
@@ -955,6 +957,9 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 minute1 = int(match.group(2))
                 hour2 = int(match.group(3))
                 minute2 = int(match.group(4))
+                # バリデーション
+                if not (0 <= hour1 <= 23 and 0 <= minute1 <= 59 and 0 <= hour2 <= 23 and 0 <= minute2 <= 59):
+                    continue
                 month_day = re.search(r'(\d{1,2})[\/月](\d{1,2})', line)
                 if month_day:
                     month = int(month_day.group(1))
@@ -974,6 +979,8 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             if match:
                 hour1 = int(match.group(1))
                 hour2 = int(match.group(2))
+                if not (0 <= hour1 <= 23 and 0 <= hour2 <= 23):
+                    continue
                 month_day = re.search(r'(\d{1,2})[\/月](\d{1,2})', line)
                 if month_day:
                     month = int(month_day.group(1))
@@ -994,6 +1001,8 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 minute1 = int(match.group(2))
                 hour2 = int(match.group(3))
                 minute2 = int(match.group(4)) if match.group(4) else 0
+                if not (0 <= hour1 <= 23 and 0 <= minute1 <= 59 and 0 <= hour2 <= 23 and 0 <= minute2 <= 59):
+                    continue
                 month_day = re.search(r'(\d{1,2})[\/月](\d{1,2})', line)
                 if month_day:
                     month = int(month_day.group(1))
@@ -1602,8 +1611,10 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
         elif operation_type == 'add':
             # 予定追加の場合
             datetime_info = extract_datetime_from_message(message, operation_type)
-            if not datetime_info:
-                return {'success': False, 'error': '日時情報が特定できません。'}
+            if not datetime_info or not datetime_info.get('success'):
+                return {'success': False, 'error': datetime_info.get('error', '日時情報が特定できません。') if datetime_info else '日時情報が特定できません。'}
+            if 'start_time' not in datetime_info or 'end_time' not in datetime_info:
+                return {'success': False, 'error': '日付・時刻情報が不足しています（start_time/end_time）'}
             title = extract_title(message)
             location = extract_location(message)
             person = extract_person(message)
