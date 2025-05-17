@@ -829,7 +829,17 @@ class CalendarManager:
             else:
                 new_end_time = new_end_time.astimezone(self.timezone)
 
+            # 予定を取得
             event = self.service.events().get(calendarId=self.calendar_id, eventId=event_id).execute()
+            # 重複チェック（自分自身は除外）
+            overlapping_events = await self._check_overlapping_events(new_start_time, new_end_time, exclude_event_id=event_id)
+            if overlapping_events:
+                return {
+                    'success': False,
+                    'error': '更新後の時間帯に重複する予定があります',
+                    'overlapping_events': overlapping_events
+                }
+            # 予定を更新
             event['start'] = {
                 'dateTime': new_start_time.isoformat(),
                 'timeZone': 'Asia/Tokyo'

@@ -1085,9 +1085,10 @@ async def handle_message(event):
                             event_end = datetime.fromisoformat(event['end']['dateTime'].replace('Z', '+00:00')).astimezone(pytz.timezone('Asia/Tokyo'))
                             if (result['new_start_time'] < event_end and result['new_end_time'] > event_start):
                                 event_index = i + 1  # 1始まり
+                                event_id = event.get('id')
                                 break
-                        if event_index is None or event_index < 1:
-                            logger.error(f"[handle_message][duplicate branch] event_indexが不正: {event_index}")
+                        if event_index is None or event_index < 1 or not event_id:
+                            logger.error(f"[handle_message][duplicate branch] event_indexが不正: {event_index}, event_id={event_id}")
                             await reply_text(reply_token, "更新対象の予定を特定できませんでした。もう一度お試しください。")
                             return
                         pending_event = {
@@ -1102,6 +1103,7 @@ async def handle_message(event):
                             'description': result.get('description'),
                             'recurrence': result.get('recurrence'),
                             'event_index': event_index,
+                            'event_id': event_id,
                             'force_update': True
                         }
                         save_pending_event(user_id, pending_event)
@@ -1802,10 +1804,8 @@ async def handle_yes_response(calendar_id: str) -> str:
             return format_response_message('add', result)
         elif operation_type == 'update':
             # 予定更新の処理
-            event_index = pending_event.get('event_index')
-            if event_index is None:
-                event_index = pending_event.get('delete_index')
-            if event_index is None:
+            event_id = pending_event.get('event_id')
+            if not event_id:
                 return "更新対象の予定を特定できませんでした。もう一度お試しください。"
             new_start_time = pending_event.get('new_start_time')
             new_end_time = pending_event.get('new_end_time')
@@ -1813,15 +1813,14 @@ async def handle_yes_response(calendar_id: str) -> str:
                 return "新しい時間情報が不足しています。もう一度やり直してください。"
             skip_overlap = pending_event.get('force_update') or pending_event.get('skip_overlap_check') or False
             logger.info(f"[handle_yes_response] skip_overlap={skip_overlap}, pending_event={pending_event}")
-            result = await calendar_manager.update_event_by_index(
-                index=event_index,
+            result = await calendar_manager.update_event_by_id(
+                event_id=event_id,
                 new_start_time=new_start_time,
-                new_end_time=new_end_time,
-                skip_overlap_check=skip_overlap
+                new_end_time=new_end_time
             )
             clear_pending_event(calendar_id)
             if not result.get('success', False):
-                logger.error(f"[update_event_by_index][error] {result}")
+                logger.error(f"[update_event_by_id][error] {result}")
                 return result.get('error', 'うまくできなかったみたい。ごめんね。')
             # 予定を更新した日の予定一覧も返す
             day = new_start_time.replace(hour=0, minute=0, second=0, microsecond=0)

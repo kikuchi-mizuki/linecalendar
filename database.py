@@ -79,6 +79,7 @@ class DatabaseManager:
                         operation_type TEXT,
                         delete_index INTEGER,
                         event_index INTEGER,
+                        event_id TEXT,
                         title TEXT,
                         start_time TEXT,
                         end_time TEXT,
@@ -98,6 +99,7 @@ class DatabaseManager:
                     ("operation_type", "TEXT"),
                     ("delete_index", "INTEGER"),
                     ("event_index", "INTEGER"),
+                    ("event_id", "TEXT"),
                     ("new_start_time", "TEXT"),
                     ("new_end_time", "TEXT"),
                     ("person", "TEXT"),
@@ -452,23 +454,24 @@ class DatabaseManager:
                 new_end_time = event_info.get('new_end_time')
                 if isinstance(new_end_time, datetime):
                     new_end_time = new_end_time.isoformat()
-                # 追加: event_index, person, force_update
                 event_index = event_info.get('event_index')
+                event_id = event_info.get('event_id')
                 person = event_info.get('person')
                 force_update = 1 if event_info.get('force_update') else 0
                 cursor.execute('''
                     INSERT OR REPLACE INTO pending_events (
-                        user_id, operation_type, delete_index, event_index,
+                        user_id, operation_type, delete_index, event_index, event_id,
                         title, start_time, end_time,
                         new_start_time, new_end_time,
                         location, person, description, recurrence, force_update
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ''', (
                     user_id,
                     event_info.get('operation_type'),
                     event_info.get('delete_index'),
                     event_index,
+                    event_id,
                     event_info.get('title'),
                     start_time,
                     end_time,
@@ -491,7 +494,7 @@ class DatabaseManager:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    SELECT operation_type, delete_index, event_index,
+                    SELECT operation_type, delete_index, event_index, event_id,
                            title, start_time, end_time,
                            new_start_time, new_end_time,
                            location, person, description, recurrence, force_update
@@ -515,16 +518,17 @@ class DatabaseManager:
                     'operation_type': result[0],
                     'delete_index': result[1],
                     'event_index': result[2],
-                    'title': result[3],
-                    'start_time': to_aware(result[4]),
-                    'end_time': to_aware(result[5]),
-                    'new_start_time': to_aware(result[6]),
-                    'new_end_time': to_aware(result[7]),
-                    'location': result[8],
-                    'person': result[9],
-                    'description': result[10],
-                    'recurrence': result[11],
-                    'force_update': bool(result[12]) if len(result) > 12 else False
+                    'event_id': result[3],
+                    'title': result[4],
+                    'start_time': to_aware(result[5]),
+                    'end_time': to_aware(result[6]),
+                    'new_start_time': to_aware(result[7]),
+                    'new_end_time': to_aware(result[8]),
+                    'location': result[9],
+                    'person': result[10],
+                    'description': result[11],
+                    'recurrence': result[12],
+                    'force_update': bool(result[13])
                 }
         except Exception as e:
             logger.error(f"保留中のイベントの取得に失敗: {str(e)}")
