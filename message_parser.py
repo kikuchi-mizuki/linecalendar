@@ -278,143 +278,91 @@ def normalize_digits(text: str) -> str:
     """全角数字を半角数字に変換するユーティリティ関数"""
     return text.translate(str.maketrans('０１２３４５６７８９', '0123456789'))
 
-def parse_message(message: str, current_time: datetime = None) -> Dict:
-    """
-    メッセージを解析して操作タイプと必要な情報を抽出する
-    
-    Args:
-        message (str): 解析するメッセージ
-        current_time (datetime, optional): 現在時刻
-        
-    Returns:
-        Dict: 解析結果
-    """
+def parse_message(text: str) -> Dict[str, Any]:
+    """メッセージを解析して操作タイプと必要な情報を抽出する"""
     try:
-        # 現在時刻の設定
-        if current_time is None:
-            current_time = datetime.now(pytz.timezone('Asia/Tokyo'))
-            
-        # 操作タイプの抽出
-        operation_type = extract_operation_type(message)
+        # テキストの正規化
+        normalized_text = normalize_text(text)
+        logger.info(f"正規化後のテキスト: {normalized_text}")
+
+        # 操作タイプの判定
+        operation_type = None
+        if any(keyword in normalized_text for keyword in ADD_KEYWORDS):
+            operation_type = "add"
+        elif any(keyword in normalized_text for keyword in DELETE_KEYWORDS):
+            operation_type = "delete"
+        elif any(keyword in normalized_text for keyword in UPDATE_KEYWORDS):
+            operation_type = "update"
+
         if not operation_type:
-            return {'success': False, 'error': '操作タイプが特定できません。'}
-            
-        # 操作タイプに応じた情報抽出
-        if operation_type == 'confirm':
-            # 確認応答の場合
+            logger.warning("操作タイプを特定できませんでした")
             return {
-                'success': True,
-                'operation_type': 'confirm'
+                "operation_type": None,
+                "error": "操作タイプを特定できませんでした。追加、削除、変更、確認のいずれかを指定してください。"
             }
-            
-        elif operation_type == 'add':
-            # 予定追加の場合
-            datetime_info = extract_datetime_from_message(message, operation_type)
-            if not datetime_info or not datetime_info.get('success'):
-                return {'success': False, 'error': datetime_info.get('error', '日時情報が特定できません。') if datetime_info else '日時情報が特定できません。'}
-            if 'start_time' not in datetime_info or 'end_time' not in datetime_info:
-                return {'success': False, 'error': '日付・時刻情報が不足しています（start_time/end_time）'}
-            title = extract_title(message)
-            location = extract_location(message)
-            person = extract_person(message)
-            recurrence = extract_recurrence(message)
-            # durationがあればend_timeを上書き
-            if 'duration' in datetime_info:
-                end_time = datetime_info['start_time'] + datetime_info['duration']
+
+        # 日付と時刻の抽出
+        date = extract_date(normalized_text)
+        start_time = extract_start_time(normalized_text)
+        end_time = extract_end_time(normalized_text)
+        logger.info(f"抽出された日付: {date}, 開始時刻: {start_time}, 終了時刻: {end_time}")
+
+        # 更新操作の場合、新しい時間を抽出
+        new_start_time = None
+        new_end_time = None
+        if operation_type == "update":
+            # 「X時からY時」パターン
+            time_match = re.search(r'(\d{1,2})時(?:(\d{1,2})分)?から(\d{1,2})時(?:(\d{1,2})分)?', normalized_text)
+            if time_match:
+                new_start_time = f"{time_match.group(1)}:{time_match.group(2) or '00'}"
+                new_end_time = f"{time_match.group(3)}:{time_match.group(4) or '00'}"
             else:
-                end_time = datetime_info['end_time']
-            return {
-                'success': True,
-                'operation_type': 'add',
-                'title': title,
-                'start_time': datetime_info['start_time'],
-                'end_time': end_time,
-                'location': location,
-                'person': person,
-                'recurrence': recurrence
-            }
-            
-        elif operation_type == 'delete':
-            # 予定削除の場合
-            title = extract_title(message)
-            datetime_info = extract_datetime_from_message(message, operation_type)
-            return {
-                'success': True,
-                'operation_type': 'delete',
-                'title': title,
-                'start_time': datetime_info.get('start_time') if datetime_info else None,
-                'end_time': datetime_info.get('end_time') if datetime_info else None
-            }
-                
-        elif operation_type == 'update':
-            # 予定更新の場合
-            title = extract_title(message)
-            lines = message.splitlines()
-            if len(lines) >= 2:
-                dt1 = extract_datetime_from_message(lines[0], 'update')
-                dt2 = extract_datetime_from_message(lines[1], 'update')
-                logger.debug(f"[parse_message][update] 1行目: {lines[0]} => {dt1}")
-                logger.debug(f"[parse_message][update] 2行目: {lines[1]} => {dt2}")
-                # 2行目の時刻範囲があればそれを優先
-                new_start_time = dt2.get('start_time')
-                new_end_time = dt2.get('end_time')
-                if 'duration' in dt2 and dt2['start_time']:
-                    new_end_time = dt2['start_time'] + dt2['duration']
-                logger.debug(f"[parse_message][update] pending_event new_start_time={new_start_time}, new_end_time={new_end_time}")
-                if dt1.get('start_time') and new_start_time:
-                    # 元の所要時間を計算
-                    if dt1.get('end_time') and dt1.get('start_time'):
-                        original_duration = dt1.get('end_time') - dt1.get('start_time')
-                    else:
-                        original_duration = timedelta(hours=1)
-                    # new_end_timeはnew_start_time+元の所要時間
-                    new_end_time = new_start_time + original_duration
-                    return {
-                        'operation_type': 'update',
-                        'title': title,
-                        'start_time': dt1.get('start_time'),
-                        'end_time': dt1.get('end_time'),
-                        'new_start_time': new_start_time,
-                        'new_end_time': new_end_time
-                    }
-            # 1行しかない場合もnew_start_time/new_end_timeが抽出されていればそれを優先
-            datetime_info = extract_datetime_from_message(message, operation_type)
-            if datetime_info.get('new_start_time') and datetime_info.get('new_end_time'):
-                return {
-                    'operation_type': 'update',
-                    'title': title,
-                    'start_time': datetime_info.get('start_time'),
-                    'end_time': datetime_info.get('end_time'),
-                    'new_start_time': datetime_info.get('new_start_time'),
-                    'new_end_time': datetime_info.get('new_end_time')
-                }
-            return {
-                'operation_type': 'update',
-                'title': title,
-                'start_time': datetime_info.get('start_time'),
-                'end_time': datetime_info.get('end_time'),
-                'new_start_time': datetime_info.get('new_start_time'),
-                'new_end_time': datetime_info.get('new_end_time')
-            }
-                
-        elif operation_type == 'read':
-            # 予定確認の場合
-            datetime_info = extract_datetime_from_message(message, operation_type)
-            return {
-                'success': True,
-                'operation_type': 'read',
-                'start_time': datetime_info.get('start_time') if datetime_info else None,
-                'end_time': datetime_info.get('end_time') if datetime_info else None
-            }
-            
-        else:
-            return {'success': False, 'error': '未対応の操作タイプです。'}
-            
+                # 「X時-Y時」パターン
+                time_match = re.search(r'(\d{1,2})時(?:(\d{1,2})分)?-(\d{1,2})時(?:(\d{1,2})分)?', normalized_text)
+                if time_match:
+                    new_start_time = f"{time_match.group(1)}:{time_match.group(2) or '00'}"
+                    new_end_time = f"{time_match.group(3)}:{time_match.group(4) or '00'}"
+
+        # タイトルの抽出
+        title = extract_title(text)
+        logger.info(f"抽出されたタイトル: {title}")
+
+        # 場所の抽出
+        location = extract_location(normalized_text)
+        logger.info(f"抽出された場所: {location}")
+
+        # 結果の構築
+        result = {
+            "operation_type": operation_type,
+            "date": date,
+            "start_time": start_time,
+            "end_time": end_time,
+            "title": title,
+            "location": location
+        }
+
+        # 更新操作の場合は新しい時間も含める
+        if operation_type == "update":
+            result["new_start_time"] = new_start_time
+            result["new_end_time"] = new_end_time
+
+        # 必須項目のチェック
+        if operation_type in ["add", "update"]:
+            if not date:
+                return {"operation_type": operation_type, "error": "日付を特定できませんでした。"}
+            if not start_time:
+                return {"operation_type": operation_type, "error": "開始時刻を特定できませんでした。"}
+            if not end_time:
+                return {"operation_type": operation_type, "error": "終了時刻を特定できませんでした。"}
+            if not title:
+                return {"operation_type": operation_type, "error": "タイトルを特定できませんでした。"}
+
+        return result
+
     except Exception as e:
-        logger.error(f"メッセージ解析中にエラーが発生: {str(e)}")
+        logger.error(f"メッセージ解析エラー: {str(e)}")
         logger.error(traceback.format_exc())
-        print(f'★parse_message except: {e}')
-        return {'success': False, 'error': str(e)}
+        return {"operation_type": None, "error": f"メッセージの解析中にエラーが発生しました: {str(e)}"}
 
 def extract_update_time(message: str, now: datetime) -> Tuple[Optional[datetime], Optional[datetime], bool]:
     """更新時の新しい時間を抽出する"""
@@ -509,6 +457,16 @@ def extract_operation_type(text: str) -> Optional[str]:
 def extract_title(text: str) -> Optional[str]:
     """メッセージからタイトルを抽出する（複数行対応・不要行除外・カタカナ保持）"""
     try:
+        # 更新操作の場合は「変更」などのキーワードを除外
+        normalized_text = normalize_text(text)
+        if any(keyword in normalized_text for keyword in UPDATE_KEYWORDS):
+            # 更新操作の場合は、日時表現と更新キーワードを除去してからタイトルを抽出
+            text = re.sub(r'を[^\sを]+で(変更|修正|更新|編集)(してください)?$', '', text)
+            text = re.sub(r'を[^\sを]+と(変更|修正|更新|編集)(してください)?$', '', text)
+            text = re.sub(r'(を)?(変更|修正|更新|編集)?して(ください)?$', '', text)
+            text = re.sub(r'(を)?(変更|修正|更新|編集|教えて|表示)(してください)?$', '', text)
+            text = re.sub(r'変更|修正|更新|編集', '', text)
+
         # 複数行メッセージ対応: 1行目が日付・時刻パターンなら2行目以降からタイトルを抽出
         lines = [line.strip() for line in text.splitlines() if line.strip()]
         if len(lines) >= 2:
@@ -519,12 +477,14 @@ def extract_title(text: str) -> Optional[str]:
                 for line in lines[1:]:
                     if re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z]', line):
                         return line
+
         # 既存のロジック
         # 末尾の「を△△で追加してください」「を△△と追加してください」などを除去
         text = re.sub(r'を[^\sを]+で(追加|削除|変更|確認|教えて|表示)(してください)?$', '', text)
         text = re.sub(r'を[^\sを]+と(追加|削除|変更|確認|教えて|表示)(してください)?$', '', text)
         text = re.sub(r'(を)?(追加|削除|変更|確認)?して(ください)?$', '', text)
         text = re.sub(r'(を)?(追加|削除|変更|確認|教えて|表示)(してください)?$', '', text)
+
         # まず「X月Y日Z時からタイトル」や「X時からタイトル」パターンを優先的に抽出
         match = re.search(r'(?:\d{1,2}月)?\d{1,2}日\d{1,2}時(?:\d{1,2})分から(.+)', text)
         if not match:
@@ -535,6 +495,7 @@ def extract_title(text: str) -> Optional[str]:
             title_candidate = re.sub(r'[。\n].*$', '', title_candidate)
             if title_candidate:
                 return title_candidate
+
         # カタカナはひらがなに変換しない
         normalized_message = normalize_text(text, keep_katakana=True)
         lines = [line.strip() for line in normalized_message.splitlines() if line.strip()]
@@ -542,7 +503,7 @@ def extract_title(text: str) -> Optional[str]:
             r'\d+時間半?', r'\d+時間', r'\d+分', r'オンライン', r'おんらいん'
         ]
         location = extract_location(normalized_message)
-        # --- ここから追加 ---
+
         # 1行メッセージで日付・時刻＋タイトルの場合、日付・時刻部分を除去
         if len(lines) == 1:
             line = lines[0]
@@ -557,7 +518,7 @@ def extract_title(text: str) -> Optional[str]:
             if not line or re.fullmatch(r'[\d/:年月日時分\s　]+', line):
                 return None
             return line
-        # --- ここまで追加 ---
+
         for i, line in enumerate(lines):
             if re.search(r'\d+月\d+日', line) or re.search(r'\d+時', line):
                 continue
