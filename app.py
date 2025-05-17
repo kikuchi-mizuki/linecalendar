@@ -1818,6 +1818,9 @@ async def handle_yes_response(calendar_id: str) -> str:
                 new_end_time=new_end_time
             )
             clear_pending_event(calendar_id)
+            if not result.get('success', False):
+                logger.error(f"[update_event_by_index][error] {result}")
+                return result.get('error', 'うまくできなかったみたい。ごめんね。')
             return format_response_message('update', result)
         else:
             return "操作タイプを特定できませんでした。もう一度お試しください。"
