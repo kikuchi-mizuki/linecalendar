@@ -955,10 +955,11 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             r'(?P<start_period>午前|午後|朝|夜|夕方|深夜)(?P<start_hour>\d{1,2})時(?:(?P<start_minute>\d{1,2})分)?[\-〜~～](?P<end_period>午前|午後|朝|夜|夕方|深夜)?(?P<end_hour>\d{1,2})時(?:(?P<end_minute>\d{1,2})分)?'
         ]
 
+        # --- ここから: パターンごとにヒット箇所を詳細ログ出力 ---
         for pattern in time_range_patterns:
             match = re.search(pattern, message)
             if match:
-                logger.debug(f"[extract_datetime_from_message] 時刻範囲抽出: {match.groupdict()}")
+                logger.debug(f"[datetime_extraction][HIT] 時刻範囲パターン: {pattern}, groupdict={match.groupdict()}")
                 # 開始時刻の処理
                 start_hour = int(match.group('start_hour'))
                 start_minute = int(match.group('start_minute') or 0)
@@ -1025,9 +1026,11 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             r'(?P<period>午前|午後|朝|夜|夕方|深夜)(?P<hour>\d{1,2})時(?:(?P<minute>\d{1,2})分)?'
         ]
 
+        # --- ここから: パターンごとにヒット箇所を詳細ログ出力 ---
         for pattern in time_patterns:
             match = re.search(pattern, message)
             if match:
+                logger.debug(f"[datetime_extraction][HIT] 時刻パターン: {pattern}, groupdict={match.groupdict()}")
                 hour = int(match.group('hour'))
                 minute = int(match.group('minute') or 0)
 
@@ -1068,10 +1071,10 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 logger.debug(f"[datetime_extraction] 入力メッセージ: {message}, 抽出結果: start={result.get('start_time')}, end={result.get('end_time')}")
                 return result
 
-        # --- ここから追加: スラッシュ・ハイフン区切り日付パターン ---
-        # 例: 5/19 13:00, 5-19 13:00
+        # --- ここから: パターンごとにヒット箇所を詳細ログ出力 ---
         date_time_match = re.search(r'(\d{1,2})[/-](\d{1,2})[\s　]*(\d{1,2}):(\d{2})', message)
         if date_time_match:
+            logger.debug(f"[datetime_extraction][HIT] スラッシュ・ハイフン日付時刻パターン: {date_time_match.groups()}")
             month = int(date_time_match.group(1))
             day = int(date_time_match.group(2))
             hour = int(date_time_match.group(3))
@@ -1089,9 +1092,9 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             logger.debug(f"[datetime_extraction] 入力メッセージ: {message}, 抽出結果: start={result.get('start_time')}, end={result.get('end_time')}")
             return result
 
-        # 日付のみのパターン（時刻なし）
         date_match = re.search(r'(\d{1,2})[/-](\d{1,2})', message)
         if date_match:
+            logger.debug(f"[datetime_extraction][HIT] スラッシュ・ハイフン日付パターン: {date_match.groups()}")
             month = int(date_match.group(1))
             day = int(date_match.group(2))
             year = now.year
@@ -1106,14 +1109,35 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             logger.debug(f"スラッシュ・ハイフン日付パターン: {start_time} から {end_time}")
             logger.debug(f"[datetime_extraction] 入力メッセージ: {message}, 抽出結果: start={result.get('start_time')}, end={result.get('end_time')}")
             return result
-        # --- ここまで追加 ---
+        # --- ここまで: パターンごとにヒット箇所を詳細ログ出力 ---
 
-        # X月Y日Z時、X月Y日Z時W分パターンも全行から未来の日付を優先して選ぶ
+        # --- ここから: 未来の最も近い日付を必ず最後に選ぶ ---
+        all_candidates = []
+        # スラッシュ日付＋時刻
+        lines = message.splitlines() if isinstance(message, str) else []
+        future_candidates = []
+        for line in lines:
+            match = re.search(r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2}):(\d{2})', line)
+            if match:
+                logger.debug(f"[datetime_extraction][CANDIDATE] スラッシュ日付+時刻: {match.groups()}")
+                month = int(match.group(1))
+                day = int(match.group(2))
+                hour = int(match.group(3))
+                minute = int(match.group(4))
+                year = now.year
+                if (month < now.month) or (month == now.month and day < now.day):
+                    year += 1
+                candidate_time = JST.localize(datetime(year, month, day, hour, minute))
+                if candidate_time >= now:
+                    future_candidates.append(candidate_time)
+        for t in future_candidates:
+            all_candidates.append(t)
+        # 日本語日付＋時刻
         jp_future_candidates = []
         for line in message.splitlines():
-            # X月Y日Z時W分
             match = re.search(r'(\d{1,2})月(\d{1,2})日(\d{1,2})時(\d{1,2})分', line)
             if match:
+                logger.debug(f"[datetime_extraction][CANDIDATE] 日本語日付+時刻: {match.groups()}")
                 month = int(match.group(1))
                 day = int(match.group(2))
                 hour = int(match.group(3))
@@ -1124,9 +1148,9 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 candidate_time = JST.localize(datetime(year, month, day, hour, minute))
                 if candidate_time >= now:
                     jp_future_candidates.append(candidate_time)
-            # X月Y日Z時
             match = re.search(r'(\d{1,2})月(\d{1,2})日(\d{1,2})時', line)
             if match:
+                logger.debug(f"[datetime_extraction][CANDIDATE] 日本語日付+時刻(分なし): {match.groups()}")
                 month = int(match.group(1))
                 day = int(match.group(2))
                 hour = int(match.group(3))
@@ -1137,38 +1161,6 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 candidate_time = JST.localize(datetime(year, month, day, hour, minute))
                 if candidate_time >= now:
                     jp_future_candidates.append(candidate_time)
-        if jp_future_candidates:
-            start_time = min(jp_future_candidates)
-            end_time = start_time + timedelta(hours=1)
-            result['start_time'] = start_time
-            result['end_time'] = end_time
-            result['is_time_range'] = False
-            logger.debug(f"[datetime_extraction] 最終選択(JP): start={start_time}, end={end_time}")
-            return result
-
-        # 正規表現でマッチしなかった場合、dateparserでパース（PREFER_DATES_FROM: 'future' を必ず指定）
-        import dateparser
-        settings = {
-            "TIMEZONE": "Asia/Tokyo",
-            "RETURN_AS_TIMEZONE_AWARE": True,
-            "PREFER_DATES_FROM": "future",
-        }
-        dt = dateparser.parse(message, settings=settings)
-        if dt:
-            dt = dt.astimezone(JST)
-            result['start_time'] = dt
-            result['end_time'] = dt + timedelta(hours=1)
-            result['is_time_range'] = False
-            logger.debug(f"[datetime_extraction] dateparser fallback: start={dt}, end={dt + timedelta(hours=1)}")
-            return result
-
-        # すべての候補を集めて未来の最も近い日付を選ぶ
-        all_candidates = []
-        # スラッシュ日付＋時刻
-        if 'future_candidates' in locals():
-            for t in future_candidates:
-                all_candidates.append(t)
-        # 日本語日付＋時刻
         for t in jp_future_candidates:
             all_candidates.append(t)
         # dateparser fallback
@@ -1189,8 +1181,9 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             result['start_time'] = start_time
             result['end_time'] = end_time
             result['is_time_range'] = False
-            logger.debug(f"[datetime_extraction] 最終選択(ALL): start={start_time}, end={end_time}")
+            logger.debug(f"[datetime_extraction] 最終選択(ALL): start={start_time}, end={end_time}, all_candidates={all_candidates}")
             return result
+        # --- ここまで: 未来の最も近い日付を必ず最後に選ぶ ---
 
         return result
 
