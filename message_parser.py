@@ -417,7 +417,7 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
                 hour1 = int(m1.group(3))
                 minute1 = int(m1.group(4)) if m1.group(4) else 0
                 year = current_time.year
-                start_time = datetime(year, month1, day1, hour1, minute1, tzinfo=pytz.timezone('Asia/Tokyo'))
+                start_time = JST.localize(datetime(year, month1, day1, hour1, minute1))
                 end_time = start_time + timedelta(hours=1)
                 # 2つ目
                 m2 = date_matches[1]
@@ -425,7 +425,7 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
                 day2 = int(m2.group(2))
                 hour2 = int(m2.group(3))
                 minute2 = int(m2.group(4)) if m2.group(4) else 0
-                new_start_time = datetime(year, month2, day2, hour2, minute2, tzinfo=pytz.timezone('Asia/Tokyo'))
+                new_start_time = JST.localize(datetime(year, month2, day2, hour2, minute2))
                 new_end_time = new_start_time + timedelta(hours=1)
                 return {
                     'success': True,
@@ -1261,12 +1261,11 @@ def extract_time(message: str, current_time: datetime) -> Tuple[Optional[datetim
     if '今月' in message:
         year = current_time.year
         month = current_time.month
-        start_time = datetime(year, month, 1, 0, 0, tzinfo=jst)
-        # 翌月の1日を求めて月末を計算
+        start_time = JST.localize(datetime(year, month, 1, 0, 0))
         if month == 12:
-            next_month = datetime(year + 1, 1, 1, 0, 0, tzinfo=jst)
+            next_month = JST.localize(datetime(year + 1, 1, 1, 0, 0))
         else:
-            next_month = datetime(year, month + 1, 1, 0, 0, tzinfo=jst)
+            next_month = JST.localize(datetime(year, month + 1, 1, 0, 0))
         end_time = next_month - timedelta(minutes=1)
         logger.debug(f"今月の時間情報: {start_time} から {end_time}")
         return start_time, end_time, True
@@ -1279,22 +1278,22 @@ def extract_time(message: str, current_time: datetime) -> Tuple[Optional[datetim
     if '今週' in message:
         week_start = get_week_start(current_time.date())
         week_end = week_start + timedelta(days=6)
-        start_time = datetime.combine(week_start, time(0, 0), tzinfo=jst)
-        end_time = datetime.combine(week_end, time(23, 59), tzinfo=jst)
+        start_time = JST.localize(datetime.combine(week_start, time(0, 0)))
+        end_time = JST.localize(datetime.combine(week_end, time(23, 59)))
         logger.debug(f"今週の時間情報: {start_time} から {end_time}")
         return start_time, end_time, True
     if '来週' in message:
         week_start = get_week_start(current_time.date()) + timedelta(days=7)
         week_end = week_start + timedelta(days=6)
-        start_time = datetime.combine(week_start, time(0, 0), tzinfo=jst)
-        end_time = datetime.combine(week_end, time(23, 59), tzinfo=jst)
+        start_time = JST.localize(datetime.combine(week_start, time(0, 0)))
+        end_time = JST.localize(datetime.combine(week_end, time(23, 59)))
         logger.debug(f"来週の時間情報: {start_time} から {end_time}")
         return start_time, end_time, True
     if '先週' in message:
         week_start = get_week_start(current_time.date()) - timedelta(days=7)
         week_end = week_start + timedelta(days=6)
-        start_time = datetime.combine(week_start, time(0, 0), tzinfo=jst)
-        end_time = datetime.combine(week_end, time(23, 59), tzinfo=jst)
+        start_time = JST.localize(datetime.combine(week_start, time(0, 0)))
+        end_time = JST.localize(datetime.combine(week_end, time(23, 59)))
         logger.debug(f"先週の時間情報: {start_time} から {end_time}")
         return start_time, end_time, True
 
@@ -1307,10 +1306,8 @@ def extract_time(message: str, current_time: datetime) -> Tuple[Optional[datetim
         year = current_time.year
         if (month < current_time.month) or (month == current_time.month and day < current_time.day):
             year += 1
-        start_time = datetime(year, month, day, hour, 30, tzinfo=jst)
-        # デフォルトは1時間
+        start_time = JST.localize(datetime(year, month, day, hour, 30))
         end_time = start_time + timedelta(hours=1)
-        # 時間の長さを抽出
         duration = extract_duration(message)
         if duration:
             end_time = start_time + duration
@@ -1326,10 +1323,8 @@ def extract_time(message: str, current_time: datetime) -> Tuple[Optional[datetim
         year = current_time.year
         if (month < current_time.month) or (month == current_time.month and day < current_time.day):
             year += 1
-        start_time = datetime(year, month, day, hour, 0, tzinfo=jst)
-        # デフォルトは1時間
+        start_time = JST.localize(datetime(year, month, day, hour, 0))
         end_time = start_time + timedelta(hours=1)
-        # 時間の長さを抽出
         duration = extract_duration(message)
         if duration:
             end_time = start_time + duration
@@ -1346,7 +1341,7 @@ def extract_time(message: str, current_time: datetime) -> Tuple[Optional[datetim
         year = current_time.year
         if (month < current_time.month) or (month == current_time.month and day < current_time.day):
             year += 1
-        start_time = datetime(year, month, day, hour, minute, tzinfo=jst)
+        start_time = JST.localize(datetime(year, month, day, hour, minute))
         end_time = start_time + timedelta(hours=1)
         logger.debug(f"X月Y日Z時W分パターン: {start_time} から {end_time}")
         return start_time, end_time, False
@@ -1361,9 +1356,8 @@ def extract_time(message: str, current_time: datetime) -> Tuple[Optional[datetim
         year = current_time.year
         if (month < current_time.month) or (month == current_time.month and day < current_time.day):
             year += 1
-        # 修正: 必ずminute=0で初期化
-        start_time = datetime(year, month, day, start_hour, 0, tzinfo=jst)
-        end_time = datetime(year, month, day, end_hour, 0, tzinfo=jst)
+        start_time = JST.localize(datetime(year, month, day, start_hour, 0))
+        end_time = JST.localize(datetime(year, month, day, end_hour, 0))
         logger.debug(f"X月Y日Z時〜W時パターン: {start_time} から {end_time}")
         return start_time, end_time, False
 
@@ -1379,8 +1373,8 @@ def extract_time(message: str, current_time: datetime) -> Tuple[Optional[datetim
         year = current_time.year
         if (month < current_time.month) or (month == current_time.month and day < current_time.day):
             year += 1
-        start_time = datetime(year, month, day, start_hour, start_minute, tzinfo=jst)
-        end_time = datetime(year, month, day, end_hour, end_minute, tzinfo=jst)
+        start_time = JST.localize(datetime(year, month, day, start_hour, start_minute))
+        end_time = JST.localize(datetime(year, month, day, end_hour, end_minute))
         logger.debug(f"X月Y日Z:W〜A:Bパターン: {start_time} から {end_time}")
         return start_time, end_time, False
 
@@ -1394,7 +1388,7 @@ def extract_time(message: str, current_time: datetime) -> Tuple[Optional[datetim
         year = current_time.year
         if (month < current_time.month) or (month == current_time.month and day < current_time.day):
             year += 1
-        start_time = datetime(year, month, day, hour, 0, tzinfo=jst)
+        start_time = JST.localize(datetime(year, month, day, hour, 0))
         end_time = start_time + timedelta(hours=duration)
         logger.debug(f"X月Y日Z時からN時間パターン: {start_time} から {end_time}")
         return start_time, end_time, False
@@ -1407,7 +1401,7 @@ def extract_time(message: str, current_time: datetime) -> Tuple[Optional[datetim
         year = current_time.year
         if (month < current_time.month) or (month == current_time.month and day < current_time.day):
             year += 1
-        start_time = datetime(year, month, day, hour, 0, tzinfo=jst)
+        start_time = JST.localize(datetime(year, month, day, hour, 0))
         end_time = start_time + timedelta(minutes=duration)
         logger.debug(f"X月Y日Z時からN分パターン: {start_time} から {end_time}")
         return start_time, end_time, False
@@ -1421,7 +1415,7 @@ def extract_time(message: str, current_time: datetime) -> Tuple[Optional[datetim
         year = current_time.year
         if (month < current_time.month) or (month == current_time.month and day < current_time.day):
             year += 1
-        start_time = datetime.combine(current_time.date(), time(9, 0, 0), tzinfo=jst)
+        start_time = JST.localize(datetime.combine(current_time.date(), time(9, 0, 0)))
         end_time = start_time + timedelta(hours=duration)
         logger.debug(f"X月Y日N時間パターン: {start_time} から {end_time}")
         return start_time, end_time, False
@@ -1433,7 +1427,7 @@ def extract_time(message: str, current_time: datetime) -> Tuple[Optional[datetim
         year = current_time.year
         if (month < current_time.month) or (month == current_time.month and day < current_time.day):
             year += 1
-        start_time = datetime.combine(current_time.date(), time(9, 0, 0), tzinfo=jst)
+        start_time = JST.localize(datetime.combine(current_time.date(), time(9, 0, 0)))
         end_time = start_time + timedelta(minutes=duration)
         logger.debug(f"X月Y日N分パターン: {start_time} から {end_time}")
         return start_time, end_time, False
@@ -1447,8 +1441,8 @@ def extract_time(message: str, current_time: datetime) -> Tuple[Optional[datetim
         if (month < current_time.month) or (month == current_time.month and day < current_time.day):
             year += 1
         target_date = date(year, month, day)
-        start_time = datetime.combine(target_date, time(0, 0, 0), tzinfo=jst)
-        end_time = datetime.combine(target_date, time(23, 59, 0), tzinfo=jst)
+        start_time = JST.localize(datetime.combine(target_date, time(0, 0, 0)))
+        end_time = JST.localize(datetime.combine(target_date, time(23, 59, 0)))
         logger.debug(f"X月Y日パターン: {start_time} から {end_time}")
         return start_time, end_time, True
 
@@ -1471,7 +1465,7 @@ def extract_time(message: str, current_time: datetime) -> Tuple[Optional[datetim
     time_match = re.search(r'(\d{1,2})時から', message)
     if time_match:
         start_hour = int(time_match.group(1))
-        start_time = datetime.combine(target_date, time(start_hour, 0), tzinfo=jst)
+        start_time = JST.localize(datetime.combine(target_date, time(start_hour, 0)))
         end_time = start_time + timedelta(hours=1)
         logger.debug(f"時刻を抽出: {start_hour}時から")
         return start_time, end_time, False
@@ -1479,12 +1473,12 @@ def extract_time(message: str, current_time: datetime) -> Tuple[Optional[datetim
     if duration_match:
         start_hour = int(duration_match.group(1))
         duration = int(duration_match.group(2))
-        start_time = datetime.combine(target_date, time(start_hour, 0), tzinfo=jst)
+        start_time = JST.localize(datetime.combine(target_date, time(start_hour, 0)))
         end_time = start_time + timedelta(hours=duration)
         logger.debug(f"時刻と時間を抽出: {start_hour}時から{duration}時間")
         return start_time, end_time, False
-    start_time = datetime.combine(target_date, time(0, 0), tzinfo=jst)
-    end_time = datetime.combine(target_date, time(23, 59), tzinfo=jst)
+    start_time = JST.localize(datetime.combine(target_date, time(0, 0)))
+    end_time = JST.localize(datetime.combine(target_date, time(23, 59)))
     logger.debug(f"日付のみの時間情報: {start_time} から {end_time}")
     return start_time, end_time, True
 
@@ -1660,7 +1654,7 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
                 hour1 = int(m1.group(3))
                 minute1 = int(m1.group(4)) if m1.group(4) else 0
                 year = current_time.year
-                start_time = datetime(year, month1, day1, hour1, minute1, tzinfo=pytz.timezone('Asia/Tokyo'))
+                start_time = JST.localize(datetime(year, month1, day1, hour1, minute1))
                 end_time = start_time + timedelta(hours=1)
                 # 2つ目
                 m2 = date_matches[1]
@@ -1668,7 +1662,7 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
                 day2 = int(m2.group(2))
                 hour2 = int(m2.group(3))
                 minute2 = int(m2.group(4)) if m2.group(4) else 0
-                new_start_time = datetime(year, month2, day2, hour2, minute2, tzinfo=pytz.timezone('Asia/Tokyo'))
+                new_start_time = JST.localize(datetime(year, month2, day2, hour2, minute2))
                 new_end_time = new_start_time + timedelta(hours=1)
                 return {
                     'success': True,
