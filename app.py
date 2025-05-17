@@ -16,7 +16,7 @@ import sys
 
 # ロガーの初期化
 logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 # コンソールハンドラの設定
 console_handler = logging.StreamHandler(sys.stdout)
