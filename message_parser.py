@@ -362,6 +362,13 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
                     new_end_time = dt2['start_time'] + dt2['duration']
                 logger.debug(f"[parse_message][update] pending_event new_start_time={new_start_time}, new_end_time={new_end_time}")
                 if dt1.get('start_time') and new_start_time:
+                    # 元の所要時間を計算
+                    if dt1.get('end_time') and dt1.get('start_time'):
+                        original_duration = dt1.get('end_time') - dt1.get('start_time')
+                    else:
+                        original_duration = timedelta(hours=1)
+                    # new_end_timeはnew_start_time+元の所要時間
+                    new_end_time = new_start_time + original_duration
                     return {
                         'operation_type': 'update',
                         'title': title,
@@ -1432,6 +1439,13 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
                     new_end_time = dt2['start_time'] + dt2['duration']
                 logger.debug(f"[parse_message][update] pending_event new_start_time={new_start_time}, new_end_time={new_end_time}")
                 if dt1.get('start_time') and new_start_time:
+                    # 元の所要時間を計算
+                    if dt1.get('end_time') and dt1.get('start_time'):
+                        original_duration = dt1.get('end_time') - dt1.get('start_time')
+                    else:
+                        original_duration = timedelta(hours=1)
+                    # new_end_timeはnew_start_time+元の所要時間
+                    new_end_time = new_start_time + original_duration
                     return {
                         'operation_type': 'update',
                         'title': title,
