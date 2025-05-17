@@ -441,6 +441,10 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
             if len(lines) >= 2:
                 dt1 = extract_datetime_from_message(lines[0], 'update')
                 dt2 = extract_datetime_from_message(lines[1], 'update')
+                # 2行目のdurationがあればend_timeを上書き
+                new_end_time = dt2['end_time']
+                if 'duration' in dt2 and dt2['start_time']:
+                    new_end_time = dt2['start_time'] + dt2['duration']
                 if dt1.get('start_time') and dt2.get('start_time'):
                     return {
                         'success': True,
@@ -449,7 +453,7 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
                         'start_time': dt1['start_time'],
                         'end_time': dt1['end_time'],
                         'new_start_time': dt2['start_time'],
-                        'new_end_time': dt2['end_time']
+                        'new_end_time': new_end_time
                     }
             # それ以外は従来通り
             datetime_info = extract_datetime_from_message(message, operation_type)
@@ -1529,6 +1533,10 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
             if len(lines) >= 2:
                 dt1 = extract_datetime_from_message(lines[0], 'update')
                 dt2 = extract_datetime_from_message(lines[1], 'update')
+                # 2行目のdurationがあればend_timeを上書き
+                new_end_time = dt2['end_time']
+                if 'duration' in dt2 and dt2['start_time']:
+                    new_end_time = dt2['start_time'] + dt2['duration']
                 if dt1.get('start_time') and dt2.get('start_time'):
                     return {
                         'success': True,
@@ -1537,7 +1545,7 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
                         'start_time': dt1['start_time'],
                         'end_time': dt1['end_time'],
                         'new_start_time': dt2['start_time'],
-                        'new_end_time': dt2['end_time']
+                        'new_end_time': new_end_time
                     }
             # それ以外は従来通り
             datetime_info = extract_datetime_from_message(message, operation_type)
