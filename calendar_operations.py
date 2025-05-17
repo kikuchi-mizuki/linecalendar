@@ -621,10 +621,19 @@ class CalendarManager:
                 event_start_str = e['start'].get('dateTime') or e['start'].get('date')
                 if not event_start_str:
                     continue
-                event_start = datetime.fromisoformat(event_start_str.replace('Z', '+00:00')).astimezone(self.timezone)
-                # 許容範囲（±5分）で一致
-                if abs((event_start - start_time).total_seconds()) > 300:
-                    continue
+                # 日付のみイベント対応
+                if 'date' in e['start'] and 'dateTime' not in e['start']:
+                    event_start = datetime.fromisoformat(event_start_str)
+                    # 日付が一致すればOK
+                    if event_start.date() != start_time.date():
+                        continue
+                else:
+                    event_start = datetime.fromisoformat(event_start_str.replace('Z', '+00:00')).astimezone(self.timezone)
+                    # 秒・マイクロ秒を丸めて比較
+                    event_start = event_start.replace(second=0, microsecond=0)
+                    st = start_time.replace(second=0, microsecond=0)
+                    if abs((event_start - st).total_seconds()) > 300:
+                        continue
                 # タイトルが指定されている場合のみタイトルも考慮
                 if title:
                     if normalize_title(title) not in normalize_title(event_title):
