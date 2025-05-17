@@ -523,13 +523,23 @@ def extract_title(text: str) -> Optional[str]:
     try:
         # 更新操作の場合は「変更」などのキーワードを除外
         normalized_text = normalize_text(text)
+        
+        # 削除操作の場合の特別処理
+        if any(keyword in normalized_text for keyword in DELETE_KEYWORDS):
+            # 削除キーワードを除去
+            for keyword in DELETE_KEYWORDS:
+                normalized_text = normalized_text.replace(keyword, '')
+            # 末尾の「を削除」「を消す」などを除去
+            normalized_text = re.sub(r'を[^\sを]+(削除|消す|キャンセル|中止)(してください)?$', '', normalized_text)
+            normalized_text = re.sub(r'(を)?(削除|消す|キャンセル|中止)(してください)?$', '', normalized_text)
+        
+        # 更新操作の場合は、日時表現と更新キーワードを除去
         if any(keyword in normalized_text for keyword in UPDATE_KEYWORDS):
-            # 更新操作の場合は、日時表現と更新キーワードを除去してからタイトルを抽出
-            text = re.sub(r'を[^\sを]+で(変更|修正|更新|編集)(してください)?$', '', text)
-            text = re.sub(r'を[^\sを]+と(変更|修正|更新|編集)(してください)?$', '', text)
-            text = re.sub(r'(を)?(変更|修正|更新|編集)?して(ください)?$', '', text)
-            text = re.sub(r'(を)?(変更|修正|更新|編集|教えて|表示)(してください)?$', '', text)
-            text = re.sub(r'変更|修正|更新|編集', '', text)
+            normalized_text = re.sub(r'を[^\sを]+で(変更|修正|更新|編集)(してください)?$', '', normalized_text)
+            normalized_text = re.sub(r'を[^\sを]+と(変更|修正|更新|編集)(してください)?$', '', normalized_text)
+            normalized_text = re.sub(r'(を)?(変更|修正|更新|編集)?して(ください)?$', '', normalized_text)
+            normalized_text = re.sub(r'(を)?(変更|修正|更新|編集|教えて|表示)(してください)?$', '', normalized_text)
+            normalized_text = re.sub(r'変更|修正|更新|編集', '', normalized_text)
 
         # 複数行メッセージ対応: 1行目が日付・時刻パターンなら2行目以降からタイトルを抽出
         lines = [line.strip() for line in text.splitlines() if line.strip()]
@@ -544,15 +554,15 @@ def extract_title(text: str) -> Optional[str]:
 
         # 既存のロジック
         # 末尾の「を△△で追加してください」「を△△と追加してください」などを除去
-        text = re.sub(r'を[^\sを]+で(追加|削除|変更|確認|教えて|表示)(してください)?$', '', text)
-        text = re.sub(r'を[^\sを]+と(追加|削除|変更|確認|教えて|表示)(してください)?$', '', text)
-        text = re.sub(r'(を)?(追加|削除|変更|確認)?して(ください)?$', '', text)
-        text = re.sub(r'(を)?(追加|削除|変更|確認|教えて|表示)(してください)?$', '', text)
+        normalized_text = re.sub(r'を[^\sを]+で(追加|削除|変更|確認|教えて|表示)(してください)?$', '', normalized_text)
+        normalized_text = re.sub(r'を[^\sを]+と(追加|削除|変更|確認|教えて|表示)(してください)?$', '', normalized_text)
+        normalized_text = re.sub(r'(を)?(追加|削除|変更|確認)?して(ください)?$', '', normalized_text)
+        normalized_text = re.sub(r'(を)?(追加|削除|変更|確認|教えて|表示)(してください)?$', '', normalized_text)
 
         # まず「X月Y日Z時からタイトル」や「X時からタイトル」パターンを優先的に抽出
-        match = re.search(r'(?:\d{1,2}月)?\d{1,2}日\d{1,2}時(?:\d{1,2})分から(.+)', text)
+        match = re.search(r'(?:\d{1,2}月)?\d{1,2}日\d{1,2}時(?:\d{1,2})分から(.+)', normalized_text)
         if not match:
-            match = re.search(r'\d{1,2}時(?:\d{1,2})分から(.+)', text)
+            match = re.search(r'\d{1,2}時(?:\d{1,2})分から(.+)', normalized_text)
         if match:
             title_candidate = match.group(1).strip()
             # 末尾の不要な語句を除去
