@@ -281,11 +281,9 @@ def normalize_digits(text: str) -> str:
 def parse_message(text: str) -> Dict[str, Any]:
     """メッセージを解析して操作タイプと必要な情報を抽出する"""
     try:
-        # テキストの正規化
         normalized_text = normalize_text(text)
         logger.info(f"正規化後のテキスト: {normalized_text}")
 
-        # 操作タイプの判定
         operation_type = None
         if any(keyword in normalized_text for keyword in ADD_KEYWORDS):
             operation_type = "add"
@@ -301,37 +299,46 @@ def parse_message(text: str) -> Dict[str, Any]:
                 "error": "操作タイプを特定できませんでした。追加、削除、変更、確認のいずれかを指定してください。"
             }
 
-        # 日付と時刻の抽出
+        # --- update処理の複数行対応 ---
+        if operation_type == "update":
+            lines = [line.strip() for line in text.splitlines() if line.strip()]
+            if len(lines) >= 2:
+                # 1行目: 元の予定、2行目: 新しい予定
+                old_line = lines[0]
+                new_line = lines[1]
+                old_date = extract_date(normalize_text(old_line))
+                old_start = extract_start_time(normalize_text(old_line))
+                old_end = extract_end_time(normalize_text(old_line))
+                new_date = extract_date(normalize_text(new_line))
+                new_start = extract_start_time(normalize_text(new_line))
+                new_end = extract_end_time(normalize_text(new_line))
+                title = extract_title(text)
+                location = extract_location(normalize_text(text))
+                result = {
+                    "operation_type": "update",
+                    "date": old_date,
+                    "start_time": old_start,
+                    "end_time": old_end,
+                    "title": title,
+                    "location": location,
+                    "new_date": new_date,
+                    "new_start_time": new_start,
+                    "new_end_time": new_end
+                }
+                # 必須項目チェック
+                if not old_date or not old_start or not old_end or not title:
+                    result["error"] = "元の予定情報が不足しています。"
+                if not new_date or not new_start or not new_end:
+                    result["error"] = "新しい予定情報が不足しています。"
+                return result
+
+        # 通常のadd/delete処理
         date = extract_date(normalized_text)
         start_time = extract_start_time(normalized_text)
         end_time = extract_end_time(normalized_text)
         logger.info(f"抽出された日付: {date}, 開始時刻: {start_time}, 終了時刻: {end_time}")
-
-        # 更新操作の場合、新しい時間を抽出
-        new_start_time = None
-        new_end_time = None
-        if operation_type == "update":
-            # 「X時からY時」パターン
-            time_match = re.search(r'(\d{1,2})時(?:(\d{1,2})分)?から(\d{1,2})時(?:(\d{1,2})分)?', normalized_text)
-            if time_match:
-                new_start_time = f"{time_match.group(1)}:{time_match.group(2) or '00'}"
-                new_end_time = f"{time_match.group(3)}:{time_match.group(4) or '00'}"
-            else:
-                # 「X時-Y時」パターン
-                time_match = re.search(r'(\d{1,2})時(?:(\d{1,2})分)?-(\d{1,2})時(?:(\d{1,2})分)?', normalized_text)
-                if time_match:
-                    new_start_time = f"{time_match.group(1)}:{time_match.group(2) or '00'}"
-                    new_end_time = f"{time_match.group(3)}:{time_match.group(4) or '00'}"
-
-        # タイトルの抽出
         title = extract_title(text)
-        logger.info(f"抽出されたタイトル: {title}")
-
-        # 場所の抽出
         location = extract_location(normalized_text)
-        logger.info(f"抽出された場所: {location}")
-
-        # 結果の構築
         result = {
             "operation_type": operation_type,
             "date": date,
@@ -340,25 +347,19 @@ def parse_message(text: str) -> Dict[str, Any]:
             "title": title,
             "location": location
         }
-
-        # 更新操作の場合は新しい時間も含める
         if operation_type == "update":
-            result["new_start_time"] = new_start_time
-            result["new_end_time"] = new_end_time
-
-        # 必須項目のチェック
+            result["new_start_time"] = None
+            result["new_end_time"] = None
         if operation_type in ["add", "update"]:
             if not date:
-                return {"operation_type": operation_type, "error": "日付を特定できませんでした。"}
+                result["error"] = "日付を特定できませんでした。"
             if not start_time:
-                return {"operation_type": operation_type, "error": "開始時刻を特定できませんでした。"}
+                result["error"] = "開始時刻を特定できませんでした。"
             if not end_time:
-                return {"operation_type": operation_type, "error": "終了時刻を特定できませんでした。"}
+                result["error"] = "終了時刻を特定できませんでした。"
             if not title:
-                return {"operation_type": operation_type, "error": "タイトルを特定できませんでした。"}
-
+                result["error"] = "タイトルを特定できませんでした。"
         return result
-
     except Exception as e:
         logger.error(f"メッセージ解析エラー: {str(e)}")
         logger.error(traceback.format_exc())
