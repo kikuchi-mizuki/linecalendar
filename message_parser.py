@@ -1126,6 +1126,22 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             logger.debug(f"[datetime_extraction] 最終選択(JP): start={start_time}, end={end_time}")
             return result
 
+        # 正規表現でマッチしなかった場合、dateparserでパース（PREFER_DATES_FROM: 'future' を必ず指定）
+        import dateparser
+        settings = {
+            "TIMEZONE": "Asia/Tokyo",
+            "RETURN_AS_TIMEZONE_AWARE": True,
+            "PREFER_DATES_FROM": "future",
+        }
+        dt = dateparser.parse(message, settings=settings)
+        if dt:
+            dt = dt.astimezone(JST)
+            result['start_time'] = dt
+            result['end_time'] = dt + timedelta(hours=1)
+            result['is_time_range'] = False
+            logger.debug(f"[datetime_extraction] dateparser fallback: start={dt}, end={dt + timedelta(hours=1)}")
+            return result
+
         return result
 
     except Exception as e:
