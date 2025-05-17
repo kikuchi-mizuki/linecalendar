@@ -283,6 +283,7 @@ class CalendarManager:
             logger.error(f"予定の追加に失敗: {str(e)}")
             return {
                 'success': False,
+                'error': 'exception',
                 'message': f'Google APIエラー: {str(e)}'
             }
 
