@@ -1088,6 +1088,44 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             return result
         # --- ここまで追加 ---
 
+        # X月Y日Z時、X月Y日Z時W分パターンも全行から未来の日付を優先して選ぶ
+        jp_future_candidates = []
+        for line in message.splitlines():
+            # X月Y日Z時W分
+            match = re.search(r'(\d{1,2})月(\d{1,2})日(\d{1,2})時(\d{1,2})分', line)
+            if match:
+                month = int(match.group(1))
+                day = int(match.group(2))
+                hour = int(match.group(3))
+                minute = int(match.group(4))
+                year = now.year
+                if (month < now.month) or (month == now.month and day < now.day):
+                    year += 1
+                candidate_time = JST.localize(datetime(year, month, day, hour, minute))
+                if candidate_time >= now:
+                    jp_future_candidates.append(candidate_time)
+            # X月Y日Z時
+            match = re.search(r'(\d{1,2})月(\d{1,2})日(\d{1,2})時', line)
+            if match:
+                month = int(match.group(1))
+                day = int(match.group(2))
+                hour = int(match.group(3))
+                minute = 0
+                year = now.year
+                if (month < now.month) or (month == now.month and day < now.day):
+                    year += 1
+                candidate_time = JST.localize(datetime(year, month, day, hour, minute))
+                if candidate_time >= now:
+                    jp_future_candidates.append(candidate_time)
+        if jp_future_candidates:
+            start_time = min(jp_future_candidates)
+            end_time = start_time + timedelta(hours=1)
+            result['start_time'] = start_time
+            result['end_time'] = end_time
+            result['is_time_range'] = False
+            logger.debug(f"[datetime_extraction] 最終選択(JP): start={start_time}, end={end_time}")
+            return result
+
         return result
 
     except Exception as e:
