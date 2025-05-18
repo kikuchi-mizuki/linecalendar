@@ -1692,7 +1692,7 @@ def extract_time(message: str, current_time: datetime) -> Tuple[Optional[datetim
                 future_candidates.append(candidate_time)
     if future_candidates:
         start_time = min(future_candidates)
-            end_time = start_time + timedelta(hours=1)
+        end_time = start_time + timedelta(hours=1)
         result['start_time'] = start_time
         result['end_time'] = end_time
         result['is_time_range'] = False
