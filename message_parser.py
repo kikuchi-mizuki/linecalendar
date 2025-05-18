@@ -947,7 +947,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             hour = int(date_time_match.group(3))
             minute = int(date_time_match.group(4))
             year = now.year
-            if datetime(year, month, day, hour, minute) < now:
+            if datetime(year, month, day, hour, minute) < now.replace(tzinfo=None):
                 year += 1
             start_time = JST.localize(datetime(year, month, day, hour, minute))
             end_time = start_time + timedelta(hours=1)
@@ -963,7 +963,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             hour = int(jp_date_time_match.group(3))
             minute = int(jp_date_time_match.group(4))
             year = now.year
-            if datetime(year, month, day, hour, minute) < now:
+            if datetime(year, month, day, hour, minute) < now.replace(tzinfo=None):
                 year += 1
             start_time = JST.localize(datetime(year, month, day, hour, minute))
             end_time = start_time + timedelta(hours=1)
@@ -978,7 +978,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             hour = int(jp_date_time_match2.group(3))
             minute = 0
             year = now.year
-            if datetime(year, month, day, hour, minute) < now:
+            if datetime(year, month, day, hour, minute) < now.replace(tzinfo=None):
                 year += 1
             start_time = JST.localize(datetime(year, month, day, hour, minute))
             end_time = start_time + timedelta(hours=1)
@@ -1130,7 +1130,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             hour = int(date_time_match.group(3))
             minute = int(date_time_match.group(4))
             year = now.year
-            if datetime(year, month, day, hour, minute) < now:
+            if datetime(year, month, day, hour, minute) < now.replace(tzinfo=None):
                 year += 1
             start_time = JST.localize(datetime(year, month, day, hour, minute))
             end_time = start_time + timedelta(hours=1)
@@ -1148,7 +1148,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             hour = int(jp_date_time_match.group(3))
             minute = int(jp_date_time_match.group(4))
             year = now.year
-            if datetime(year, month, day, hour, minute) < now:
+            if datetime(year, month, day, hour, minute) < now.replace(tzinfo=None):
                 year += 1
             start_time = JST.localize(datetime(year, month, day, hour, minute))
             end_time = start_time + timedelta(hours=1)
@@ -1165,7 +1165,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             hour = int(jp_date_time_match2.group(3))
             minute = 0
             year = now.year
-            if datetime(year, month, day, hour, minute) < now:
+            if datetime(year, month, day, hour, minute) < now.replace(tzinfo=None):
                 year += 1
             start_time = JST.localize(datetime(year, month, day, hour, minute))
             end_time = start_time + timedelta(hours=1)
