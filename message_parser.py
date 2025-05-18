@@ -324,7 +324,7 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
             if not datetime_info or not datetime_info.get('start_time'):
                 return {'success': False, 'error': '日時情報が特定できません。'}
             
-            title = extract_title(normalized_message)
+            title = extract_title(message)
             if not title:
                 return {'success': False, 'error': 'タイトルを特定できません。'}
             
@@ -350,7 +350,7 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
             }
             
         elif operation_type == 'delete':
-            title = extract_title(normalized_message)
+            title = extract_title(message)
             datetime_info = extract_datetime_from_message(normalized_message, operation_type)
             return {
                 'success': True,
@@ -361,7 +361,7 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
             }
                 
         elif operation_type == 'update':
-            title = extract_title(normalized_message)
+            title = extract_title(message)
             lines = normalized_message.splitlines()
             if len(lines) >= 2:
                 dt1 = extract_datetime_from_message(lines[0], 'update')
