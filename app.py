@@ -551,52 +551,57 @@ def format_event_details(event: dict) -> str:
 def format_event_list(events, start_time=None, end_time=None):
     from constants import WEEKDAYS
     import pytz
-    from datetime import datetime
+    from datetime import datetime, timedelta
     JST = pytz.timezone('Asia/Tokyo')
-    if not events:
-        if start_time:
-            date_str = start_time.strftime('%Y/%m/%d')
-            weekday = WEEKDAYS[start_time.weekday()] if hasattr(start_time, 'weekday') else ''
-            return f"📅 {date_str}（{weekday}）\n━━━━━━━━━━\n予定はありません。\n━━━━━━━━━━"
-        else:
-            return "予定はありません。"
-    
-    # 日付・曜日
-    date_str = start_time.strftime('%Y/%m/%d') if start_time else ''
-    weekday = WEEKDAYS[start_time.weekday()] if start_time and hasattr(start_time, 'weekday') else ''
-    msg = f"📅 {date_str}（{weekday}）\n━━━━━━━━━━\n"
-    
-    # その日の予定のみをフィルタリング
-    filtered_events = []
+
+    # 日付範囲のリストを作成
+    if start_time and end_time:
+        days = []
+        current = start_time.date()
+        while current <= end_time.date():
+            days.append(current)
+            current += timedelta(days=1)
+    else:
+        days = [start_time.date()] if start_time else []
+
+    # イベントを日付ごとにグループ化
+    events_by_date = {d: [] for d in days}
     for event in events:
         start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date', ''))
         if 'T' in start:
             try:
                 event_start = datetime.fromisoformat(start.replace('Z', '+00:00')).astimezone(JST)
-                if start_time and event_start.date() == start_time.date():
-                    filtered_events.append(event)
+                event_date = event_start.date()
+                if event_date in events_by_date:
+                    events_by_date[event_date].append(event)
             except Exception:
                 continue
-    
-    # 予定を時間順にソート
-    filtered_events.sort(key=lambda x: x.get('start', {}).get('dateTime', ''))
-    
-    for i, event in enumerate(filtered_events, 1):
-        title = event.get('summary', '（タイトルなし）')
-        start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date', ''))
-        end = event.get('end', {}).get('dateTime', event.get('end', {}).get('date', ''))
-        # 時刻部分の整形
-        if 'T' in start and 'T' in end:
-            try:
-                start_dt = datetime.fromisoformat(start.replace('Z', '+00:00')).astimezone(JST)
-                end_dt = datetime.fromisoformat(end.replace('Z', '+00:00')).astimezone(JST)
-                time_str = f"⏰ {start_dt.strftime('%H:%M')}～{end_dt.strftime('%H:%M')}"
-            except Exception:
-                time_str = "⏰ 時刻不明"
+
+    # メッセージを構築
+    msg = ""
+    for d in days:
+        date_str = d.strftime('%Y/%m/%d')
+        weekday = WEEKDAYS[d.weekday()]
+        msg += f"📅 {date_str}（{weekday}）\n━━━━━━━━━━\n"
+        day_events = sorted(events_by_date[d], key=lambda x: x.get('start', {}).get('dateTime', ''))
+        if not day_events:
+            msg += "予定はありません。\n"
         else:
-            time_str = "終日"
-        msg += f"{i}. {title}\n{time_str}\n\n"
-    msg += "━━━━━━━━━━"
+            for i, event in enumerate(day_events, 1):
+                title = event.get('summary', '（タイトルなし）')
+                start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date', ''))
+                end = event.get('end', {}).get('dateTime', event.get('end', {}).get('date', ''))
+                if 'T' in start and 'T' in end:
+                    try:
+                        start_dt = datetime.fromisoformat(start.replace('Z', '+00:00')).astimezone(JST)
+                        end_dt = datetime.fromisoformat(end.replace('Z', '+00:00')).astimezone(JST)
+                        time_str = f"🕘 {start_dt.strftime('%H:%M')}～{end_dt.strftime('%H:%M')}"
+                    except Exception:
+                        time_str = "🕘 時刻不明"
+                else:
+                    time_str = "終日"
+                msg += f"{i}. {title}\n   {time_str}\n"
+        msg += "━━━━━━━━━━\n"
     return msg.strip()
 
 def format_overlapping_events(events):
