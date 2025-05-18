@@ -163,10 +163,10 @@ class CalendarManager:
                 filtered_events = []
                 for event in events:
                     event_title = event.get('summary', '')
-                    norm_event_title = normalize_text(event_title, keep_katakana=True)
-                    if norm_title in norm_event_title:
+                    # タイトルをそのまま比較
+                    if norm_title in event_title:
                         filtered_events.append(event)
-                        logger.debug(f"タイトル一致: 検索={norm_title}, イベント={norm_event_title}")
+                        logger.debug(f"タイトル一致: 検索={norm_title}, イベント={event_title}")
                 events = filtered_events
                 logger.info(f"タイトルフィルタリング後の予定数: {len(events)}")
             
@@ -254,7 +254,7 @@ class CalendarManager:
                     }
             # 予定の作成
             event = {
-                'summary': title,
+                'summary': title,  # タイトルをそのまま使用
                 'start': {
                     'dateTime': start_time.isoformat(),
                     'timeZone': 'Asia/Tokyo',
