@@ -886,4 +886,16 @@ class CalendarManager:
             return {
                 'success': False,
                 'error': str(e)
-            } 
+            }
+
+    def _parse_event_time(self, time_dict):
+        """
+        Google Calendar APIのevent['start']やevent['end']のdictからdatetimeを返す
+        """
+        if 'dateTime' in time_dict:
+            return datetime.fromisoformat(time_dict['dateTime'].replace('Z', '+00:00'))
+        elif 'date' in time_dict:
+            # 終日イベント
+            return datetime.fromisoformat(time_dict['date'])
+        else:
+            return None 
