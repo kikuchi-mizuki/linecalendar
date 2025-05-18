@@ -377,12 +377,14 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
                     new_end_time = dt2['start_time'] + dt2['duration']
                 
                 if dt1.get('start_time') and new_start_time:
-                    if dt1.get('end_time') and dt1.get('start_time'):
+                    # 2行目にend_timeがあればそれを優先
+                    if dt2.get('end_time'):
+                        new_end_time = dt2.get('end_time')
+                    elif dt1.get('end_time') and dt1.get('start_time'):
                         original_duration = dt1.get('end_time') - dt1.get('start_time')
+                        new_end_time = new_start_time + original_duration
                     else:
-                        original_duration = timedelta(hours=1)
-                    new_end_time = new_start_time + original_duration
-                    
+                        new_end_time = new_start_time + timedelta(hours=1)
                     return {
                         'success': True,
                         'operation_type': 'update',
