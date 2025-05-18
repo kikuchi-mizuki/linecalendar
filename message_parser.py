@@ -322,7 +322,7 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
             if len(lines) >= 2:
                 datetime_info = extract_datetime_from_message(lines[0], operation_type)
             else:
-                datetime_info = extract_datetime_from_message(normalized_message, operation_type)
+            datetime_info = extract_datetime_from_message(normalized_message, operation_type)
             if not datetime_info or not datetime_info.get('start_time'):
                 return {'success': False, 'error': '日時情報が特定できません。'}
             
@@ -549,12 +549,12 @@ def extract_title(text: str) -> Optional[str]:
         lines = [jaconv.h2z(line.strip(), kana=True) for line in normalized_text.splitlines()]
         logger.debug(f"[extract_title] lines after split: {lines}")
         if len(lines) >= 2:
-            for line in lines[1:]:
+                for line in lines[1:]:
                 if not line or line in DELETE_KEYWORDS:
                     continue
-                if re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z]', line):
+                    if re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z]', line):
                     return line
-            return None
+                            return None
         # 1行メッセージの場合は先頭の時刻（範囲含む）部分を除去し残りをタイトルとする
         if len(lines) == 1:
             line = lines[0]
@@ -1081,8 +1081,8 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 start_hour = int(match.group('start_hour'))
                 start_minute = int(match.group('start_minute') or 0)
                 if 'end_hour' in match.groupdict():
-                    end_hour = int(match.group('end_hour'))
-                    end_minute = int(match.group('end_minute') or 0)
+                end_hour = int(match.group('end_hour'))
+                end_minute = int(match.group('end_minute') or 0)
                 elif 'end_hour2' in match.groupdict():
                     end_hour = int(match.group('end_hour2'))
                     end_minute = 0
@@ -1242,9 +1242,9 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 day = int(match.group(2))
                 hour = int(match.group(3))
                 minute = int(match.group(4))
-                year = now.year
-                if (month < now.month) or (month == now.month and day < now.day):
-                    year += 1
+            year = now.year
+            if (month < now.month) or (month == now.month and day < now.day):
+                year += 1
                 candidate_time = JST.localize(datetime(year, month, day, hour, minute))
                 if candidate_time >= now:
                     future_candidates.append(candidate_time)
@@ -1692,7 +1692,7 @@ def extract_time(message: str, current_time: datetime) -> Tuple[Optional[datetim
                 future_candidates.append(candidate_time)
     if future_candidates:
         start_time = min(future_candidates)
-        end_time = start_time + timedelta(hours=1)
+            end_time = start_time + timedelta(hours=1)
         result['start_time'] = start_time
         result['end_time'] = end_time
         result['is_time_range'] = False

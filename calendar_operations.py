@@ -131,18 +131,18 @@ class CalendarManager:
             return []
 
         # タイムゾーンの設定
-        if start_time.tzinfo is None:
-            start_time = self.timezone.localize(start_time)
-        else:
-            start_time = start_time.astimezone(self.timezone)
-        if end_time.tzinfo is None:
-            end_time = self.timezone.localize(end_time)
-        else:
-            end_time = end_time.astimezone(self.timezone)
-
+            if start_time.tzinfo is None:
+                start_time = self.timezone.localize(start_time)
+            else:
+                start_time = start_time.astimezone(self.timezone)
+            if end_time.tzinfo is None:
+                end_time = self.timezone.localize(end_time)
+            else:
+                end_time = end_time.astimezone(self.timezone)
+            
         # デバッグ: 取得前の時刻をJSTで出力
-        logger.info(f"予定を取得: {start_time.isoformat()} から {end_time.isoformat()}")
-        
+            logger.info(f"予定を取得: {start_time.isoformat()} から {end_time.isoformat()}")
+            
         try:
             # タイトルが指定されている場合は正規化
             norm_title = None
@@ -184,7 +184,7 @@ class CalendarManager:
             # ignore_event_idでフィルタリング
             if ignore_event_id:
                 events = [event for event in events if event.get('id') != ignore_event_id]
-            
+
             # 予定を時系列順にソート
             events.sort(key=lambda x: x.get('start', {}).get('dateTime', ''))
             
@@ -875,7 +875,7 @@ class CalendarManager:
             return {
                 'success': False,
                 'error': str(e)
-            }
+            } 
 
     def _parse_event_time(self, time_dict):
         """

@@ -215,7 +215,7 @@ class CalendarChat:
                     event_end = datetime.fromisoformat(event_end.replace('Z', '+00:00'))
                     event_start = event_start.astimezone(self.timezone)
                     event_end = event_end.astimezone(self.timezone)
-                    if (event_start < end_time and event_end > start_time):
+                    if (event_start < end_time and event_end > start_time and event_start != end_time and event_end != start_time):
                         overlapping_events.append({
                             'summary': event.get('summary', '予定なし'),
                             'start': event_start,
@@ -999,7 +999,7 @@ class CalendarChat:
                 event_end = event_end.astimezone(self.timezone)
                 
                 # 時間が重複しているかチェック
-                if (event_start < end_time and event_end > start_time):
+                if (event_start < end_time and event_end > start_time and event_start != end_time and event_end != start_time):
                     overlapping_events.append({
                         'id': event['id'],  # イベントIDを追加
                         'summary': event.get('summary', '予定なし'),

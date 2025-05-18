@@ -985,8 +985,8 @@ async def handle_message(event):
                             await reply_text(reply_token, "指定された日時の予定が見つかりませんでした。")
                             return
                         if len(matched_events) == 1:
-                            event = matched_events[0]
-                            delete_result = await calendar_manager.delete_event(event['id'])
+                        event = matched_events[0]
+                        delete_result = await calendar_manager.delete_event(event['id'])
                         elif len(matched_events) > 1:
                             # 重複している予定を一覧表示
                             msg = "複数の予定が見つかりました。削除したい予定を選んでください:\n" + format_event_list(matched_events)
@@ -1025,10 +1025,14 @@ async def handle_message(event):
                             day = result['start_time'].replace(hour=0, minute=0, second=0, microsecond=0)
                         elif 'date' in result and result['date']:
                             day = result['date'].replace(hour=0, minute=0, second=0, microsecond=0)
+                        msg = delete_result['message'] if 'message' in delete_result else '予定を削除しました。'
                         if day:
                             day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
                             events = await calendar_manager.get_events(start_time=day, end_time=day_end)
-                            msg = f"{delete_result['message']}\n\n残りの予定：\n" + format_event_list(events, day, day_end)
+                            if events:
+                                msg += f"\n\n残りの予定：\n" + format_event_list(events, day, day_end)
+                            else:
+                                msg += "\n\nこの日の予定は全て削除されました。"
                             await reply_text(reply_token, msg)
                             # 削除後は文脈も更新
                             user_last_event_list[user_id] = {
@@ -1036,6 +1040,9 @@ async def handle_message(event):
                                 'start_time': day,
                                 'end_time': day_end
                             }
+                            return
+                        else:
+                            await reply_text(reply_token, msg)
                             return
                     else:
                         await reply_text(reply_token, f"予定の削除に失敗しました: {delete_result.get('message', '不明なエラー')}")
