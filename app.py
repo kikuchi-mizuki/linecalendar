@@ -550,72 +550,16 @@ def format_event_details(event: dict) -> str:
         logger.error(f"イベント詳細のフォーマット中にエラーが発生: {str(e)}")
         return ""
 
-def format_event_list(events: List[Dict], start_time: datetime = None, end_time: datetime = None) -> str:
-    """
-    予定一覧をカレンダー風に整形して返す（LINEの吹き出し画像のような見やすい形式）
-    """
-    from collections import defaultdict
-    JST = pytz.timezone('Asia/Tokyo')
-    date_events = defaultdict(list)
-    for event in events:
-        date = event['start'].get('dateTime', event['start'].get('date'))
-        if 'T' in date:
-            date = date.split('T')[0]
-        date_events[date].append(event)
-    response_text = ""
-    # 期間指定があれば、その期間の全日付をループ
-    if start_time and end_time:
-        num_days = (end_time.date() - start_time.date()).days + 1
-        for i in range(num_days):
-            day = (start_time.date() + timedelta(days=i))
-            date_str = day.strftime('%Y-%m-%d')
-            date_obj = day
-            weekday = WEEKDAYS[date_obj.weekday()]
-            response_text += f"\U0001F4C5 {date_obj.strftime('%Y/%m/%d')}（{weekday}）\n"
-            response_text += "━━━━━━━━━━\n"  # 太い罫線を1本だけ
-            day_events = sorted(date_events.get(date_str, []), key=lambda x: x['start'].get('dateTime', x['start'].get('date')))
-            if day_events:
-                for j, event in enumerate(day_events, 1):
-                    title = event.get('summary', '予定')
-                    start = event['start'].get('dateTime', event['start'].get('date'))
-                    end = event['end'].get('dateTime', event['end'].get('date'))
-                    if 'T' in start:
-                        start_time_dt = datetime.strptime(start, '%Y-%m-%dT%H:%M:%S%z').astimezone(JST)
-                        end_time_dt = datetime.strptime(end, '%Y-%m-%dT%H:%M:%S%z').astimezone(JST)
-                        # 分・秒・マイクロ秒を丸めずそのまま表示
-                        time_str = f"⏰ {start_time_dt.strftime('%H:%M')}～{end_time_dt.strftime('%H:%M')}"
-                    else:
-                        time_str = "終日"
-                    response_text += f"{j}. {title}\n{time_str}\n\n"
-            else:
-                response_text += "予定はありません。\n"
-            response_text += "━━━━━━━━━━\n"  # 日付ごとに太い罫線
-    else:
-        # 期間指定がなければ予定がある日だけ
-        sorted_dates = sorted(date_events.keys())
-        for date in sorted_dates:
-            date_obj = datetime.strptime(date, '%Y-%m-%d')
-            weekday = WEEKDAYS[date_obj.weekday()]
-            response_text += f"\U0001F4C5 {date_obj.strftime('%Y/%m/%d')}（{weekday}）\n"
-            response_text += "━━━━━━━━━━\n"
-            sorted_events = sorted(date_events[date], key=lambda x: x['start'].get('dateTime', x['start'].get('date')))
-            if sorted_events:
-                for i, event in enumerate(sorted_events, 1):
-                    title = event.get('summary', '予定')
-                    start = event['start'].get('dateTime', event['start'].get('date'))
-                    end = event['end'].get('dateTime', event['end'].get('date'))
-                    if 'T' in start:
-                        start_time_dt = datetime.strptime(start, '%Y-%m-%dT%H:%M:%S%z').astimezone(JST)
-                        end_time_dt = datetime.strptime(end, '%Y-%m-%dT%H:%M:%S%z').astimezone(JST)
-                        # 分・秒・マイクロ秒を丸めずそのまま表示
-                        time_str = f"⏰ {start_time_dt.strftime('%H:%M')}～{end_time_dt.strftime('%H:%M')}"
-                    else:
-                        time_str = "終日"
-                    response_text += f"{i}. {title}\n{time_str}\n\n"
-            else:
-                response_text += "予定はありません。\n"
-            response_text += "━━━━━━━━━━\n"
-    return response_text.strip()
+def format_event_list(events, start_time, end_time):
+    if not events:
+        return "指定された期間に予定はありません。"
+    msg = f"{start_time.strftime('%Y/%m/%d')}の予定一覧:\n"
+    for i, event in enumerate(events, 1):
+        title = event.get('summary', '（タイトルなし）')
+        start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date', ''))
+        end = event.get('end', {}).get('dateTime', event.get('end', {}).get('date', ''))
+        msg += f"{i}. {title}（{start} ～ {end}）\n"
+    return msg
 
 def format_overlapping_events(events):
     """重複する予定を整形して表示する"""
