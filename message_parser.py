@@ -544,7 +544,7 @@ def extract_title(text: str) -> Optional[str]:
             normalized_text = re.sub(r'変更|修正|更新|編集', '', normalized_text)
 
         # 複数行メッセージ対応: 1行目が日付・時刻パターンなら2行目以降からタイトルを抽出
-        lines = [line.strip() for line in text.splitlines() if line.strip()]
+        lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
         if len(lines) >= 2:
             first_line = lines[0]
             # 1行目が日付・時刻パターン

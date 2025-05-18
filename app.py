@@ -957,7 +957,7 @@ async def handle_message(event):
                     # 日時指定での削除（start_time, end_timeがある場合）
                     elif 'start_time' in result and 'end_time' in result:
                         # タイトルもあれば渡す
-                        matched_events = calendar_manager._find_events(
+                        matched_events = await calendar_manager._find_events(
                             result['start_time'], result['end_time'], result.get('title'))
                         if not matched_events:
                             await reply_text(reply_token, "指定された日時の予定が見つかりませんでした。")
