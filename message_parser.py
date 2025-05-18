@@ -1341,6 +1341,38 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             logger.debug(f"[datetime_extraction] 入力メッセージ: {message}, 抽出結果: start={start_time}, end={end_time}")
             return result
 
+        try:
+            now = datetime.now(JST)
+            logger.debug(f"[now] サーバー現在日時: {now}")
+            # --- スラッシュ日付＋時刻範囲（例: 5/19 11:00〜13:00, 5/19 11:00-13:00）を最優先で抽出 ---
+            date_time_range_match = re.search(
+                r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2}):(\d{2})[〜~～-](\d{1,2}):(\d{2})', message)
+            if date_time_range_match:
+                month = int(date_time_range_match.group(1))
+                day = int(date_time_range_match.group(2))
+                start_hour = int(date_time_range_match.group(3))
+                start_minute = int(date_time_range_match.group(4))
+                end_hour = int(date_time_range_match.group(5))
+                end_minute = int(date_time_range_match.group(6))
+                year = now.year
+                if (month < now.month) or (month == now.month and day < now.day):
+                    year += 1
+                start_time = JST.localize(datetime(year, month, day, start_hour, start_minute))
+                end_time = JST.localize(datetime(year, month, day, end_hour, end_minute))
+                if end_time <= start_time:
+                    end_time += timedelta(days=1)
+                result = {'start_time': start_time, 'end_time': end_time, 'is_time_range': True}
+                logger.debug(f"[datetime_extraction][HIT] スラッシュ日付＋時刻範囲: {date_time_range_match.groups()} 入力メッセージ: {message}, 抽出結果: start={start_time}, end={end_time}")
+                return result
+        except Exception as e:
+            logger.error(f"スラッシュ日付＋時刻範囲の抽出中にエラーが発生: {str(e)}")
+            logger.error(traceback.format_exc())
+            return {
+                'start_time': None,
+                'end_time': None,
+                'is_time_range': False
+            }
+
         return result
 
     except Exception as e:
