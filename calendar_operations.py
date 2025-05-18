@@ -556,7 +556,7 @@ class CalendarManager:
                 if exclude_event_id and event.get('id') == exclude_event_id:
                     continue
                 # 時間帯が重なっていれば重複とみなす
-                if (event_start < end_time and event_end > start_time):
+                if (event_start < end_time and event_end > start_time and event_start != end_time and event_end != start_time):
                     overlapping_events.append({
                         'id': event['id'],
                         'summary': event.get('summary', '予定なし'),
@@ -600,11 +600,11 @@ class CalendarManager:
             for event in events:
                 event_start = self._parse_event_time(event['start'])
                 event_end = self._parse_event_time(event['end'])
+                # 完全一致のみを最優先
                 if event_start == start_time and event_end == end_time:
                     matching_events.insert(0, event)
-                elif (event_start <= start_time and event_end >= start_time) or \
-                     (event_start <= end_time and event_end >= end_time) or \
-                     (event_start >= start_time and event_end <= end_time):
+                # 開始時刻が一致するものだけ
+                elif event_start == start_time:
                     matching_events.append(event)
             if title:
                 matching_events = [
