@@ -1250,6 +1250,36 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             return result
         # --- ここまで: 未来の最も近い日付を必ず最後に選ぶ ---
 
+        # 日付のみのパターン（例：「5/19の予定を教えて」）
+        date_only_match = re.search(r'(\d{1,2})[/-](\d{1,2})', message)
+        if date_only_match:
+            logger.debug(f"[datetime_extraction][HIT] 日付のみパターン: {date_only_match.groups()}")
+            month = int(date_only_match.group(1))
+            day = int(date_only_match.group(2))
+            year = now.year
+            if (month < now.month) or (month == now.month and day < now.day):
+                year += 1
+            start_time = JST.localize(datetime(year, month, day, 0, 0))
+            end_time = JST.localize(datetime(year, month, day, 23, 59, 59, 999999))
+            result = {'start_time': start_time, 'end_time': end_time, 'is_time_range': True}
+            logger.debug(f"[datetime_extraction] 入力メッセージ: {message}, 抽出結果: start={start_time}, end={end_time}")
+            return result
+
+        # 日本語日付のみのパターン（例：「5月19日の予定を教えて」）
+        jp_date_only_match = re.search(r'(\d{1,2})月(\d{1,2})日', message)
+        if jp_date_only_match:
+            logger.debug(f"[datetime_extraction][HIT] 日本語日付のみパターン: {jp_date_only_match.groups()}")
+            month = int(jp_date_only_match.group(1))
+            day = int(jp_date_only_match.group(2))
+            year = now.year
+            if (month < now.month) or (month == now.month and day < now.day):
+                year += 1
+            start_time = JST.localize(datetime(year, month, day, 0, 0))
+            end_time = JST.localize(datetime(year, month, day, 23, 59, 59, 999999))
+            result = {'start_time': start_time, 'end_time': end_time, 'is_time_range': True}
+            logger.debug(f"[datetime_extraction] 入力メッセージ: {message}, 抽出結果: start={start_time}, end={end_time}")
+            return result
+
         return result
 
     except Exception as e:
