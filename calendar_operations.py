@@ -116,13 +116,11 @@ class CalendarManager:
     ) -> List[Dict]:
         """
         指定された期間のイベントを取得
-        
         Args:
             start_time (datetime): 開始時間
             end_time (datetime): 終了時間
             title (Optional[str]): イベントのタイトル
             ignore_event_id (Optional[str]): 除外するイベントID
-            
         Returns:
             List[Dict]: イベントのリスト
         """
@@ -132,61 +130,53 @@ class CalendarManager:
             return []
         # デバッグ: 取得前の時刻をJSTで出力
         print(f"[DEBUG][get_events] 取得前: start_time={start_time} end_time={end_time}")
-        logger.info(f"[DEBUG][get_events] 取得前: start_time={start_time} end_time={end_time}")
-        # 型チェック追加
-        if isinstance(start_time, str):
-            start_time = datetime.fromisoformat(start_time.replace('Z', '+00:00'))
-        if isinstance(end_time, str):
-            end_time = datetime.fromisoformat(end_time.replace('Z', '+00:00'))
+        logger.info(f"予定を取得: {start_time.isoformat()} から {end_time.isoformat()}")
         
         try:
-            # 開始時刻の処理
-            if start_time.tzinfo is None:
-                start_time = self.timezone.localize(start_time)
-            else:
-                start_time = start_time.astimezone(self.timezone)
+            # タイトルが指定されている場合は正規化
+            norm_title = None
+            if title:
+                norm_title = normalize_text(title, keep_katakana=True)
+                logger.debug(f"検索タイトル(正規化後): {norm_title}")
             
-            # 終了時刻の処理
-            if end_time.tzinfo is None:
-                end_time = self.timezone.localize(end_time)
-            else:
-                end_time = end_time.astimezone(self.timezone)
-            
-            # 日付のみの場合は、その日の0時から23時59分59秒までを範囲とする
-            if start_time.hour == 0 and start_time.minute == 0 and start_time.second == 0:
-                end_time = end_time.replace(hour=23, minute=59, second=59, microsecond=999999)
-            
-            logger.info(f"予定を取得: {start_time.isoformat()} から {end_time.isoformat()}")
-            
-            # 検索条件の設定
-            query = title if title else None
-            
-            # 予定の取得
+            # APIからイベントを取得（qパラメータを削除）
             events_result = self.service.events().list(
                 calendarId=self.calendar_id,
                 timeMin=start_time.isoformat(),
                 timeMax=end_time.isoformat(),
                 singleEvents=True,
-                orderBy='startTime',
-                q=query
+                orderBy='startTime'
             ).execute()
             
             events = events_result.get('items', [])
+            logger.info(f"取得した予定の数: {len(events)}")
             
-            # ignore_event_idが指定されている場合、そのイベントを除外
+            # デバッグ: 取得したイベントの一覧を出力
+            for event in events:
+                event_title = event.get('summary', '')
+                event_start = event.get('start', {}).get('dateTime', '')
+                logger.debug(f"取得したイベント: タイトル={event_title}, 開始時刻={event_start}")
+            
+            # タイトルでフィルタリング（カタカナ保持の正規化で部分一致）
+            if norm_title:
+                filtered_events = []
+                for event in events:
+                    event_title = event.get('summary', '')
+                    norm_event_title = normalize_text(event_title, keep_katakana=True)
+                    if norm_title in norm_event_title:
+                        filtered_events.append(event)
+                        logger.debug(f"タイトル一致: 検索={norm_title}, イベント={norm_event_title}")
+                events = filtered_events
+                logger.info(f"タイトルフィルタリング後の予定数: {len(events)}")
+            
+            # ignore_event_idでフィルタリング
             if ignore_event_id:
                 events = [event for event in events if event.get('id') != ignore_event_id]
-
-            # タイトルでフィルタリング（カタカナ保持の正規化で比較）
-            if title:
-                norm_title = normalize_text(title, keep_katakana=True)
-                events = [event for event in events if norm_title in normalize_text(event.get('summary', ''), keep_katakana=True)]
-
-            logger.info(f"取得した予定の数: {len(events)}")
+            
             return events
             
         except Exception as e:
-            logger.error(f"予定の取得に失敗: {str(e)}")
+            logger.error(f"イベント取得中にエラーが発生: {str(e)}")
             logger.error(traceback.format_exc())
             return []
 
