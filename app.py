@@ -560,11 +560,28 @@ def format_event_list(events, start_time=None, end_time=None):
             return f"📅 {date_str}（{weekday}）\n━━━━━━━━━━\n予定はありません。\n━━━━━━━━━━"
         else:
             return "予定はありません。"
+    
     # 日付・曜日
     date_str = start_time.strftime('%Y/%m/%d') if start_time else ''
     weekday = WEEKDAYS[start_time.weekday()] if start_time and hasattr(start_time, 'weekday') else ''
     msg = f"📅 {date_str}（{weekday}）\n━━━━━━━━━━\n"
-    for i, event in enumerate(events, 1):
+    
+    # その日の予定のみをフィルタリング
+    filtered_events = []
+    for event in events:
+        start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date', ''))
+        if 'T' in start:
+            try:
+                event_start = datetime.fromisoformat(start.replace('Z', '+00:00')).astimezone(JST)
+                if start_time and event_start.date() == start_time.date():
+                    filtered_events.append(event)
+            except Exception:
+                continue
+    
+    # 予定を時間順にソート
+    filtered_events.sort(key=lambda x: x.get('start', {}).get('dateTime', ''))
+    
+    for i, event in enumerate(filtered_events, 1):
         title = event.get('summary', '（タイトルなし）')
         start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date', ''))
         end = event.get('end', {}).get('dateTime', event.get('end', {}).get('date', ''))
@@ -1684,7 +1701,7 @@ def check_event_overlap(start_time: datetime, end_time: datetime, events: List[D
             event_end = datetime.fromisoformat(event_end_str.replace('Z', '+00:00'))
             
             # 時間帯が重複しているかチェック
-            if (start_time < event_end and end_time > event_start):
+            if (start_time < event_end and end_time > event_start and start_time != event_end and end_time != event_start):
                 return True
                 
         except (KeyError, ValueError) as e:
