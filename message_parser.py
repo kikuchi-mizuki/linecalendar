@@ -937,6 +937,56 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
     try:
         now = datetime.now(JST)
         logger.debug(f"[now] サーバー現在日時: {now}")
+        # --- 日付＋時刻パターンを最優先で抽出 ---
+        # スラッシュ・ハイフン日付＋時刻（例: 5/19 13:00, 5-19 13:00）
+        date_time_match = re.search(r'(\d{1,2})[/-](\d{1,2})[\s　]*(\d{1,2}):(\d{2})', message)
+        if date_time_match:
+            logger.debug(f"[datetime_extraction][HIT] スラッシュ・ハイフン日付時刻パターン: {date_time_match.groups()}")
+            month = int(date_time_match.group(1))
+            day = int(date_time_match.group(2))
+            hour = int(date_time_match.group(3))
+            minute = int(date_time_match.group(4))
+            year = now.year
+            if datetime(year, month, day, hour, minute) < now:
+                year += 1
+            start_time = JST.localize(datetime(year, month, day, hour, minute))
+            end_time = start_time + timedelta(hours=1)
+            result = {'start_time': start_time, 'end_time': end_time, 'is_time_range': False}
+            logger.debug(f"[datetime_extraction] 入力メッセージ: {message}, 抽出結果: start={start_time}, end={end_time}")
+            return result
+        # 日本語日付＋時刻（例: 5月19日13時00分, 5月19日13時）
+        jp_date_time_match = re.search(r'(\d{1,2})月(\d{1,2})日(\d{1,2})時(\d{1,2})分', message)
+        if jp_date_time_match:
+            logger.debug(f"[datetime_extraction][HIT] 日本語日付+時刻: {jp_date_time_match.groups()}")
+            month = int(jp_date_time_match.group(1))
+            day = int(jp_date_time_match.group(2))
+            hour = int(jp_date_time_match.group(3))
+            minute = int(jp_date_time_match.group(4))
+            year = now.year
+            if datetime(year, month, day, hour, minute) < now:
+                year += 1
+            start_time = JST.localize(datetime(year, month, day, hour, minute))
+            end_time = start_time + timedelta(hours=1)
+            result = {'start_time': start_time, 'end_time': end_time, 'is_time_range': False}
+            logger.debug(f"[datetime_extraction] 入力メッセージ: {message}, 抽出結果: start={start_time}, end={end_time}")
+            return result
+        jp_date_time_match2 = re.search(r'(\d{1,2})月(\d{1,2})日(\d{1,2})時', message)
+        if jp_date_time_match2:
+            logger.debug(f"[datetime_extraction][HIT] 日本語日付+時刻(分なし): {jp_date_time_match2.groups()}")
+            month = int(jp_date_time_match2.group(1))
+            day = int(jp_date_time_match2.group(2))
+            hour = int(jp_date_time_match2.group(3))
+            minute = 0
+            year = now.year
+            if datetime(year, month, day, hour, minute) < now:
+                year += 1
+            start_time = JST.localize(datetime(year, month, day, hour, minute))
+            end_time = start_time + timedelta(hours=1)
+            result = {'start_time': start_time, 'end_time': end_time, 'is_time_range': False}
+            logger.debug(f"[datetime_extraction] 入力メッセージ: {message}, 抽出結果: start={start_time}, end={end_time}")
+            return result
+        # --- ここまで: 日付＋時刻パターンを最優先で抽出 ---
+
         # まず相対日付表現を優先的に判定
         relative_result = extract_relative_datetime(message, now)
         if relative_result:
