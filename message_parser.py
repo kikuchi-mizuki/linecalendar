@@ -1320,6 +1320,27 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             logger.debug(f"[datetime_extraction] 入力メッセージ: {message}, 抽出結果: start={start_time}, end={end_time}")
             return result
 
+        # スラッシュ・ハイフン日付＋時刻（例: 5/19 13:00, 5-19 13:00）
+        date_time_match = re.search(r'(\d{1,2})[/-](\d{1,2})[\s　]*(\d{1,2}):(\d{2})', message)
+        if date_time_match:
+            month = int(date_time_match.group(1))
+            day = int(date_time_match.group(2))
+            hour = int(date_time_match.group(3))
+            minute = int(date_time_match.group(4))
+            year = now.year
+            dt_candidate = datetime(year, month, day, hour, minute)
+            # 今日の日付は必ず今年を使う
+            if (month, day) == (now.month, now.day):
+                pass  # 今年の今日
+            elif dt_candidate < now.replace(tzinfo=None):
+                year += 1
+                dt_candidate = datetime(year, month, day, hour, minute)
+            start_time = JST.localize(dt_candidate)
+            end_time = start_time + timedelta(hours=1)
+            result = {'start_time': start_time, 'end_time': end_time, 'is_time_range': False}
+            logger.debug(f"[datetime_extraction] 入力メッセージ: {message}, 抽出結果: start={start_time}, end={end_time}")
+            return result
+
         return result
 
     except Exception as e:
