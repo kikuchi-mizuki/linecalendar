@@ -947,9 +947,14 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             hour = int(date_time_match.group(3))
             minute = int(date_time_match.group(4))
             year = now.year
-            if datetime(year, month, day, hour, minute) < now.replace(tzinfo=None):
+            dt_candidate = datetime(year, month, day, hour, minute)
+            # 今日の日付は必ず今年を使う
+            if (month, day) == (now.month, now.day):
+                pass  # 今年の今日
+            elif dt_candidate < now.replace(tzinfo=None):
                 year += 1
-            start_time = JST.localize(datetime(year, month, day, hour, minute))
+                dt_candidate = datetime(year, month, day, hour, minute)
+            start_time = JST.localize(dt_candidate)
             end_time = start_time + timedelta(hours=1)
             result = {'start_time': start_time, 'end_time': end_time, 'is_time_range': False}
             logger.debug(f"[datetime_extraction] 入力メッセージ: {message}, 抽出結果: start={start_time}, end={end_time}")
@@ -963,9 +968,14 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             hour = int(jp_date_time_match.group(3))
             minute = int(jp_date_time_match.group(4))
             year = now.year
-            if datetime(year, month, day, hour, minute) < now.replace(tzinfo=None):
+            dt_candidate = datetime(year, month, day, hour, minute)
+            # 今日の日付は必ず今年を使う
+            if (month, day) == (now.month, now.day):
+                pass  # 今年の今日
+            elif dt_candidate < now.replace(tzinfo=None):
                 year += 1
-            start_time = JST.localize(datetime(year, month, day, hour, minute))
+                dt_candidate = datetime(year, month, day, hour, minute)
+            start_time = JST.localize(dt_candidate)
             end_time = start_time + timedelta(hours=1)
             result = {'start_time': start_time, 'end_time': end_time, 'is_time_range': False}
             logger.debug(f"[datetime_extraction] 入力メッセージ: {message}, 抽出結果: start={start_time}, end={end_time}")
@@ -978,9 +988,14 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             hour = int(jp_date_time_match2.group(3))
             minute = 0
             year = now.year
-            if datetime(year, month, day, hour, minute) < now.replace(tzinfo=None):
+            dt_candidate = datetime(year, month, day, hour, minute)
+            # 今日の日付は必ず今年を使う
+            if (month, day) == (now.month, now.day):
+                pass  # 今年の今日
+            elif dt_candidate < now.replace(tzinfo=None):
                 year += 1
-            start_time = JST.localize(datetime(year, month, day, hour, minute))
+                dt_candidate = datetime(year, month, day, hour, minute)
+            start_time = JST.localize(dt_candidate)
             end_time = start_time + timedelta(hours=1)
             result = {'start_time': start_time, 'end_time': end_time, 'is_time_range': False}
             logger.debug(f"[datetime_extraction] 入力メッセージ: {message}, 抽出結果: start={start_time}, end={end_time}")
@@ -1130,9 +1145,14 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             hour = int(date_time_match.group(3))
             minute = int(date_time_match.group(4))
             year = now.year
-            if datetime(year, month, day, hour, minute) < now.replace(tzinfo=None):
+            dt_candidate = datetime(year, month, day, hour, minute)
+            # 今日の日付は必ず今年を使う
+            if (month, day) == (now.month, now.day):
+                pass  # 今年の今日
+            elif dt_candidate < now.replace(tzinfo=None):
                 year += 1
-            start_time = JST.localize(datetime(year, month, day, hour, minute))
+                dt_candidate = datetime(year, month, day, hour, minute)
+            start_time = JST.localize(dt_candidate)
             end_time = start_time + timedelta(hours=1)
             result['start_time'] = start_time
             result['end_time'] = end_time
@@ -1148,9 +1168,14 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             hour = int(jp_date_time_match.group(3))
             minute = int(jp_date_time_match.group(4))
             year = now.year
-            if datetime(year, month, day, hour, minute) < now.replace(tzinfo=None):
+            dt_candidate = datetime(year, month, day, hour, minute)
+            # 今日の日付は必ず今年を使う
+            if (month, day) == (now.month, now.day):
+                pass  # 今年の今日
+            elif dt_candidate < now.replace(tzinfo=None):
                 year += 1
-            start_time = JST.localize(datetime(year, month, day, hour, minute))
+                dt_candidate = datetime(year, month, day, hour, minute)
+            start_time = JST.localize(dt_candidate)
             end_time = start_time + timedelta(hours=1)
             result['start_time'] = start_time
             result['end_time'] = end_time
@@ -1165,9 +1190,14 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             hour = int(jp_date_time_match2.group(3))
             minute = 0
             year = now.year
-            if datetime(year, month, day, hour, minute) < now.replace(tzinfo=None):
+            dt_candidate = datetime(year, month, day, hour, minute)
+            # 今日の日付は必ず今年を使う
+            if (month, day) == (now.month, now.day):
+                pass  # 今年の今日
+            elif dt_candidate < now.replace(tzinfo=None):
                 year += 1
-            start_time = JST.localize(datetime(year, month, day, hour, minute))
+                dt_candidate = datetime(year, month, day, hour, minute)
+            start_time = JST.localize(dt_candidate)
             end_time = start_time + timedelta(hours=1)
             result['start_time'] = start_time
             result['end_time'] = end_time
