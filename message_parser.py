@@ -547,22 +547,16 @@ def extract_title(text: str) -> Optional[str]:
             normalized_text = re.sub(r'(を)?(変更|修正|更新|編集|教えて|表示)(してください)?$', '', normalized_text)
             normalized_text = re.sub(r'変更|修正|更新|編集', '', normalized_text)
 
-        # 複数行メッセージ対応: 1行目が日付・時刻パターンなら2行目以降からタイトルを抽出
+        # 複数行メッセージ対応: 必ず2行目以降の最初の日本語行のみをタイトルにする
         lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
         if len(lines) >= 2:
-            first_line = lines[0]
-            if (
-                re.match(r'^(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?', first_line) or
-                re.match(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時', first_line) or
-                re.match(r'^(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?[\-〜~～](\d{1,2}):?(\d{2})?', first_line) or
-                re.match(r'^(\d{1,2})時(\d{1,2})分?[\-〜~～](\d{1,2})時(\d{1,2})分?', first_line)
-            ):
-                for line in lines[1:]:
-                    if re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z]', line):
-                        title = line
-                        if title in DELETE_KEYWORDS or title.strip() == '':
-                            return None
-                        return title
+            for line in lines[1:]:
+                if re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z]', line):
+                    title = line
+                    if title in DELETE_KEYWORDS or title.strip() == '':
+                        return None
+                    return title
+            return None
         # 1行メッセージの場合は先頭の時刻（範囲含む）部分を除去し残りをタイトルとする
         if len(lines) == 1:
             line = lines[0]
@@ -1044,8 +1038,6 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             r'(?P<start_hour>\d{1,2}):(?P<start_minute>\d{2})[\-〜~～](?P<end_hour2>\d{1,2})',
             r'(?P<start_hour>\d{1,2})時[\-〜~～](?P<end_hour2>\d{1,2})時',
         ]
-
-        # --- ここから: パターンごとにヒット箇所を詳細ログ出力 ---
         for pattern in time_range_patterns:
             match = re.search(pattern, message)
             if match:
@@ -1054,11 +1046,13 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 start_minute = int(match.group('start_minute') or 0)
                 if 'end_hour' in match.groupdict():
                     end_hour = int(match.group('end_hour'))
+                    end_minute = int(match.group('end_minute') or 0)
                 elif 'end_hour2' in match.groupdict():
                     end_hour = int(match.group('end_hour2'))
+                    end_minute = 0
                 else:
                     end_hour = start_hour
-                end_minute = int(match.group('end_minute') or 0)
+                    end_minute = 0
                 # 日付の抽出
                 date_match = re.search(r'(?P<month>\d{1,2})月(?P<day>\d{1,2})日', message)
                 if date_match:
