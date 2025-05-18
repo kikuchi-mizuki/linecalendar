@@ -524,7 +524,7 @@ def extract_title(text: str) -> Optional[str]:
     """メッセージからタイトルを抽出する（複数行対応・不要行除外・カタカナ保持）"""
     try:
         # 更新操作の場合は「変更」などのキーワードを除外
-        normalized_text = normalize_text(text)
+        normalized_text = normalize_text(text, keep_katakana=True)
         
         # 削除操作の場合の特別処理
         if any(keyword in normalized_text for keyword in DELETE_KEYWORDS):

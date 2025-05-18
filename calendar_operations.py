@@ -20,6 +20,7 @@ import google.oauth2.credentials
 from google.auth import credentials
 from google.auth import exceptions
 from google.auth import transport
+from message_parser import normalize_text
 
 # ログ設定
 logger = logging.getLogger(__name__)
@@ -175,6 +176,11 @@ class CalendarManager:
             # ignore_event_idが指定されている場合、そのイベントを除外
             if ignore_event_id:
                 events = [event for event in events if event.get('id') != ignore_event_id]
+
+            # タイトルでフィルタリング（カタカナ保持の正規化で比較）
+            if title:
+                norm_title = normalize_text(title, keep_katakana=True)
+                events = [event for event in events if norm_title in normalize_text(event.get('summary', ''), keep_katakana=True)]
 
             logger.info(f"取得した予定の数: {len(events)}")
             return events
