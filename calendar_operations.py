@@ -21,6 +21,7 @@ from google.auth import credentials
 from google.auth import exceptions
 from google.auth import transport
 from message_parser import normalize_text
+from constants import WEEKDAYS
 
 # ログ設定
 logger = logging.getLogger(__name__)
@@ -573,7 +574,7 @@ class CalendarManager:
             logger.error(traceback.format_exc())
             return []
             
-    def _find_events(
+    async def _find_events(
         self,
         start_time: datetime,
         end_time: datetime,
@@ -582,58 +583,36 @@ class CalendarManager:
     ) -> List[Dict]:
         """
         指定された条件に一致するイベントを検索
-        
-        Args:
-            start_time (datetime): 開始時間
-            end_time (datetime): 終了時間
-            title (Optional[str]): イベントのタイトル
-            ignore_event_id (Optional[str]): 除外するイベントID
-            
-        Returns:
-            List[Dict]: 条件に一致するイベントのリスト
         """
         try:
-            # 検索範囲を広げる（前後30分）
             search_start = start_time - timedelta(minutes=30)
             search_end = end_time + timedelta(minutes=30)
-            
-            # イベントを取得
-            events = asyncio.run(self.get_events(
+            events = await self.get_events(
                 start_time=search_start,
                 end_time=search_end,
                 title=title,
                 ignore_event_id=ignore_event_id
-            ))
-            
+            )
             if not events:
                 logger.info(f"指定された期間にイベントが見つかりません: {start_time} - {end_time}")
                 return []
-            
-            # イベントを時間でフィルタリング
             matching_events = []
             for event in events:
                 event_start = self._parse_event_time(event['start'])
                 event_end = self._parse_event_time(event['end'])
-                
-                # 完全一致を優先
                 if event_start == start_time and event_end == end_time:
-                    matching_events.insert(0, event)  # 完全一致を先頭に
-                # 部分一致も含める
+                    matching_events.insert(0, event)
                 elif (event_start <= start_time and event_end >= start_time) or \
                      (event_start <= end_time and event_end >= end_time) or \
                      (event_start >= start_time and event_end <= end_time):
                     matching_events.append(event)
-            
-            # タイトルが指定されている場合は、タイトルでもフィルタリング
             if title:
                 matching_events = [
                     event for event in matching_events
                     if title.lower() in event.get('summary', '').lower()
                 ]
-            
             logger.info(f"検索結果: {len(matching_events)}件のイベントが見つかりました")
             return matching_events
-            
         except Exception as e:
             logger.error(f"イベントの検索中にエラーが発生: {str(e)}")
             logger.error(traceback.format_exc())

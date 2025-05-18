@@ -80,9 +80,7 @@ from werkzeug.exceptions import HTTPException
 import random
 import string
 from flask import render_template_string
-
-# 曜日の日本語表記
-WEEKDAYS = ['月', '火', '水', '木', '金', '土', '日']
+from constants import WEEKDAYS
 
 # 警告の抑制
 warnings.filterwarnings('ignore', category=DeprecationWarning)
@@ -550,16 +548,23 @@ def format_event_details(event: dict) -> str:
         logger.error(f"イベント詳細のフォーマット中にエラーが発生: {str(e)}")
         return ""
 
-def format_event_list(events, start_time, end_time):
+def format_event_list(events, start_time=None, end_time=None):
     if not events:
-        return "指定された期間に予定はありません。"
-    msg = f"{start_time.strftime('%Y/%m/%d')}の予定一覧:\n"
+        if start_time and end_time:
+            return f"{start_time.strftime('%Y/%m/%d')}の予定はありません。"
+        elif start_time:
+            return f"{start_time.strftime('%Y/%m/%d')}の予定はありません。"
+        else:
+            return "指定された期間に予定はありません。"
+    msg = ""
+    if start_time:
+        msg += f"{start_time.strftime('%Y/%m/%d')}の予定一覧:\n"
     for i, event in enumerate(events, 1):
         title = event.get('summary', '（タイトルなし）')
         start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date', ''))
         end = event.get('end', {}).get('dateTime', event.get('end', {}).get('date', ''))
         msg += f"{i}. {title}（{start} ～ {end}）\n"
-    return msg
+    return msg.strip()
 
 def format_overlapping_events(events):
     """重複する予定を整形して表示する"""
