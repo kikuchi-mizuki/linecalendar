@@ -1027,7 +1027,8 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
         time_range_patterns = [
             r'(?P<start_hour>\d{1,2}):(?P<start_minute>\d{2})[\-〜~～](?P<end_hour>\d{1,2}):(?P<end_minute>\d{2})',
             r'(?P<start_hour>\d{1,2})時(?:(?P<start_minute>\d{1,2})分)?[\-〜~～](?P<end_hour>\d{1,2})時(?:(?P<end_minute>\d{1,2})分)?',
-            r'(?P<start_period>午前|午後|朝|夜|夕方|深夜)(?P<start_hour>\d{1,2})時(?:(?P<start_minute>\d{1,2})分)?[\-〜~～](?P<end_period>午前|午後|朝|夜|夕方|深夜)?(?P<end_hour>\d{1,2})時(?:(?P<end_minute>\d{1,2})分)?'
+            r'(?P<start_hour>\d{1,2}):(?P<start_minute>\d{2})[\-〜~～](?P<end_hour2>\d{1,2})',
+            r'(?P<start_hour>\d{1,2})時[\-〜~～](?P<end_hour2>\d{1,2})時',
         ]
 
         # --- ここから: パターンごとにヒット箇所を詳細ログ出力 ---
@@ -1035,37 +1036,15 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             match = re.search(pattern, message)
             if match:
                 logger.debug(f"[datetime_extraction][HIT] 時刻範囲パターン: {pattern}, groupdict={match.groupdict()}")
-                # 開始時刻の処理
                 start_hour = int(match.group('start_hour'))
                 start_minute = int(match.group('start_minute') or 0)
-                
-                # 午前/午後の処理
-                if 'start_period' in match.groupdict() and match.group('start_period'):
-                    if match.group('start_period') in ['午後', '夜', '夕方']:
-                        if start_hour < 12:
-                            start_hour += 12
-                    elif match.group('start_period') == '深夜':
-                        if start_hour < 12:
-                            start_hour += 24
-
-                # 終了時刻の処理
-                end_hour = int(match.group('end_hour'))
+                if 'end_hour' in match.groupdict():
+                    end_hour = int(match.group('end_hour'))
+                elif 'end_hour2' in match.groupdict():
+                    end_hour = int(match.group('end_hour2'))
+                else:
+                    end_hour = start_hour
                 end_minute = int(match.group('end_minute') or 0)
-                
-                # 午前/午後の処理
-                if 'end_period' in match.groupdict() and match.group('end_period'):
-                    if match.group('end_period') in ['午後', '夜', '夕方']:
-                        if end_hour < 12:
-                            end_hour += 12
-                    elif match.group('end_period') == '深夜':
-                        if end_hour < 12:
-                            end_hour += 24
-
-                # 時刻のバリデーション
-                if not (0 <= start_hour <= 23 and 0 <= start_minute <= 59 and
-                        0 <= end_hour <= 23 and 0 <= end_minute <= 59):
-                    continue
-
                 # 日付の抽出
                 date_match = re.search(r'(?P<month>\d{1,2})月(?P<day>\d{1,2})日', message)
                 if date_match:
@@ -1075,19 +1054,13 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                     if month < now.month:
                         year += 1
                 else:
-                    # 日付が指定されていない場合は今日の日付を使用
                     year = now.year
                     month = now.month
                     day = now.day
-
-                # datetimeオブジェクトの作成
                 start_time = JST.localize(datetime(year, month, day, start_hour, start_minute))
                 end_time = JST.localize(datetime(year, month, day, end_hour, end_minute))
-
-                # 終了時刻が開始時刻より前の場合は翌日として扱う
                 if end_time <= start_time:
                     end_time += timedelta(days=1)
-
                 result['start_time'] = start_time
                 result['end_time'] = end_time
                 result['is_time_range'] = True
