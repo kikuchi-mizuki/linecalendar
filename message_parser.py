@@ -547,21 +547,26 @@ def extract_title(text: str) -> Optional[str]:
         lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
         if len(lines) >= 2:
             first_line = lines[0]
-            # 1行目が日付・時刻または時刻範囲パターン
             if (
                 re.match(r'^(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?', first_line) or
                 re.match(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時', first_line) or
                 re.match(r'^(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?[\-〜~～](\d{1,2}):?(\d{2})?', first_line) or
                 re.match(r'^(\d{1,2})時(\d{1,2})分?[\-〜~～](\d{1,2})時(\d{1,2})分?', first_line)
             ):
-                # 2行目以降で最初に日本語文字列が含まれる行をタイトルとする
                 for line in lines[1:]:
                     if re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z]', line):
                         title = line
-                        # 操作キーワードのみの場合はNone
                         if title in DELETE_KEYWORDS or title.strip() == '':
                             return None
                         return title
+        # 1行メッセージの場合は先頭の時刻（範囲含む）部分を除去し残りをタイトルとする
+        if len(lines) == 1:
+            line = lines[0]
+            # 日付＋時刻範囲パターン
+            line = re.sub(r'^(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?[\-〜~～](\d{1,2}):?(\d{2})?', '', line)
+            line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時[\-〜~～](\d{1,2})時', '', line)
+            # 日付＋時刻パターン
+            line = re.sub(r'^(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?', '', line)
 
         # 既存のロジック
         # 末尾の「を△△で追加してください」「を△△と追加してください」などを除去
