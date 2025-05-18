@@ -547,16 +547,15 @@ def extract_title(text: str) -> Optional[str]:
             normalized_text = re.sub(r'(を)?(変更|修正|更新|編集|教えて|表示)(してください)?$', '', normalized_text)
             normalized_text = re.sub(r'変更|修正|更新|編集', '', normalized_text)
 
-        # 複数行メッセージ対応: 必ず2行目以降の最初の日本語行のみをタイトルにする
-        lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
+        # 複数行メッセージ対応: 2行目以降のすべての行を順に見て、最初の「日本語・英字が含まれる」かつ「DELETE_KEYWORDS等に該当しない」行をタイトルにする
+        lines = [line.strip() for line in normalized_text.splitlines()]
         logger.debug(f"[extract_title] lines after split: {lines}")
         if len(lines) >= 2:
             for line in lines[1:]:
+                if not line or line in DELETE_KEYWORDS:
+                    continue
                 if re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z]', line):
-                    title = line
-                    if title in DELETE_KEYWORDS or title.strip() == '':
-                        return None
-                    return title
+                    return line
             return None
         # 1行メッセージの場合は先頭の時刻（範囲含む）部分を除去し残りをタイトルとする
         if len(lines) == 1:
@@ -1298,6 +1297,27 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 year += 1
             start_time = JST.localize(datetime(year, month, day, 0, 0))
             end_time = JST.localize(datetime(year, month, day, 23, 59, 59, 999999))
+            result = {'start_time': start_time, 'end_time': end_time, 'is_time_range': True}
+            logger.debug(f"[datetime_extraction] 入力メッセージ: {message}, 抽出結果: start={start_time}, end={end_time}")
+            return result
+
+        # スラッシュ日付＋時刻範囲（例: 5/19 10:00〜12:00, 5/19 10:00-12:00）
+        date_time_range_match = re.search(
+            r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2}):(\d{2})[〜~～-](\d{1,2}):(\d{2})', message)
+        if date_time_range_match:
+            month = int(date_time_range_match.group(1))
+            day = int(date_time_range_match.group(2))
+            start_hour = int(date_time_range_match.group(3))
+            start_minute = int(date_time_range_match.group(4))
+            end_hour = int(date_time_range_match.group(5))
+            end_minute = int(date_time_range_match.group(6))
+            year = now.year
+            if (month < now.month) or (month == now.month and day < now.day):
+                year += 1
+            start_time = JST.localize(datetime(year, month, day, start_hour, start_minute))
+            end_time = JST.localize(datetime(year, month, day, end_hour, end_minute))
+            if end_time <= start_time:
+                end_time += timedelta(days=1)
             result = {'start_time': start_time, 'end_time': end_time, 'is_time_range': True}
             logger.debug(f"[datetime_extraction] 入力メッセージ: {message}, 抽出結果: start={start_time}, end={end_time}")
             return result
