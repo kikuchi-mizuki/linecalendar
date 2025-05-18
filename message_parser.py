@@ -569,8 +569,18 @@ def extract_title(text: str) -> Optional[str]:
             # 日付＋時刻範囲パターン
             line = re.sub(r'^(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?[\-〜~～](\d{1,2}):?(\d{2})?', '', line)
             line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時[\-〜~～](\d{1,2})時', '', line)
+            line = re.sub(r'^(\d{1,2}):?(\d{2})?[\-〜~～](\d{1,2}):?(\d{2})?', '', line)  # 10:00〜12:00, 10:00-12:00
+            line = re.sub(r'^(\d{1,2})時[\-〜~～](\d{1,2})時', '', line)  # 10時〜12時, 10時-12時
             # 日付＋時刻パターン
             line = re.sub(r'^(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?', '', line)
+            line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時(\d{1,2})分?', '', line)
+            line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時', '', line)
+            line = re.sub(r'^(\d{1,2})[\/](\d{1,2})[\s　]*(\d{1,2}):?(\d{2})?', '', line)
+            # 先頭の空白や記号を除去
+            line = re.sub(r'^[\s　:：,、。]+', '', line)
+            if not line or re.fullmatch(r'[\d/:年月日時分\-〜~～\s　]+', line) or line in DELETE_KEYWORDS:
+                return None
+            return line
 
         # 既存のロジック
         # 末尾の「を△△で追加してください」「を△△と追加してください」などを除去
