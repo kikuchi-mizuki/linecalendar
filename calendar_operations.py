@@ -129,8 +129,18 @@ class CalendarManager:
         if start_time is None or end_time is None:
             logger.error("start_timeまたはend_timeがNoneです")
             return []
+
+        # タイムゾーンの設定
+        if start_time.tzinfo is None:
+            start_time = self.timezone.localize(start_time)
+        else:
+            start_time = start_time.astimezone(self.timezone)
+        if end_time.tzinfo is None:
+            end_time = self.timezone.localize(end_time)
+        else:
+            end_time = end_time.astimezone(self.timezone)
+
         # デバッグ: 取得前の時刻をJSTで出力
-        print(f"[DEBUG][get_events] 取得前: start_time={start_time} end_time={end_time}")
         logger.info(f"予定を取得: {start_time.isoformat()} から {end_time.isoformat()}")
         
         try:
@@ -140,13 +150,14 @@ class CalendarManager:
                 norm_title = normalize_text(title, keep_katakana=True)
                 logger.debug(f"検索タイトル(正規化後): {norm_title}")
             
-            # APIからイベントを取得（qパラメータを削除）
+            # APIからイベントを取得
             events_result = self.service.events().list(
                 calendarId=self.calendar_id,
                 timeMin=start_time.isoformat(),
                 timeMax=end_time.isoformat(),
                 singleEvents=True,
-                orderBy='startTime'
+                orderBy='startTime',
+                timeZone='Asia/Tokyo'
             ).execute()
             
             events = events_result.get('items', [])
@@ -173,6 +184,9 @@ class CalendarManager:
             # ignore_event_idでフィルタリング
             if ignore_event_id:
                 events = [event for event in events if event.get('id') != ignore_event_id]
+            
+            # 予定を時系列順にソート
+            events.sort(key=lambda x: x.get('start', {}).get('dateTime', ''))
             
             return events
             
