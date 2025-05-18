@@ -306,13 +306,11 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
             if title:
                 extracted["title"] = title
             operation_type = detect_operation_type(normalized_message, extracted)
-            
             # それでも特定できない場合は、メッセージの内容から推測
             if not operation_type:
-                # 日付や時刻が含まれていれば追加とみなす
-                if re.search(r'\d{1,2}月\d{1,2}日|\d{1,2}/\d{1,2}|\d{1,2}時|\d{1,2}:\d{2}', normalized_message):
+                # 日付や時刻が含まれている、またはdatetime_info/titleがどちらかあれば追加とみなす
+                if (datetime_info and datetime_info.get("start_time")) or title or re.search(r'\d{1,2}月\d{1,2}日|\d{1,2}/\d{1,2}|\d{1,2}時|\d{1,2}:\d{2}', normalized_message):
                     operation_type = "add"
-                # 確認系のキーワードがあれば確認とみなす
                 elif re.search(r'確認|教えて|見せて|表示|一覧', normalized_message):
                     operation_type = "read"
                 else:
@@ -548,7 +546,7 @@ def extract_title(text: str) -> Optional[str]:
             normalized_text = re.sub(r'変更|修正|更新|編集', '', normalized_text)
 
         # 複数行メッセージ対応: 2行目以降のすべての行を順に見て、最初の「日本語・英字が含まれる」かつ「DELETE_KEYWORDS等に該当しない」行をタイトルにする
-        lines = [line.strip() for line in normalized_text.splitlines()]
+        lines = [jaconv.h2z(line.strip(), kana=True) for line in normalized_text.splitlines()]
         logger.debug(f"[extract_title] lines after split: {lines}")
         if len(lines) >= 2:
             for line in lines[1:]:
