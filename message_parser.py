@@ -549,6 +549,7 @@ def extract_title(text: str) -> Optional[str]:
 
         # 複数行メッセージ対応: 必ず2行目以降の最初の日本語行のみをタイトルにする
         lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
+        logger.debug(f"[extract_title] lines after split: {lines}")
         if len(lines) >= 2:
             for line in lines[1:]:
                 if re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z]', line):
