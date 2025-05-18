@@ -951,7 +951,6 @@ async def handle_message(event):
                             delete_result = await calendar_manager.delete_event(event['id'])
                         elif len(matched_events) > 1:
                             # 重複している予定を一覧表示
-                            from app import format_event_list
                             msg = "複数の予定が見つかりました。削除したい予定を選んでください:\n" + format_event_list(matched_events)
                             await reply_text(reply_token, msg)
                             return
