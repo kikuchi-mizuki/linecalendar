@@ -549,21 +549,37 @@ def format_event_details(event: dict) -> str:
         return ""
 
 def format_event_list(events, start_time=None, end_time=None):
+    from constants import WEEKDAYS
+    import pytz
+    from datetime import datetime
+    JST = pytz.timezone('Asia/Tokyo')
     if not events:
-        if start_time and end_time:
-            return f"{start_time.strftime('%Y/%m/%d')}の予定はありません。"
-        elif start_time:
-            return f"{start_time.strftime('%Y/%m/%d')}の予定はありません。"
+        if start_time:
+            date_str = start_time.strftime('%Y/%m/%d')
+            weekday = WEEKDAYS[start_time.weekday()] if hasattr(start_time, 'weekday') else ''
+            return f"📅 {date_str}（{weekday}）\n━━━━━━━━━━\n予定はありません。\n━━━━━━━━━━"
         else:
-            return "指定された期間に予定はありません。"
-    msg = ""
-    if start_time:
-        msg += f"{start_time.strftime('%Y/%m/%d')}の予定一覧:\n"
+            return "予定はありません。"
+    # 日付・曜日
+    date_str = start_time.strftime('%Y/%m/%d') if start_time else ''
+    weekday = WEEKDAYS[start_time.weekday()] if start_time and hasattr(start_time, 'weekday') else ''
+    msg = f"📅 {date_str}（{weekday}）\n━━━━━━━━━━\n"
     for i, event in enumerate(events, 1):
         title = event.get('summary', '（タイトルなし）')
         start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date', ''))
         end = event.get('end', {}).get('dateTime', event.get('end', {}).get('date', ''))
-        msg += f"{i}. {title}（{start} ～ {end}）\n"
+        # 時刻部分の整形
+        if 'T' in start and 'T' in end:
+            try:
+                start_dt = datetime.fromisoformat(start.replace('Z', '+00:00')).astimezone(JST)
+                end_dt = datetime.fromisoformat(end.replace('Z', '+00:00')).astimezone(JST)
+                time_str = f"⏰ {start_dt.strftime('%H:%M')}～{end_dt.strftime('%H:%M')}"
+            except Exception:
+                time_str = "⏰ 時刻不明"
+        else:
+            time_str = "終日"
+        msg += f"{i}. {title}\n{time_str}\n\n"
+    msg += "━━━━━━━━━━"
     return msg.strip()
 
 def format_overlapping_events(events):
