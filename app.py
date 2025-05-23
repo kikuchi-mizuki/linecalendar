@@ -550,26 +550,25 @@ def format_event_details(event: dict) -> str:
         return ""
 
 def format_event_list(events, start_time=None, end_time=None):
-    from constants import WEEKDAYS
-    import pytz
-    from datetime import datetime, timedelta
-    JST = pytz.timezone('Asia/Tokyo')
-
-    # 日付範囲のリストを作成
+    """イベントリストを整形して表示する"""
+    if not events:
+        return "予定はありません。"
+    
+    # 日付範囲の設定
     if start_time and end_time:
         days = []
         current = start_time.date()
         while current <= end_time.date():
             days.append(current)
             current += timedelta(days=1)
-                    else:
+    else:
         days = [start_time.date()] if start_time else []
 
     # イベントを日付ごとにグループ化
     events_by_date = {d: [] for d in days}
     for event in events:
         start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date', ''))
-                    if 'T' in start:
+        if 'T' in start:
             try:
                 event_start = datetime.fromisoformat(start.replace('Z', '+00:00')).astimezone(JST)
                 event_date = event_start.date()
@@ -587,7 +586,7 @@ def format_event_list(events, start_time=None, end_time=None):
         day_events = sorted(events_by_date[d], key=lambda x: x.get('start', {}).get('dateTime', ''))
         if not day_events:
             msg += "予定はありません。\n"
-                    else:
+        else:
             for i, event in enumerate(day_events, 1):
                 title = event.get('summary', '（タイトルなし）')
                 start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date', ''))
@@ -599,7 +598,7 @@ def format_event_list(events, start_time=None, end_time=None):
                         time_str = f"🕘 {start_dt.strftime('%H:%M')}～{end_dt.strftime('%H:%M')}"
                     except Exception:
                         time_str = "🕘 時刻不明"
-            else:
+                else:
                     time_str = "終日"
                 msg += f"{i}. {title}\n   {time_str}\n"
         msg += "━━━━━━━━━━\n"
