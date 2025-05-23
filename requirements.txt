@@ -86,3 +86,4 @@ zipp==3.21.0
 redis
 flask-session
 flask-limiter
+stripe==7.11.0

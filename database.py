@@ -32,10 +32,14 @@ class DatabaseManager:
                 # ユーザーテーブルの作成
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS users (
-                        user_id TEXT PRIMARY KEY,
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        line_user_id TEXT UNIQUE NOT NULL,
                         name TEXT,
                         email TEXT,
-                        is_authorized INTEGER DEFAULT 0,
+                        subscription_status TEXT DEFAULT 'inactive',
+                        stripe_customer_id TEXT,
+                        subscription_start_date TIMESTAMP,
+                        subscription_end_date TIMESTAMP,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )

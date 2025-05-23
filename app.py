@@ -39,7 +39,7 @@ logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
 logging.getLogger('urllib3').setLevel(logging.ERROR)
 logging.getLogger('linebot').setLevel(logging.ERROR)
 
-from flask import Flask, request, abort, session, jsonify, render_template, redirect, url_for
+from flask import Flask, request, abort, session, jsonify, render_template, redirect, url_for, current_app
 from linebot.v3 import WebhookHandler
 from linebot.v3.messaging import MessagingApi, Configuration, ApiClient, ReplyMessageRequest, URIAction, TemplateMessage, ButtonsTemplate, PushMessageRequest, TextMessage
 from linebot.v3.exceptions import InvalidSignatureError
@@ -81,6 +81,7 @@ import random
 import string
 from flask import render_template_string
 from constants import WEEKDAYS
+from stripe_manager import StripeManager
 
 # 警告の抑制
 warnings.filterwarnings('ignore', category=DeprecationWarning)
@@ -561,14 +562,14 @@ def format_event_list(events, start_time=None, end_time=None):
         while current <= end_time.date():
             days.append(current)
             current += timedelta(days=1)
-    else:
+                    else:
         days = [start_time.date()] if start_time else []
 
     # イベントを日付ごとにグループ化
     events_by_date = {d: [] for d in days}
     for event in events:
         start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date', ''))
-        if 'T' in start:
+                    if 'T' in start:
             try:
                 event_start = datetime.fromisoformat(start.replace('Z', '+00:00')).astimezone(JST)
                 event_date = event_start.date()
@@ -586,7 +587,7 @@ def format_event_list(events, start_time=None, end_time=None):
         day_events = sorted(events_by_date[d], key=lambda x: x.get('start', {}).get('dateTime', ''))
         if not day_events:
             msg += "予定はありません。\n"
-        else:
+                    else:
             for i, event in enumerate(day_events, 1):
                 title = event.get('summary', '（タイトルなし）')
                 start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date', ''))
@@ -598,7 +599,7 @@ def format_event_list(events, start_time=None, end_time=None):
                         time_str = f"🕘 {start_dt.strftime('%H:%M')}～{end_dt.strftime('%H:%M')}"
                     except Exception:
                         time_str = "🕘 時刻不明"
-                else:
+            else:
                     time_str = "終日"
                 msg += f"{i}. {title}\n   {time_str}\n"
         msg += "━━━━━━━━━━\n"
@@ -985,8 +986,8 @@ async def handle_message(event):
                             await reply_text(reply_token, "指定された日時の予定が見つかりませんでした。")
                             return
                         if len(matched_events) == 1:
-                            event = matched_events[0]
-                            delete_result = await calendar_manager.delete_event(event['id'])
+                        event = matched_events[0]
+                        delete_result = await calendar_manager.delete_event(event['id'])
                         elif len(matched_events) > 1:
                             # 重複している予定を一覧表示
                             msg = "複数の予定が見つかりました。削除したい予定を選んでください:\n" + format_event_list(matched_events)
@@ -2187,6 +2188,64 @@ ONETIME_LOGIN_HTML = '''
 </body>
 </html>
 '''
+
+stripe_manager = StripeManager()
+
+@app.route('/payment/checkout', methods=['POST'])
+def create_checkout_session():
+    try:
+        data = request.get_json()
+        user_id = data.get('user_id')
+        line_user_id = data.get('line_user_id')
+        
+        session = stripe_manager.create_checkout_session(user_id, line_user_id)
+        return jsonify({'session_id': session.id, 'url': session.url})
+    except Exception as e:
+        current_app.logger.error(f"Checkout session creation failed: {str(e)}")
+        return jsonify({'error': str(e)}), 400
+
+@app.route('/payment/webhook', methods=['POST'])
+def stripe_webhook():
+    payload = request.data
+    sig_header = request.headers.get('Stripe-Signature')
+    
+    if stripe_manager.handle_webhook(payload, sig_header):
+        return jsonify({'status': 'success'})
+    return jsonify({'status': 'error'}), 400
+
+@app.route('/payment/success')
+def payment_success():
+    session_id = request.args.get('session_id')
+    return render_template('payment_success.html', session_id=session_id)
+
+@app.route('/payment/cancel')
+def payment_cancel():
+    return render_template('payment_cancel.html')
+
+# LINE Messaging APIの処理を修正
+def handle_line_message(event):
+    try:
+        user_id = event.source.user_id
+        message_text = event.message.text
+        
+        # ユーザーのサブスクリプション状態を確認
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT subscription_status FROM users WHERE line_user_id = ?', (user_id,))
+        user = cursor.fetchone()
+        conn.close()
+        
+        if not user or user['subscription_status'] != 'active':
+            # 未課金ユーザーへのメッセージ
+            return {
+                'type': 'text',
+                'text': 'この機能をご利用いただくには、月額プランへのご登録が必要です。\n'
+                       '以下のURLからご登録ください：\n'
+                       f'{os.getenv("BASE_URL")}/payment/checkout?user_id={user_id}'
+            }
+        
+        # 既存のメッセージ処理ロジック
+        // ... existing code ...
 
 if __name__ == "__main__":
     try:
