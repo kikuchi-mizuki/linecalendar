@@ -137,8 +137,16 @@ def setup_logging():
         logging.getLogger('urllib3').setLevel(logging.ERROR)
         logging.getLogger('linebot').setLevel(logging.ERROR)
         
+        global logger
         logger = logging.getLogger(__name__)
         logger.info(f"Logging configured with level: {log_level}")
+        
+        # Flaskのapp.loggerにも同じハンドラを追加
+        if 'app' in globals():
+            for handler in handlers:
+                app.logger.addHandler(handler)
+            app.logger.setLevel(numeric_level)
+            app.logger.info("Flask app.logger configured.")
         
     except Exception as e:
         print(f"Error setting up logging: {str(e)}")
@@ -985,8 +993,8 @@ async def handle_message(event):
                             await reply_text(reply_token, "指定された日時の予定が見つかりませんでした。")
                             return
                         if len(matched_events) == 1:
-                        event = matched_events[0]
-                        delete_result = await calendar_manager.delete_event(event['id'])
+                            event = matched_events[0]
+                            delete_result = await calendar_manager.delete_event(event['id'])
                         elif len(matched_events) > 1:
                             # 重複している予定を一覧表示
                             msg = "複数の予定が見つかりました。削除したい予定を選んでください:\n" + format_event_list(matched_events)
