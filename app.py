@@ -558,59 +558,117 @@ def format_event_details(event: dict) -> str:
         return ""
 
 def format_event_list(events, start_time=None, end_time=None):
-    """イベントリストを整形して表示する"""
+    """イベントリストをFlex Messageで整形して表示する"""
     if not events:
-        return "予定はありません。"
-    
-    # 日付範囲の設定
-    if start_time and end_time:
-        days = []
-        current = start_time.date()
-        while current <= end_time.date():
-            days.append(current)
-            current += timedelta(days=1)
-    else:
-        days = [start_time.date()] if start_time else []
+        return {
+            "type": "flex",
+            "altText": "予定はありません",
+            "contents": {
+                "type": "bubble",
+                "body": {
+                    "type": "box",
+                    "layout": "vertical",
+                    "contents": [
+                        {
+                            "type": "text",
+                            "text": "予定はありません",
+                            "weight": "bold",
+                            "size": "xl"
+                        }
+                    ]
+                }
+            }
+        }
 
-    # イベントを日付ごとにグループ化
-    events_by_date = {d: [] for d in days}
+    # 日付ごとにイベントをグループ化
+    events_by_date = {}
     for event in events:
         start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date', ''))
         if 'T' in start:
-            try:
-                event_start = datetime.fromisoformat(start.replace('Z', '+00:00')).astimezone(JST)
-                event_date = event_start.date()
-                if event_date in events_by_date:
-                    events_by_date[event_date].append(event)
-            except Exception:
-                continue
-
-    # メッセージを構築
-    msg = ""
-    for d in days:
-        date_str = d.strftime('%Y/%m/%d')
-        weekday = WEEKDAYS[d.weekday()]
-        msg += f"📅 {date_str}（{weekday}）\n━━━━━━━━━━\n"
-        day_events = sorted(events_by_date[d], key=lambda x: x.get('start', {}).get('dateTime', ''))
-        if not day_events:
-            msg += "予定はありません。\n"
+            date = datetime.fromisoformat(start.replace('Z', '+00:00')).strftime('%Y/%m/%d')
         else:
-            for i, event in enumerate(day_events, 1):
-                title = event.get('summary', '（タイトルなし）')
-                start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date', ''))
-                end = event.get('end', {}).get('dateTime', event.get('end', {}).get('date', ''))
-                if 'T' in start and 'T' in end:
-                    try:
-                        start_dt = datetime.fromisoformat(start.replace('Z', '+00:00')).astimezone(JST)
-                        end_dt = datetime.fromisoformat(end.replace('Z', '+00:00')).astimezone(JST)
-                        time_str = f"🕘 {start_dt.strftime('%H:%M')}～{end_dt.strftime('%H:%M')}"
-                    except Exception:
-                        time_str = "🕘 時刻不明"
-                else:
-                    time_str = "終日"
-                msg += f"{i}. {title}\n   {time_str}\n"
-        msg += "━━━━━━━━━━\n"
-    return msg.strip()
+            date = start
+        if date not in events_by_date:
+            events_by_date[date] = []
+        events_by_date[date].append(event)
+
+    # Flex Messageのコンテンツを構築
+    contents = []
+    for date in sorted(events_by_date.keys()):
+        date_dt = datetime.strptime(date, '%Y/%m/%d')
+        weekday = WEEKDAYS[date_dt.weekday()]
+        
+        # 日付ヘッダー
+        date_box = {
+            "type": "box",
+            "layout": "vertical",
+            "contents": [
+                {
+                    "type": "text",
+                    "text": f"📅 {date}（{weekday}）",
+                    "weight": "bold",
+                    "size": "lg"
+                }
+            ],
+            "backgroundColor": "#f0f0f0",
+            "paddingAll": "sm"
+        }
+        contents.append(date_box)
+        
+        # イベントリスト
+        for event in sorted(events_by_date[date], key=lambda x: x.get('start', {}).get('dateTime', '')):
+            title = event.get('summary', '（タイトルなし）')
+            start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date', ''))
+            end = event.get('end', {}).get('dateTime', event.get('end', {}).get('date', ''))
+            
+            if 'T' in start and 'T' in end:
+                try:
+                    start_dt = datetime.fromisoformat(start.replace('Z', '+00:00')).astimezone(JST)
+                    end_dt = datetime.fromisoformat(end.replace('Z', '+00:00')).astimezone(JST)
+                    time_str = f"{start_dt.strftime('%H:%M')}～{end_dt.strftime('%H:%M')}"
+                except Exception:
+                    time_str = "時刻不明"
+            else:
+                time_str = "終日"
+            
+            event_box = {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": title,
+                        "weight": "bold"
+                    },
+                    {
+                        "type": "text",
+                        "text": f"🕘 {time_str}",
+                        "size": "sm",
+                        "color": "#666666"
+                    }
+                ],
+                "paddingAll": "sm"
+            }
+            contents.append(event_box)
+            
+            # 区切り線
+            contents.append({
+                "type": "separator",
+                "margin": "sm"
+            })
+
+    return {
+        "type": "flex",
+        "altText": "予定一覧",
+        "contents": {
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": contents
+            }
+        }
+    }
 
 def format_overlapping_events(events):
     """重複する予定を整形して表示する"""
