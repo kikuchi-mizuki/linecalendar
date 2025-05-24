@@ -9,7 +9,11 @@ if client_secret_json:
         f.write(client_secret_json)
 
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
+
+# 環境変数の確認
+print('STRIPE_WEBHOOK_SECRET:', os.getenv('STRIPE_WEBHOOK_SECRET'))
+print('環境変数一覧:', {k: v for k, v in os.environ.items() if 'STRIPE' in k})
 
 import logging
 import sys
@@ -23,16 +27,24 @@ console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
 logger.addHandler(console_handler)
 
-# ファイルハンドラの設定（本番環境の場合）
-if os.getenv('ENVIRONMENT') == 'production':
-    from logging.handlers import RotatingFileHandler
-    file_handler = RotatingFileHandler(
-        'app.log',
-        maxBytes=10*1024*1024,  # 10MB
-        backupCount=5
-    )
-    file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
-    logger.addHandler(file_handler)
+# ファイルハンドラの設定（常に有効に変更）
+from logging.handlers import RotatingFileHandler
+file_handler = RotatingFileHandler(
+    'app.log',
+    maxBytes=10*1024*1024,  # 10MB
+    backupCount=5
+)
+file_handler.setLevel(logging.DEBUG)  # ここを追加
+file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+logger.addHandler(file_handler)
+
+# app.loggerのログレベルもDEBUGに設定
+try:
+    app.logger.setLevel(logging.DEBUG)
+    app.logger.addHandler(file_handler)
+    app.logger.addHandler(console_handler)
+except Exception as e:
+    pass
 
 # 特定のライブラリのログレベルを設定
 logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
@@ -41,7 +53,11 @@ logging.getLogger('linebot').setLevel(logging.ERROR)
 
 from flask import Flask, request, abort, session, jsonify, render_template, redirect, url_for, current_app
 from linebot.v3 import WebhookHandler
-from linebot.v3.messaging import MessagingApi, Configuration, ApiClient, ReplyMessageRequest, URIAction, TemplateMessage, ButtonsTemplate, PushMessageRequest, TextMessage, FlexMessage
+from linebot.v3.messaging import (
+    MessagingApi, Configuration, ApiClient, ReplyMessageRequest,
+    URIAction, TemplateMessage, ButtonsTemplate, PushMessageRequest,
+    TextMessage, FlexMessage
+)
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from linebot.v3.messaging import TextMessage
@@ -211,8 +227,11 @@ limiter = Limiter(
 
 # Redisの設定
 REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+if not REDIS_URL.endswith('/0'):
+    REDIS_URL = REDIS_URL.split('/')[0] + '/0'  # DB番号を0に強制
 app.config['SESSION_TYPE'] = 'redis'
-app.config['SESSION_REDIS'] = redis.from_url(REDIS_URL)
+app.config['SESSION_REDIS'] = redis.from_url(REDIS_URL, db=0)
+redis_client = app.config['SESSION_REDIS']  # ← ここで統一
 app.config['SESSION_USE_SIGNER'] = True
 app.config['SESSION_KEY_PREFIX'] = 'line_calendar_'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(hours=2)
@@ -229,7 +248,6 @@ Session(app)
 
 # Redis接続テストとセッション書き込みテスト
 try:
-    redis_client = app.config['SESSION_REDIS']
     redis_client.ping()
     logger.info(f"[Redis接続テスト] Redisへの接続が成功しました: {REDIS_URL}")
 except Exception as e:
@@ -242,7 +260,6 @@ def init_session():
     """
     try:
         # Redisの接続確認
-        redis_client = app.config['SESSION_REDIS']
         redis_client.ping()
         logger.info("Redisへの接続が成功しました")
         
@@ -258,15 +275,20 @@ def init_session():
         raise
 
 # ngrokの設定
-NGROK_URL = "https://3656-113-32-186-176.ngrok-free.app"
+# NGROK_URL = "https://3656-113-32-186-176.ngrok-free.app"
 
 # LINE Bot SDKの初期化
-configuration = Configuration(
-    access_token=os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
-)
+access_token = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
+channel_secret = os.getenv('LINE_CHANNEL_SECRET')
+logger.info(f"LINE_CHANNEL_ACCESS_TOKEN: {access_token}")
+logger.info(f"LINE_CHANNEL_SECRET: {channel_secret}")
+if not access_token or not channel_secret:
+    logger.error("LINE_CHANNEL_ACCESS_TOKENまたはLINE_CHANNEL_SECRETが設定されていません。サーバーを停止します。")
+    sys.exit(1)
+configuration = Configuration(access_token=access_token)
 api_client = ApiClient(configuration)
 line_bot_api = MessagingApi(api_client)
-handler = WebhookHandler(os.getenv('LINE_CHANNEL_SECRET'))
+handler = WebhookHandler(channel_secret)
 
 db_manager = DatabaseManager()
 
@@ -302,54 +324,86 @@ TIMEOUT_SECONDS = 30  # タイムアウトを30秒に延長
 nest_asyncio.apply()
 loop = asyncio.get_event_loop()
 
-# イベントハンドラの設定
-@handler.add(MessageEvent, message=TextMessageContent)
-def handle_text_message(event):
+def handle_unauthenticated_user(user_id, reply_token):
+    """
+    未認証ユーザーへのガイダンスメッセージを送信する
+    """
     try:
-        loop = asyncio.get_event_loop()
-        user_id = event.source.user_id if hasattr(event.source, 'user_id') else None
-        message = event.message.text if hasattr(event.message, 'text') else None
-        reply_token = event.reply_token if hasattr(event, 'reply_token') else None
-        # --- 追加: いいえ・キャンセル応答時の処理 ---
-        if user_id and get_pending_event(user_id):
-            cancel_patterns = [
-                'いいえ', 'キャンセル', 'やめる', '中止', 'いらない', 'no', 'NO', 'No', 'cancel', 'CANCEL', 'Cancel'
-            ]
-            normalized_text = message.strip().lower() if message else ''
-            if normalized_text in cancel_patterns:
-                clear_pending_event(user_id)
-                loop.run_until_complete(reply_text(reply_token, '予定の追加をキャンセルしました。'))
-                return
-        # --- ここまで追加 ---
-        if user_id and is_confirmation_reply(message):
-            pending_event = get_pending_event(user_id)
-            logger.debug(f"[pending_event] on yes: user_id={user_id}, pending_event={pending_event}")
-            logger.info(f"[pending_event][YES] user_id={user_id}, pending_event={pending_event}")
+        code = generate_one_time_code()
+        save_one_time_code(code, user_id)
+        auth_url = f"https://linecalendar-production.up.railway.app/onetimelogin?code={code}"
+        line_bot_api.reply_message(
+            ReplyMessageRequest(
+                reply_token=reply_token,
+                messages=[
+                    TextMessage(
+                        text=f"Googleカレンダーの連携がまだのようです！\n以下のリンクから認証してください👇\n\n{auth_url}"
+                    )
+                ]
+            )
+        )
+    except Exception as e:
+        logger.error(f"[未認証ユーザー] エラー: {e}")
+        raise
+
+# handle_text_messageを非同期化
+async def handle_text_message(event):
+    logger.info(f"[handle_text_message] called: event={event}")
+    try:
+        user_id = event.source.user_id
+        message = event.message.text
+        reply_token = event.reply_token
+        logger.debug(f"[handle_text_message] user_id={user_id}, message={message}, reply_token={reply_token}")
+        
+        # 保留中のイベントを取得
+        pending_event = get_pending_event(user_id)
+        logger.debug(f"[get_pending_event] user_id={user_id}, pending_event={pending_event}")
+        logger.info(f"[get_pending_event][INFO] user_id={user_id}, pending_event={pending_event}")
+        
+        # Google認証情報を取得
+        credentials = get_user_credentials(user_id)
+        if not credentials:
+            logger.warning(f"認証情報が見つかりません: user_id={user_id}")
+            handle_unauthenticated_user(user_id, reply_token)
+            return
+        
+        # キャンセルパターンの確認
+        cancel_patterns = [
+            'いいえ', 'キャンセル', 'やめる', '中止', 'いらない', 'no', 'NO', 'No', 'cancel', 'CANCEL', 'Cancel'
+        ]
+        normalized_text = message.strip().lower() if message else ''
+        if pending_event and normalized_text in cancel_patterns:
+            clear_pending_event(user_id)
+            logger.info(f"[handle_text_message] reply_text予定の追加をキャンセルしました: reply_token={reply_token}")
+            await reply_text(reply_token, '予定の追加をキャンセルしました。')
+            logger.info(f"[handle_text_message] reply_text完了: reply_token={reply_token}")
+            return
+        
+        # 確認応答の処理
+        if is_confirmation_reply(message):
             if pending_event:
                 op_type = pending_event.get('operation_type')
                 if op_type == 'add':
-                    loop.run_until_complete(add_event_from_pending(user_id, reply_token, pending_event))
+                    await add_event_from_pending(user_id, reply_token, pending_event)
                     clear_pending_event(user_id)
                     return
                 elif op_type == 'update':
-                    result_msg = loop.run_until_complete(handle_yes_response(user_id))
+                    result_msg = await handle_yes_response(user_id)
                     clear_pending_event(user_id)
-                    loop.run_until_complete(reply_text(reply_token, result_msg))
+                    logger.info(f"[handle_text_message] reply_text確認応答: reply_token={reply_token}, result_msg={result_msg}")
+                    await reply_text(reply_token, result_msg)
+                    logger.info(f"[handle_text_message] reply_text完了: reply_token={reply_token}")
                     return
-        loop.run_until_complete(handle_message(event))
+        
+        # 通常のメッセージ処理
+        logger.info(f"[handle_text_message] 通常メッセージ処理: event={event}")
+        await handle_message(event)
+        
     except Exception as e:
         logger.error(f"メッセージ処理中にエラーが発生: {str(e)}")
         logger.error(traceback.format_exc())
-        error_message = format_error_message(e, "メッセージの処理中")
-        try:
-            if isinstance(event, dict):
-                reply_token = event['reply_token']
-            else:
-                reply_token = event.reply_token
-            loop.run_until_complete(reply_text(reply_token, error_message))
-        except Exception as reply_error:
-            logger.error(f"エラーメッセージの送信中にエラーが発生: {str(reply_error)}")
-            logger.error(traceback.format_exc())
+        if reply_token:
+            await reply_text(reply_token, "申し訳ありません。エラーが発生しました。\nしばらく時間をおいて再度お試しください。")
 
 # --- 追加: pending_eventから予定追加を行う非同期関数 ---
 async def add_event_from_pending(user_id, reply_token, pending_event):
@@ -559,119 +613,28 @@ def format_event_details(event: dict) -> str:
         return ""
 
 def format_event_list(events, start_time=None, end_time=None):
-    """イベントリストをFlex Messageで整形して表示する"""
+    """イベントリストをテキストで整形して表示する（FlexMessageは返さない）"""
     if not events:
-        return {
-            "type": "flex",
-            "altText": "予定はありません",
-            "contents": {
-                "type": "bubble",
-                "body": {
-                    "type": "box",
-                    "layout": "vertical",
-                    "contents": [
-                        {
-                            "type": "text",
-                            "text": "今日は予定がありません",
-                            "weight": "bold",
-                            "size": "xl",
-                            "align": "center",
-                            "color": "#888888"
-                        }
-                    ]
-                }
-            }
-        }
-
-    # 日付ごとにイベントをグループ化
-    events_by_date = {}
-    for event in events:
+        return "今日は予定がありません。"
+    lines = []
+    for i, event in enumerate(events, 1):
+        title = event.get('summary', '（タイトルなし）')
         start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date', ''))
-        if 'T' in start:
-            date = datetime.fromisoformat(start.replace('Z', '+00:00')).strftime('%Y/%m/%d')
+        end = event.get('end', {}).get('dateTime', event.get('end', {}).get('date', ''))
+        if 'T' in start and 'T' in end:
+            try:
+                from datetime import datetime
+                import pytz
+                JST = pytz.timezone('Asia/Tokyo')
+                start_dt = datetime.fromisoformat(start.replace('Z', '+00:00')).astimezone(JST)
+                end_dt = datetime.fromisoformat(end.replace('Z', '+00:00')).astimezone(JST)
+                time_str = f"{start_dt.strftime('%H:%M')}～{end_dt.strftime('%H:%M')}"
+            except Exception:
+                time_str = "時刻不明"
         else:
-            date = start
-        if date not in events_by_date:
-            events_by_date[date] = []
-        events_by_date[date].append(event)
-
-    # Flex Messageのコンテンツを構築
-    contents = []
-    for date in sorted(events_by_date.keys()):
-        date_dt = datetime.strptime(date, '%Y/%m/%d')
-        weekday = WEEKDAYS[date_dt.weekday()]
-        
-        # 日付ヘッダー
-        date_box = {
-            "type": "box",
-            "layout": "vertical",
-            "contents": [
-                {
-                    "type": "text",
-                    "text": f"📅 {date}（{weekday}）",
-                    "weight": "bold",
-                    "size": "lg"
-                }
-            ],
-            "backgroundColor": "#f0f0f0",
-            "paddingAll": "sm"
-        }
-        contents.append(date_box)
-        
-        # イベントリスト
-        for event in sorted(events_by_date[date], key=lambda x: x.get('start', {}).get('dateTime', '')):
-            title = event.get('summary', '（タイトルなし）')
-            start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date', ''))
-            end = event.get('end', {}).get('dateTime', event.get('end', {}).get('date', ''))
-            
-            if 'T' in start and 'T' in end:
-                try:
-                    start_dt = datetime.fromisoformat(start.replace('Z', '+00:00')).astimezone(JST)
-                    end_dt = datetime.fromisoformat(end.replace('Z', '+00:00')).astimezone(JST)
-                    time_str = f"{start_dt.strftime('%H:%M')}～{end_dt.strftime('%H:%M')}"
-                except Exception:
-                    time_str = "時刻不明"
-            else:
-                time_str = "終日"
-            
-            event_box = {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "text",
-                        "text": title,
-                        "weight": "bold"
-                    },
-                    {
-                        "type": "text",
-                        "text": f"🕘 {time_str}",
-                        "size": "sm",
-                        "color": "#666666"
-                    }
-                ],
-                "paddingAll": "sm"
-            }
-            contents.append(event_box)
-            
-            # 区切り線
-            contents.append({
-                "type": "separator",
-                "margin": "sm"
-            })
-
-    return {
-        "type": "flex",
-        "altText": "予定一覧",
-        "contents": {
-            "type": "bubble",
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": contents
-            }
-        }
-    }
+            time_str = "終日"
+        lines.append(f"{i}. {title}\n   🕘 {time_str}")
+    return '\n'.join(lines)
 
 def format_overlapping_events(events):
     """重複する予定を整形して表示する"""
@@ -731,6 +694,7 @@ def callback():
     try:
         body = request.get_data(as_text=True)
         signature = request.headers['X-Line-Signature']
+        logger.info(f"[callback] received body: {body}")
         logger.info("Webhookの処理を開始")
         # 署名の検証とイベントの処理
         handler.handle(body, signature)
@@ -883,18 +847,24 @@ async def handle_message(event):
         message = event.message.text
         reply_token = event.reply_token
         
+        logger.debug(f"[handle_message] メッセージを受信: user_id={user_id}, message={message}")
+        
         # 課金判定
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT subscription_status FROM users WHERE user_id = ?', (user_id,))
+        cursor.execute('SELECT subscription_status FROM users WHERE line_user_id = ?', (user_id,))
         user = cursor.fetchone()
         conn.close()
+        
+        logger.debug(f"[handle_message] ユーザー情報: {user}")
+        
         if not user or user['subscription_status'] != 'active':
             msg = (
                 'この機能をご利用いただくには、月額プランへのご登録が必要です。\n'
                 f'以下のURLからご登録ください：\n'
                 f'{os.getenv("BASE_URL")}/payment/checkout?user_id={user_id}'
             )
+            logger.debug(f"[handle_message] 未登録ユーザーへのメッセージ送信: {msg}")
             await reply_text(reply_token, msg)
             return
 
@@ -912,6 +882,7 @@ async def handle_message(event):
             credentials = get_user_credentials(user_id)
             if not credentials:
                 # 認証情報が無効な場合は再認証を促す
+                logger.debug(f"[handle_message] 認証情報が見つかりません: user_id={user_id}")
                 send_one_time_code(user_id)
                 return
         except Exception as e:
@@ -919,354 +890,39 @@ async def handle_message(event):
             logger.error(traceback.format_exc())
             await reply_text(reply_token, "認証情報の取得に失敗しました。\nしばらく時間をおいて再度お試しください。")
             return
-
-        # カレンダーマネージャーの初期化
-        try:
-            calendar_manager = get_calendar_manager(user_id)
-        except google.auth.exceptions.RefreshError:
-            # トークンが期限切れの場合は再認証を促す
-            send_one_time_code(user_id)
-            return
-        except Exception as e:
-            logger.error(f"カレンダーマネージャーの初期化に失敗: {str(e)}")
-            logger.error(traceback.format_exc())
-            await reply_text(reply_token, "カレンダーとの連携中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
-            return
-
-        # メッセージの解析
-        try:
-            result = parse_message(message)
-            if not result:
-                await reply_text(reply_token, "メッセージを理解できませんでした。\n予定の追加、確認、削除などの操作を指定してください。")
-                return
-
-            # 操作タイプに応じた処理
-            operation_type = result.get('operation_type')
-            logger.info(f"[handle_message][operation_type] user_id={user_id}, operation_type={operation_type}, result={result}")
-            if not operation_type:
-                await reply_text(reply_token, "操作タイプを特定できませんでした。\n予定の追加、確認、削除などの操作を指定してください。")
-                return
-
-            # 各操作タイプの処理
-            if operation_type == 'add':
-                logger.info(f"[handle_message][add branch entered] user_id={user_id}, result={result}")
-                # 予定の追加処理
-                if not all(k in result for k in ['title', 'start_time', 'end_time']):
-                    await reply_text(reply_token, "予定の追加に必要な情報が不足しています。\nタイトル、開始時間、終了時間を指定してください。")
-                    return
-
-                try:
-                    add_result = await calendar_manager.add_event(
-                        title=result['title'],
-                        start_time=result['start_time'],
-                        end_time=result['end_time'],
-                        location=result.get('location'),
-                        person=result.get('person'),
-                        description=result.get('description'),
-                        recurrence=result.get('recurrence')
-                    )
-
-                    logger.info(f"[handle_message][add_result] user_id={user_id}, add_result={add_result}")
-                    if add_result['success']:
-                        day = result['start_time'].replace(hour=0, minute=0, second=0, microsecond=0)
-                        day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
-                        events = await calendar_manager.get_events(start_time=day, end_time=day_end)
-                        msg = f"✅ 予定を追加しました：\n{result['title']}\n{result['start_time'].strftime('%m月%d日 %H:%M')}～{result['end_time'].strftime('%H:%M')}\n\n" + format_event_list(events, day, day_end)
-                        await reply_text(reply_token, msg)
-                        return
-                    else:
-                        logger.info(f"[handle_message][add_result] user_id={user_id}, add_result={add_result}")
-                        if add_result.get('error') == 'duplicate':
-                            logger.info(f"[handle_message][duplicate branch] user_id={user_id}, result={result}")
-                            day = result['start_time'].replace(hour=0, minute=0, second=0, microsecond=0)
-                            day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
-                            events = await calendar_manager.get_events(start_time=day, end_time=day_end)
-                            # 重複イベントのインデックスを特定（最初の重複イベントを0番とする）
-                            event_index = 0
-                            for i, event in enumerate(events):
-                                event_start = datetime.fromisoformat(event['start']['dateTime'].replace('Z', '+00:00')).astimezone(pytz.timezone('Asia/Tokyo'))
-                                event_end = datetime.fromisoformat(event['end']['dateTime'].replace('Z', '+00:00')).astimezone(pytz.timezone('Asia/Tokyo'))
-                                if (result['start_time'] < event_end and result['end_time'] > event_start):
-                                    event_index = i
-                                    break
-                            operation_type = result.get('operation_type', 'add')
-                            logger.info(f"[handle_message][duplicate branch] user_id={user_id}, event_index={event_index}, operation_type={operation_type}")
-                            pending_event = {
-                                'title': result['title'],
-                                'start_time': result['start_time'],
-                                'end_time': result['end_time'],
-                                'location': result.get('location'),
-                                'person': result.get('person'),
-                                'description': result.get('description'),
-                                'recurrence': result.get('recurrence'),
-                                'operation_type': operation_type,
-                                'event_index': event_index
-                            }
-                            if operation_type == 'update':
-                                pending_event['new_start_time'] = result.get('new_start_time')
-                                pending_event['new_end_time'] = result.get('new_end_time')
-                            logger.info(f"[handle_message][before save_pending_event] user_id={user_id}, pending_event={pending_event}")
-                            try:
-                                save_pending_event(user_id, pending_event)
-                                logger.info(f"[handle_message][after save_pending_event] user_id={user_id}")
-                            except Exception as e:
-                                logger.error(f"[handle_message][save_pending_event exception] user_id={user_id}, error={str(e)}")
-                            msg = add_result['message'] + "\n\n" + format_event_list(events, day, day_end)
-                            await reply_text(reply_token, msg)
-                            return
-                        else:
-                            await reply_text(reply_token, f"予定の追加に失敗しました: {add_result.get('message', '不明なエラー')}")
-                except Exception as e:
-                    logger.error(f"予定の追加中にエラーが発生: {str(e)}")
-                    logger.error(traceback.format_exc())
-                    await reply_text(reply_token, "予定の追加中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
-
-            elif operation_type == 'read':
-                # 予定の確認処理
-                if not all(k in result for k in ['start_time', 'end_time']):
-                    await reply_text(reply_token, "予定の確認に必要な情報が不足しています。\n確認したい日付を指定してください。")
-                    return
-
-                try:
-                    logger.info(f"[handle_message][read] user_id={user_id}, start_time={result['start_time']}, end_time={result['end_time']}, title={result.get('title')}")
-                    events = await calendar_manager.get_events(
-                        start_time=result['start_time'],
-                        end_time=result['end_time'],
-                        title=result.get('title')
-                    )
-                    logger.info(f"[handle_message][read] user_id={user_id}, events_count={len(events)}")
-                    for i, event in enumerate(events):
-                        logger.info(f"[handle_message][read] event[{i}]: {event}")
-                    # ここを修正: 予定がなくてもカレンダー風で返す
-                    message = format_event_list(events, result['start_time'], result['end_time'])
-                    logger.debug(f"[DEBUG] format_event_list返り値: {message}")
-                    user_last_event_list[user_id] = {
-                        'events': events,
-                        'start_time': result['start_time'],
-                        'end_time': result['end_time']
-                    }
-                    if isinstance(message, dict) and message.get("type") == "flex":
-                        await reply_flex(reply_token, message)
-                    else:
-                        await reply_text(reply_token, message)
-                except Exception as e:
-                    logger.error(f"予定の確認中にエラーが発生: {str(e)}")
-                    logger.error(traceback.format_exc())
-                    await reply_text(reply_token, "予定の確認中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
-
-            elif operation_type == 'delete':
-                # 予定の削除処理
-                try:
-                    delete_result = None
-                    # 通常のインデックス指定削除
-                    if 'index' in result:
-                        delete_result = await calendar_manager.delete_event_by_index(
-                            index=result['index'],
-                            start_time=result.get('start_time')
-                        )
-                    # 日時指定での削除（start_time, end_timeがある場合）
-                    elif 'start_time' in result and 'end_time' in result:
-                        # タイトルもあれば渡す
-                        matched_events = await calendar_manager._find_events(
-                            result['start_time'], result['end_time'], result.get('title'))
-                        if not matched_events:
-                            await reply_text(reply_token, "指定された日時の予定が見つかりませんでした。")
-                            return
-                        if len(matched_events) == 1:
-                            event = matched_events[0]
-                            delete_result = await calendar_manager.delete_event(event['id'])
-                        elif len(matched_events) > 1:
-                            # 重複している予定を一覧表示
-                            msg = "複数の予定が見つかりました。削除したい予定を選んでください:\n" + format_event_list(matched_events)
-                            await reply_text(reply_token, msg)
-                            return
-                    # 文脈保存からの削除（start_timeで予定が特定できない場合）
-                    elif 'delete_index' in result:
-                        # 直前の予定リストがあるか
-                        last_list = user_last_event_list.get(user_id)
-                        if last_list and 'events' in last_list:
-                            events = last_list['events']
-                            # start_time指定があればその日付のみに絞る
-                            if result.get('start_time'):
-                                day = result['start_time'].date()
-                                events = [e for e in events if 'dateTime' in e['start'] and datetime.fromisoformat(e['start']['dateTime'].replace('Z', '+00:00')).date() == day]
-                            if 1 <= result['delete_index'] <= len(events):
-                                event = events[result['delete_index'] - 1]
-                                delete_result = await calendar_manager.delete_event(event['id'])
-                            else:
-                                await reply_text(reply_token, f"指定された番号の予定が見つかりませんでした。1から{len(events)}までの番号を指定してください。")
-                                return
-                        else:
-                            await reply_text(reply_token, "直前に予定一覧を表示してから番号指定で削除してください。\n例:『今日の予定を教えて』→『1番の予定を削除して』")
-                            return
-                    elif 'event_id' in result:
-                        # イベントID指定での削除
-                        delete_result = await calendar_manager.delete_event(result['event_id'])
-                    else:
-                        await reply_text(reply_token, "削除する予定を特定できませんでした。\n予定の番号またはIDを指定してください。\nまたは直前に予定一覧を表示してから番号指定で削除してください。")
-                        return
-
-                    if delete_result and delete_result.get('success'):
-                        # 削除した予定の日付を特定（start_timeまたはresultから）
-                        day = None
-                        if 'start_time' in result and result['start_time']:
-                            day = result['start_time'].replace(hour=0, minute=0, second=0, microsecond=0)
-                        elif 'date' in result and result['date']:
-                            day = result['date'].replace(hour=0, minute=0, second=0, microsecond=0)
-                        msg = delete_result['message'] if 'message' in delete_result else '予定を削除しました。'
-                        if day:
-                            day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
-                            events = await calendar_manager.get_events(start_time=day, end_time=day_end)
-                            if events:
-                                msg += f"\n\n残りの予定：\n" + format_event_list(events, day, day_end)
-                            else:
-                                msg += "\n\nこの日の予定は全て削除されました。"
-                            await reply_text(reply_token, msg)
-                            # 削除後は文脈も更新
-                            user_last_event_list[user_id] = {
-                                'events': events,
-                                'start_time': day,
-                                'end_time': day_end
-                            }
-                            return
-                        else:
-                            await reply_text(reply_token, msg)
-                            return
-                    else:
-                        await reply_text(reply_token, f"予定の削除に失敗しました: {delete_result.get('message', '不明なエラー')}")
-                except Exception as e:
-                    logger.error(f"予定の削除中にエラーが発生: {str(e)}")
-                    logger.error(traceback.format_exc())
-                    await reply_text(reply_token, "予定の削除中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
-
-            elif operation_type == 'update':
-                # 予定の更新処理
-                if not all(k in result for k in ['start_time', 'end_time', 'new_start_time', 'new_end_time']):
-                    await reply_text(reply_token, "予定の更新に必要な情報が不足しています。\n更新する予定の時間と新しい時間を指定してください。")
-                    return
-
-                try:
-                    update_result = await calendar_manager.update_event(
-                        start_time=result['start_time'],
-                        end_time=result['end_time'],
-                        new_start_time=result['new_start_time'],
-                        new_end_time=result['new_end_time'],
-                        title=result.get('title')
-                    )
-
-                    if update_result['success']:
-                        # その日の予定一覧も必ず返信
-                        day = result['new_start_time'].replace(hour=0, minute=0, second=0, microsecond=0)
-                        day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
-                        events = await calendar_manager.get_events(start_time=day, end_time=day_end)
-                        msg = f"予定を更新しました！\n\n" + format_event_list(events, day, day_end)
-                        await reply_text(reply_token, msg)
-                        return
-                    elif update_result.get('error') == 'duplicate':
-                        # 重複時はpending_eventを保存
-                        day = result['new_start_time'].replace(hour=0, minute=0, second=0, microsecond=0)
-                        day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
-                        events = await calendar_manager.get_events(start_time=day, end_time=day_end)
-                        event_index = None
-                        for i, event in enumerate(events):
-                            event_start = datetime.fromisoformat(event['start']['dateTime'].replace('Z', '+00:00')).astimezone(pytz.timezone('Asia/Tokyo'))
-                            event_end = datetime.fromisoformat(event['end']['dateTime'].replace('Z', '+00:00')).astimezone(pytz.timezone('Asia/Tokyo'))
-                            if (result['new_start_time'] < event_end and result['new_end_time'] > event_start):
-                                event_index = i + 1  # 1始まり
-                                event_id = event.get('id')
-                                break
-                        if event_index is None or event_index < 1 or not event_id:
-                            logger.error(f"[handle_message][duplicate branch] event_indexが不正: {event_index}, event_id={event_id}")
-                            await reply_text(reply_token, "更新対象の予定を特定できませんでした。もう一度お試しください。")
-                            return
-                        pending_event = {
-                            'operation_type': 'update',
-                            'title': result.get('title'),
-                            'start_time': result.get('start_time'),
-                            'end_time': result.get('end_time'),
-                            'new_start_time': result.get('new_start_time'),
-                            'new_end_time': result.get('new_end_time'),
-                            'location': result.get('location'),
-                            'person': result.get('person'),
-                            'description': result.get('description'),
-                            'recurrence': result.get('recurrence'),
-                            'event_index': event_index,
-                            'event_id': event_id,
-                            'force_update': True
-                        }
-                        save_pending_event(user_id, pending_event)
-                        msg = f"{update_result.get('message', '更新後の時間帯に重複する予定があります')}"
-                        await reply_text(reply_token, msg)
-                        return
-                    else:
-                        # 失敗時もその日の予定一覧を返信
-                        day = result['new_start_time'].replace(hour=0, minute=0, second=0, microsecond=0)
-                        day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
-                        events = await calendar_manager.get_events(start_time=day, end_time=day_end)
-                        msg = f"{update_result.get('message', '予定の更新に失敗しました。')}\n\n" + format_event_list(events, day, day_end)
-                        await reply_text(reply_token, msg)
-                        return
-                except Exception as e:
-                    logger.error(f"予定の更新中にエラーが発生: {str(e)}")
-                    logger.error(traceback.format_exc())
-                    await reply_text(reply_token, "予定の更新中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
-                    return
-
-            else:
-                await reply_text(reply_token, "未対応の操作です。\n予定の追加、確認、削除、更新のいずれかを指定してください。")
-
-        except Exception as e:
-            logger.error(f"メッセージの処理中にエラーが発生: {str(e)}")
-            logger.error(traceback.format_exc())
-            await reply_text(reply_token, f"メッセージの処理中にエラーが発生しました: {str(e)}")
-
-    except Exception as e:
-        logger.error(f"予期せぬエラーが発生: {str(e)}")
-        logger.error(traceback.format_exc())
-        if 'reply_token' in locals():
-            await reply_text(reply_token, f"エラーが発生しました: {str(e)}\n\n詳細: メッセージの処理中")
+            
+        # メッセージの解析と処理
+        logger.debug(f"[handle_message] メッセージを解析: {message}")
+        result = parse_message(message)
+        logger.debug(f"[handle_message] 解析結果: {result}")
+        
+        if result:
+            await handle_parsed_message(result, user_id, reply_token)
         else:
-            logger.error("reply_tokenが利用できません")
+            logger.debug(f"[handle_message] メッセージの解析に失敗: {message}")
+            await reply_text(reply_token, "申し訳ありません。メッセージを理解できませんでした。\n予定の追加や確認の方法について、もう一度お試しください。")
+            
+    except Exception as e:
+        logger.error(f"メッセージ処理中にエラーが発生: {str(e)}")
+        logger.error(traceback.format_exc())
+        if reply_token:
+            await reply_text(reply_token, "申し訳ありません。エラーが発生しました。\nしばらく時間をおいて再度お試しください。")
 
 @app.route('/webhook', methods=['POST'])
-async def webhook():
-    """
-    Webhookエンドポイント
-    
-    Returns:
-        Response: JSONレスポンス
-    """
+def stripe_webhook():
+    """StripeのWebhookを処理"""
+    payload = request.get_data()
+    sig_header = request.headers.get('Stripe-Signature')
+
     try:
-        # リクエストの検証
-        if not request.is_json:
-            logger.error("Invalid request: Content-Type is not application/json")
-            return jsonify({'error': 'Invalid Content-Type'}), 400
-
-        data = request.get_json()
-        if not data:
-            logger.error("Invalid request: Empty JSON body")
-            return jsonify({'error': 'Empty request body'}), 400
-
-        message = data.get('message', '')
-        if not message:
-            logger.error("Invalid request: No message in request body")
-            return jsonify({'error': 'No message provided'}), 400
-
-        # メッセージを解析
-        try:
-            result = parse_message(message)
-            if not result:
-                return jsonify({'error': 'Failed to parse message'}), 400
-            return jsonify(result)
-        except Exception as e:
-            logger.error(f"Error parsing message: {str(e)}")
-            logger.error(traceback.format_exc())
-            return jsonify({'error': 'Failed to parse message'}), 500
-
+        stripe_manager = StripeManager()
+        if stripe_manager.handle_webhook(payload, sig_header, line_bot_api):
+            return jsonify({'status': 'success'}), 200
+        else:
+            return jsonify({'status': 'error'}), 400
     except Exception as e:
-        logger.error(f"Error processing webhook: {str(e)}")
-        logger.error(traceback.format_exc())
-        return jsonify({'error': str(e)}), 500
+        current_app.logger.error(f"Webhook error: {str(e)}")
+        return jsonify({'status': 'error', 'message': str(e)}), 400
 
 @app.before_request
 def before_request():
@@ -1464,14 +1120,50 @@ def handle_exception(error):
     }), 500
 
 # Google連携ボタンをLINEユーザーに送信する関数
+def delete_all_one_time_codes_for_user(user_id):
+    pattern = f"one_time_code:*"
+    for key in redis_client.scan_iter(pattern):
+        if redis_client.get(key) and redis_client.get(key).decode() == user_id:
+            redis_client.delete(key)
+            logger.debug(f"[one_time_code][redis][delete-old] key={key} for user_id={user_id}")
+
+def log_all_one_time_codes():
+    try:
+        keys = list(redis_client.scan_iter('one_time_code:*'))
+        logger.debug(f"[one_time_code][redis][all_keys] {keys}")
+        for key in keys:
+            val = redis_client.get(key)
+            logger.debug(f"[one_time_code][redis][key] {key} => {val}")
+    except Exception as e:
+        logger.error(f"[one_time_code][redis][log_all] error: {e}")
+
+# ワンタイムコード発行時
+
 def send_one_time_code(user_id):
+    delete_all_one_time_codes_for_user(user_id)
     code = generate_one_time_code()
-    one_time_codes[code] = user_id
-    # LINEにワンタイムコードと認証ページURLを別々のメッセージで送信
-    message1 = f"ワンタイムコード: {code}"
-    message2 = "Google認証を行うには、下記URLを外部ブラウザで開き、ワンタイムコードを入力してください。"
-    message3 = "https://linecalendar-production.up.railway.app/onetimelogin"
-    line_bot_api.push_message(PushMessageRequest(to=user_id, messages=[TextMessage(text=message1), TextMessage(text=message2), TextMessage(text=message3)]))
+    save_one_time_code(code, user_id)
+    log_all_one_time_codes()  # 本番でもログは残す
+    message = f"Googleカレンダー連携用ワンタイムコード: {code}\nhttps://linecalendar-production.up.railway.app/onetimelogin"
+    line_bot_api.push_message(
+        PushMessageRequest(
+            to=user_id,
+            messages=[TextMessage(text=message)]
+        )
+    )
+
+# ワンタイムコード削除時
+
+def delete_all_one_time_codes_for_user(user_id):
+    pattern = f"one_time_code:*"
+    for key in redis_client.scan_iter(pattern):
+        try:
+            val = redis_client.get(key)
+            if val and val.decode() == user_id:
+                redis_client.delete(key)
+                logger.debug(f"[one_time_code][redis][delete-old] key={key} for user_id={user_id}")
+        except Exception as e:
+            logger.error(f"[one_time_code][redis][delete-old][error] key={key}, error={e}")
 
 # /authorizeでuser_idを受け取ってセッションに保存
 @app.route('/authorize')
@@ -1618,87 +1310,76 @@ RETRY_DELAY = 1  # 秒
 TIMEOUT_SECONDS = 10
 
 async def reply_text(reply_token: str, texts: Union[str, List[str]]) -> None:
-    """LINEへの返信を送信する（複数メッセージ対応、リトライロジック付き）"""
+    """
+    LINE Messaging APIを使用してテキストメッセージを送信する
+    
+    Args:
+        reply_token (str): リプライトークン
+        texts (Union[str, List[str]]): 送信するテキスト（文字列または文字列のリスト）
+    """
     try:
-        logger.debug(f"LINEへの返信を開始: {texts}")
+        if not reply_token:
+            logger.error("reply_tokenが空です")
+            return
+
+        if not texts:
+            logger.error("送信するテキストが空です")
+            return
+
+        # テキストが文字列の場合はリストに変換
         if isinstance(texts, str):
             texts = [texts]
-        
-        # FlexMessageのコンテンツを作成
-        flex_content = {
-            "type": "bubble",
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "text",
-                        "text": text,
-                        "wrap": True
-                    } for text in texts
-                ]
-            }
-        }
-        
-        message = FlexMessage(alt_text="メッセージ", contents=flex_content)
-        logger.debug(f"送信するメッセージ: {message}")
-        
-        # リトライロジックを実装
-        for attempt in range(MAX_RETRIES):
+
+        # メッセージの長さ制限（2000文字）を考慮して分割
+        messages = []
+        current_message = []
+        current_length = 0
+
+        for text in texts:
+            if current_length + len(text) > 1900:  # 余裕を持って1900文字に制限
+                messages.append("\n".join(current_message))
+                current_message = [text]
+                current_length = len(text)
+            else:
+                current_message.append(text)
+                current_length += len(text)
+
+        if current_message:
+            messages.append("\n".join(current_message))
+
+        # 各メッセージを送信
+        for message in messages:
             try:
-                async with async_timeout(TIMEOUT_SECONDS):
-                    asyncio.get_event_loop().run_in_executor(
-                        None,
-                        lambda: line_bot_api.reply_message(
-                            ReplyMessageRequest(
-                                reply_token=reply_token,
-                                messages=[message]
-                            )
-                        )
+                line_bot_api.reply_message(
+                    reply_token,
+                    TextMessage(text=message)
+                )
+                logger.info(f"メッセージを送信しました: {message[:100]}...")
+            except Exception as e:
+                logger.error(f"メッセージの送信中にエラーが発生: {str(e)}")
+                logger.error(traceback.format_exc())
+                # エラーメッセージを送信
+                try:
+                    error_message = "申し訳ありません。メッセージの送信に失敗しました。しばらく時間をおいて再度お試しください。"
+                    line_bot_api.reply_message(
+                        reply_token,
+                        TextMessage(text=error_message)
                     )
-                    logger.debug("LINEへの返信が完了")
-                    return
-            except linebot.v3.messaging.exceptions.ApiException as e:
-                if e.status_code == 429 and attempt < MAX_RETRIES - 1:
-                    logger.warning(f"レート制限に達しました。{RETRY_DELAY}秒後にリトライします。")
-                    await asyncio.sleep(RETRY_DELAY)
-                    continue
-                raise
-    except TimeoutError:
-        logger.error(f"LINEへの返信がタイムアウトしました（{TIMEOUT_SECONDS}秒）")
-        raise
+                except Exception as inner_e:
+                    logger.error(f"エラーメッセージの送信にも失敗: {str(inner_e)}")
+
     except Exception as e:
-        logger.error(f"LINEへの返信中にエラーが発生: {str(e)}")
+        logger.error(f"reply_textで予期せぬエラーが発生: {str(e)}")
         logger.error(traceback.format_exc())
-        raise
 
 async def push_message(user_id: str, texts: Union[str, List[str]]) -> None:
-    """LINEへのプッシュメッセージを送信する（複数メッセージ対応、リトライロジック付き）"""
+    """LINEへのプッシュメッセージを送信する（テキストのみ、リトライロジック付き）"""
     try:
         logger.debug(f"LINEへのプッシュメッセージを開始: {texts}")
         if isinstance(texts, str):
             texts = [texts]
-        
-        # FlexMessageのコンテンツを作成
-        flex_content = {
-            "type": "bubble",
-            "body": {
-                "type": "box",
-                "layout": "vertical",
-                "contents": [
-                    {
-                        "type": "text",
-                        "text": text,
-                        "wrap": True
-                    } for text in texts
-                ]
-            }
-        }
-        
-        message = FlexMessage(alt_text="メッセージ", contents=flex_content)
-        logger.debug(f"送信するメッセージ: {message}")
-        
-        # リトライロジックを実装
+        messages = [TextMessage(text=text) for text in texts]
+        logger.debug(f"送信するメッセージ: {messages}")
         for attempt in range(MAX_RETRIES):
             try:
                 async with async_timeout(TIMEOUT_SECONDS):
@@ -1707,15 +1388,15 @@ async def push_message(user_id: str, texts: Union[str, List[str]]) -> None:
                         lambda: line_bot_api.push_message(
                             PushMessageRequest(
                                 to=user_id,
-                                messages=[message]
+                                messages=messages
                             )
                         )
                     )
                     logger.debug("LINEへのプッシュメッセージが完了")
                     return
-            except linebot.v3.messaging.exceptions.ApiException as e:
-                if e.status_code == 429 and attempt < MAX_RETRIES - 1:
-                    logger.warning(f"レート制限に達しました。{RETRY_DELAY}秒後にリトライします。")
+            except Exception as e:
+                logger.error(f"LINEへのプッシュメッセージ中にエラーが発生: {str(e)}")
+                if attempt < MAX_RETRIES - 1:
                     await asyncio.sleep(RETRY_DELAY)
                     continue
                 raise
@@ -1968,7 +1649,7 @@ def get_user_credentials(user_id: str) -> Optional[google.oauth2.credentials.Cre
     """
     try:
         # データベースから認証情報を取得
-        credentials_dict = db_manager.get_google_credentials(user_id)
+        credentials_dict = db_manager.get_user_credentials(user_id)
         if not credentials_dict:
             logger.warning(f"認証情報が見つかりません: user_id={user_id}")
             return None
@@ -2172,21 +1853,77 @@ def handle_exception(error):
         "status_code": 500
     }), 500
 
-# ワンタイムコードの保存用（メモリ上、必要ならDBに変更可）
-one_time_codes = {}
+# ワンタイムコードの保存用（Redisに変更）
+# one_time_codes = {}
+ONE_TIME_CODE_TTL = 600  # 10分
 
-# ワンタイムコード生成関数
 def generate_one_time_code(length=6):
-    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
+    code = ''.join(random.choices(string.ascii_uppercase + string.digits, k=length))
+    logger.debug(f"[one_time_code][generate] code={code}")
+    return code
+
+def save_one_time_code(code, user_id):
+    try:
+        redis_client.setex(f"one_time_code:{code}", ONE_TIME_CODE_TTL, user_id)
+        logger.debug(f"[one_time_code][redis][save] code={code}, user_id={user_id}")
+        print(f"[one_time_code][redis][save] code={code}, user_id={user_id}")
+        try:
+            val = redis_client.get(f"one_time_code:{code}")
+            logger.debug(f"[one_time_code][redis][check-val] code={code}, value={val}")
+            print(f"[one_time_code][redis][check-val] code={code}, value={val}")
+        except Exception as e:
+            logger.error(f"[one_time_code][redis][check-val][error] code={code}, error={e}", exc_info=True)
+            print(f"[one_time_code][redis][check-val][error] code={code}, error={e}")
+        try:
+            ttl = redis_client.ttl(f"one_time_code:{code}")
+            logger.debug(f"[one_time_code][redis][check-ttl] code={code}, ttl={ttl}")
+            print(f"[one_time_code][redis][check-ttl] code={code}, ttl={ttl}")
+        except Exception as e:
+            logger.error(f"[one_time_code][redis][check-ttl][error] code={code}, error={e}", exc_info=True)
+            print(f"[one_time_code][redis][check-ttl][error] code={code}, error={e}")
+    except Exception as e:
+        logger.error(f"[one_time_code][redis][save][error] code={code}, user_id={user_id}, error={e}", exc_info=True)
+        print(f"[one_time_code][redis][save][error] code={code}, user_id={user_id}, error={e}")
+
+def get_one_time_code_user(code):
+    user_id = redis_client.get(f"one_time_code:{code}")
+    if user_id:
+        return user_id.decode()
+    return None
+
+def delete_one_time_code(code):
+    redis_client.delete(f"one_time_code:{code}")
+    logger.debug(f"[one_time_code][redis][delete] code={code}")
 
 # ワンタイムコード入力ページ
 @app.route('/onetimelogin', methods=['GET', 'POST'])
 def onetimelogin():
     if request.method == 'POST':
         code = request.form.get('code')
-        user_id = one_time_codes.get(code)
+        logger.debug(f"[onetimelogin][input] code={code}")
+        print(f"[onetimelogin][input] code={code}")
+        # Redisから取得
+        user_id = None
+        try:
+            user_id = redis_client.get(f"one_time_code:{code}")
+            logger.debug(f"[onetimelogin][redis][get] code={code}, user_id={user_id}")
+            print(f"[onetimelogin][redis][get] code={code}, user_id={user_id}")
+        except Exception as e:
+            logger.error(f"[onetimelogin][redis][get][error] code={code}, error={e}", exc_info=True)
+            print(f"[onetimelogin][redis][get][error] code={code}, error={e}")
+        # Redis内の全one_time_code:*キーと値を出力
+        try:
+            keys = list(redis_client.scan_iter('one_time_code:*'))
+            logger.debug(f"[onetimelogin][redis][all_keys] {keys}")
+            print(f"[onetimelogin][redis][all_keys] {keys}")
+            for key in keys:
+                val = redis_client.get(key)
+                logger.debug(f"[onetimelogin][redis][key] {key} => {val}")
+                print(f"[onetimelogin][redis][key] {key} => {val}")
+        except Exception as e:
+            logger.error(f"[onetimelogin][redis][log_all][error] {e}", exc_info=True)
+            print(f"[onetimelogin][redis][log_all][error] {e}")
         if user_id:
-            # コードが正しければGoogle認証フロー開始
             session.clear()
             session['line_user_id'] = user_id
             session['auth_start_time'] = time.time()
@@ -2194,9 +1931,8 @@ def onetimelogin():
             session['auth_state'] = 'started'
             session.permanent = True
             session.modified = True
-            # コードは一度きり
-            del one_time_codes[code]
-            # Google認証URL生成
+            delete_one_time_code(code)
+            logger.debug(f"[one_time_code][delete] code={code}")
             flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
                 CLIENT_SECRETS_FILE,
                 scopes=SCOPES
@@ -2211,6 +1947,7 @@ def onetimelogin():
             return redirect(authorization_url)
         else:
             error = 'ワンタイムコードが無効か、期限切れです。LINEで新しいコードを取得してください。'
+            logger.debug(f"[one_time_code][invalid] code={code}")
             return render_template_string(ONETIME_LOGIN_HTML, error=error)
     return render_template_string(ONETIME_LOGIN_HTML, error=None)
 
@@ -2326,14 +2063,6 @@ def create_checkout_session():
         current_app.logger.error(f"Checkout session creation failed: {str(e)}")
         return jsonify({'error': str(e)}), 400
 
-@app.route('/payment/webhook', methods=['POST'])
-def stripe_webhook():
-    payload = request.data
-    sig_header = request.headers.get('Stripe-Signature')
-    if stripe_manager.handle_webhook(payload, sig_header, line_bot_api):
-        return jsonify({'status': 'success'})
-    return jsonify({'status': 'error'}), 400
-
 @app.route('/payment/success')
 def payment_success():
     session_id = request.args.get('session_id')
@@ -2386,29 +2115,286 @@ async def reply_flex(reply_token, flex_content):
         logger.error(traceback.format_exc())
 
 def get_db_connection():
-    conn = sqlite3.connect('calendar_bot.db')
-    conn.row_factory = sqlite3.Row
-    return conn
+    """データベース接続を取得する"""
+    try:
+        conn = sqlite3.connect('instance/calendar.db')
+        conn.row_factory = sqlite3.Row
+        return conn
+    except Exception as e:
+        logger.error(f"データベース接続エラー: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise
 
 def ensure_db_columns():
-    conn = sqlite3.connect('calendar_bot.db')
-    cursor = conn.cursor()
+    """必要なデータベースカラムが存在することを確認する"""
     try:
-        cursor.execute("ALTER TABLE users ADD COLUMN stripe_customer_id TEXT;")
-    except Exception:
-        pass
-    try:
-        cursor.execute("ALTER TABLE users ADD COLUMN subscription_start_date TIMESTAMP;")
-    except Exception:
-        pass
-    try:
-        cursor.execute("ALTER TABLE users ADD COLUMN subscription_end_date TIMESTAMP;")
-    except Exception:
-        pass
-    conn.commit()
-    conn.close()
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        
+        # usersテーブルのカラムを確認
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id TEXT PRIMARY KEY,
+                subscription_status TEXT DEFAULT 'inactive',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # google_credentialsテーブルのカラムを確認
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS google_credentials (
+                user_id TEXT PRIMARY KEY,
+                credentials TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        """)
+        
+        # pending_eventsテーブルのカラムを確認
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pending_events (
+                user_id TEXT PRIMARY KEY,
+                event_info TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        """)
+        
+        conn.commit()
+        logger.info("データベースのカラム確認が完了しました")
+    except Exception as e:
+        logger.error(f"データベースのカラム確認中にエラーが発生: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise
+    finally:
+        if conn:
+            conn.close()
 
-ensure_db_columns()
+@app.route('/test_redis_write')
+def test_redis_write():
+    try:
+        # テスト用のデータを書き込む
+        test_key = 'test_key'
+        test_value = 'test_value'
+        redis_client.setex(test_key, 60, test_value)  # 60秒のTTL
+        
+        # 書き込みの確認
+        stored_value = redis_client.get(test_key)
+        if stored_value and stored_value.decode() == test_value:
+            logger.info(f"[Redis書き込みテスト] 成功: {test_key}={test_value}")
+            return jsonify({
+                'status': 'success',
+                'message': 'Redis書き込みテスト成功',
+                'data': {
+                    'key': test_key,
+                    'value': test_value,
+                    'ttl': redis_client.ttl(test_key)
+                }
+            })
+        else:
+            logger.error(f"[Redis書き込みテスト] 失敗: 値の不一致")
+            return jsonify({
+                'status': 'error',
+                'message': 'Redis書き込みテスト失敗: 値の不一致'
+            }), 500
+    except Exception as e:
+        logger.error(f"[Redis書き込みテスト] エラー: {str(e)}")
+        return jsonify({
+            'status': 'error',
+            'message': f'Redis書き込みテストエラー: {str(e)}'
+        }), 500
+
+# handlerの登録部分でasync対応
+@handler.add(MessageEvent)
+def on_message(event):
+    print("=== on_message: 最初の1行目 ===")
+    logger.info("=== on_message: 最初の1行目 ===")
+    logger.info(f"[on_message] called: event={event}")
+    print("[on_message] called")
+    try:
+        try:
+            print("before asyncio.run")
+            logger.info("before asyncio.run")
+            asyncio.run(handle_text_message(event))
+            print("after asyncio.run")
+            logger.info("after asyncio.run")
+        except RuntimeError as e:
+            logger.error(f"asyncio.run error: {e}")
+            print(f"asyncio.run error: {e}")
+            new_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(new_loop)
+            new_loop.run_until_complete(handle_text_message(event))
+            new_loop.close()
+            print("after run_until_complete")
+            logger.info("after run_until_complete")
+    except Exception as e:
+        logger.error(f"on_message error: {str(e)}")
+        logger.error(traceback.format_exc())
+        print(f"on_message error: {str(e)}")
+
+async def handle_parsed_message(result, user_id, reply_token):
+    """
+    解析されたメッセージを処理する
+    
+    Args:
+        result: 解析結果
+        user_id: ユーザーID
+        reply_token: リプライトークン
+    """
+    try:
+        # カレンダーマネージャーの初期化
+        calendar_manager = get_calendar_manager(user_id)
+        
+        # 操作タイプに応じた処理
+        operation_type = result.get('operation_type')
+        logger.debug(f"[handle_parsed_message] 操作タイプ: {operation_type}")
+        
+        if operation_type == 'add':
+            await handle_add_event(result, calendar_manager, user_id, reply_token)
+        elif operation_type == 'read':
+            await handle_read_event(result, calendar_manager, user_id, reply_token)
+        elif operation_type == 'delete':
+            await handle_delete_event(result, calendar_manager, user_id, reply_token)
+        elif operation_type == 'update':
+            await handle_update_event(result, calendar_manager, user_id, reply_token)
+        else:
+            await reply_text(reply_token, "未対応の操作です。\n予定の追加、確認、削除、更新のいずれかを指定してください。")
+            
+    except Exception as e:
+        logger.error(f"メッセージ処理中にエラーが発生: {str(e)}")
+        logger.error(traceback.format_exc())
+        await reply_text(reply_token, "申し訳ありません。エラーが発生しました。\nしばらく時間をおいて再度お試しください。")
+
+async def handle_add_event(result, calendar_manager, user_id, reply_token):
+    """予定の追加を処理する"""
+    try:
+        if not all(k in result for k in ['title', 'start_time', 'end_time']):
+            await reply_text(reply_token, "予定の追加に必要な情報が不足しています。\nタイトル、開始時間、終了時間を指定してください。")
+            return
+
+        add_result = await calendar_manager.add_event(
+            title=result['title'],
+            start_time=result['start_time'],
+            end_time=result['end_time'],
+            location=result.get('location'),
+            person=result.get('person'),
+            description=result.get('description'),
+            recurrence=result.get('recurrence')
+        )
+
+        if add_result['success']:
+            day = result['start_time'].replace(hour=0, minute=0, second=0, microsecond=0)
+            day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
+            events = await calendar_manager.get_events(start_time=day, end_time=day_end)
+            msg = f"✅ 予定を追加しました：\n{result['title']}\n{result['start_time'].strftime('%m月%d日 %H:%M')}～{result['end_time'].strftime('%H:%M')}\n\n" + format_event_list(events, day, day_end)
+            await reply_text(reply_token, msg)
+        else:
+            await reply_text(reply_token, f"予定の追加に失敗しました: {add_result.get('message', '不明なエラー')}")
+    except Exception as e:
+        logger.error(f"予定の追加中にエラーが発生: {str(e)}")
+        logger.error(traceback.format_exc())
+        await reply_text(reply_token, "予定の追加中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
+
+async def handle_read_event(result, calendar_manager, user_id, reply_token):
+    """予定の確認を処理する"""
+    try:
+        if not all(k in result for k in ['start_time', 'end_time']):
+            await reply_text(reply_token, "予定の確認に必要な情報が不足しています。\n確認したい日付を指定してください。")
+            return
+
+        events = await calendar_manager.get_events(
+            start_time=result['start_time'],
+            end_time=result['end_time'],
+            title=result.get('title')
+        )
+        
+        message = format_event_list(events, result['start_time'], result['end_time'])
+        user_last_event_list[user_id] = {
+            'events': events,
+            'start_time': result['start_time'],
+            'end_time': result['end_time']
+        }
+        await reply_text(reply_token, message)
+    except Exception as e:
+        logger.error(f"予定の確認中にエラーが発生: {str(e)}")
+        logger.error(traceback.format_exc())
+        await reply_text(reply_token, "予定の確認中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
+
+async def handle_delete_event(result, calendar_manager, user_id, reply_token):
+    """予定の削除を処理する"""
+    try:
+        delete_result = None
+        if 'index' in result:
+            delete_result = await calendar_manager.delete_event_by_index(
+                index=result['index'],
+                start_time=result.get('start_time')
+            )
+        elif 'start_time' in result and 'end_time' in result:
+            matched_events = await calendar_manager._find_events(
+                result['start_time'], result['end_time'], result.get('title'))
+            if not matched_events:
+                await reply_text(reply_token, "指定された日時の予定が見つかりませんでした。")
+                return
+            if len(matched_events) == 1:
+                event = matched_events[0]
+                delete_result = await calendar_manager.delete_event(event['id'])
+            else:
+                msg = "複数の予定が見つかりました。削除したい予定を選んでください:\n" + format_event_list(matched_events)
+                await reply_text(reply_token, msg)
+                return
+        elif 'event_id' in result:
+            delete_result = await calendar_manager.delete_event(result['event_id'])
+        else:
+            await reply_text(reply_token, "削除する予定を特定できませんでした。\n予定の番号またはIDを指定してください。")
+            return
+
+        if delete_result and delete_result.get('success'):
+            day = result.get('start_time', datetime.now()).replace(hour=0, minute=0, second=0, microsecond=0)
+            day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
+            events = await calendar_manager.get_events(start_time=day, end_time=day_end)
+            msg = delete_result.get('message', '予定を削除しました。')
+            if events:
+                msg += f"\n\n残りの予定：\n" + format_event_list(events, day, day_end)
+            else:
+                msg += "\n\nこの日の予定は全て削除されました。"
+            await reply_text(reply_token, msg)
+        else:
+            await reply_text(reply_token, f"予定の削除に失敗しました: {delete_result.get('message', '不明なエラー')}")
+    except Exception as e:
+        logger.error(f"予定の削除中にエラーが発生: {str(e)}")
+        logger.error(traceback.format_exc())
+        await reply_text(reply_token, "予定の削除中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
+
+async def handle_update_event(result, calendar_manager, user_id, reply_token):
+    """予定の更新を処理する"""
+    try:
+        if not all(k in result for k in ['start_time', 'end_time', 'new_start_time', 'new_end_time']):
+            await reply_text(reply_token, "予定の更新に必要な情報が不足しています。\n更新する予定の時間と新しい時間を指定してください。")
+            return
+
+        update_result = await calendar_manager.update_event(
+            start_time=result['start_time'],
+            end_time=result['end_time'],
+            new_start_time=result['new_start_time'],
+            new_end_time=result['new_end_time'],
+            title=result.get('title')
+        )
+
+        if update_result['success']:
+            day = result['new_start_time'].replace(hour=0, minute=0, second=0, microsecond=0)
+            day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
+            events = await calendar_manager.get_events(start_time=day, end_time=day_end)
+            msg = f"予定を更新しました！\n\n" + format_event_list(events, day, day_end)
+            await reply_text(reply_token, msg)
+        else:
+            await reply_text(reply_token, f"予定の更新に失敗しました: {update_result.get('message', '不明なエラー')}")
+    except Exception as e:
+        logger.error(f"予定の更新中にエラーが発生: {str(e)}")
+        logger.error(traceback.format_exc())
+        await reply_text(reply_token, "予定の更新中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
 
 if __name__ == "__main__":
     try:
@@ -2426,3 +2412,6 @@ if __name__ == "__main__":
         logger.error(f"Failed to start application: {str(e)}")
         logger.error(traceback.format_exc())
         sys.exit(1) 
+
+import os
+print('STRIPE_WEBHOOK_SECRET:', os.getenv('STRIPE_WEBHOOK_SECRET'))
