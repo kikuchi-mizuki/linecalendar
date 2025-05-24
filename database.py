@@ -543,4 +543,9 @@ class DatabaseManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute('DELETE FROM pending_events WHERE user_id = ?', (user_id,))
-            conn.commit() 
+            conn.commit()
+
+def get_db_connection():
+    conn = sqlite3.connect('calendar_bot.db')
+    conn.row_factory = sqlite3.Row
+    return conn 
