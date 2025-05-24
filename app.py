@@ -2415,3 +2415,8 @@ if __name__ == "__main__":
 
 import os
 print('STRIPE_WEBHOOK_SECRET:', os.getenv('STRIPE_WEBHOOK_SECRET'))
+
+REDIS_URL = os.getenv("REDIS_URL")
+print("REDIS_URL at startup:", REDIS_URL)
+if not REDIS_URL or not REDIS_URL.startswith("redis://"):
+    raise ValueError("REDIS_URL is missing or invalid.")
