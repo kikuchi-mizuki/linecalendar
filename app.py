@@ -2252,7 +2252,6 @@ def handle_line_message(event):
             }
         
         # 既存のメッセージ処理ロジック
-        // ... existing code ...
 
 if __name__ == "__main__":
     try:
