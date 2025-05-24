@@ -2356,6 +2356,26 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+def ensure_db_columns():
+    conn = sqlite3.connect('calendar_bot.db')
+    cursor = conn.cursor()
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN stripe_customer_id TEXT;")
+    except Exception:
+        pass
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN subscription_start_date TIMESTAMP;")
+    except Exception:
+        pass
+    try:
+        cursor.execute("ALTER TABLE users ADD COLUMN subscription_end_date TIMESTAMP;")
+    except Exception:
+        pass
+    conn.commit()
+    conn.close()
+
+ensure_db_columns()
+
 if __name__ == "__main__":
     try:
         # アプリケーションの初期設定
