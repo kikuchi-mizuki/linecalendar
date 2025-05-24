@@ -2294,10 +2294,11 @@ def payment_cancel():
     return render_template('payment_cancel.html')
 
 # LINE Messaging APIの処理を修正
-def handle_line_message(event):
+async def handle_line_message(event):
     try:
         user_id = event.source.user_id
         message_text = event.message.text
+        reply_token = event.reply_token
         # ユーザーのサブスクリプション状態を確認
         conn = get_db_connection()
         cursor = conn.cursor()
