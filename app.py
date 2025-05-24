@@ -41,7 +41,7 @@ logging.getLogger('linebot').setLevel(logging.ERROR)
 
 from flask import Flask, request, abort, session, jsonify, render_template, redirect, url_for, current_app
 from linebot.v3 import WebhookHandler
-from linebot.v3.messaging import MessagingApi, Configuration, ApiClient, ReplyMessageRequest, URIAction, TemplateMessage, ButtonsTemplate, PushMessageRequest, TextMessage
+from linebot.v3.messaging import MessagingApi, Configuration, ApiClient, ReplyMessageRequest, URIAction, TemplateMessage, ButtonsTemplate, PushMessageRequest, TextMessage, FlexMessage
 from linebot.v3.exceptions import InvalidSignatureError
 from linebot.v3.webhooks import MessageEvent, TextMessageContent
 from linebot.v3.messaging import TextMessage
@@ -1026,7 +1026,10 @@ async def handle_message(event):
                         'start_time': result['start_time'],
                         'end_time': result['end_time']
                     }
-                    await reply_text(reply_token, message)
+                    if isinstance(message, dict) and message.get("type") == "flex":
+                        await reply_flex(reply_token, message)
+                    else:
+                        await reply_text(reply_token, message)
                 except Exception as e:
                     logger.error(f"予定の確認中にエラーが発生: {str(e)}")
                     logger.error(traceback.format_exc())
@@ -2256,15 +2259,18 @@ ONETIME_LOGIN_HTML = '''
 
 stripe_manager = StripeManager()
 
-@app.route('/payment/checkout', methods=['POST'])
+@app.route('/payment/checkout', methods=['GET', 'POST'])
 def create_checkout_session():
     try:
-        data = request.get_json()
-        user_id = data.get('user_id')
-        line_user_id = data.get('line_user_id')
-        
+        if request.method == 'POST':
+            data = request.get_json()
+            user_id = data.get('user_id')
+            line_user_id = data.get('line_user_id')
+        else:
+            user_id = request.args.get('user_id')
+            line_user_id = request.args.get('line_user_id', user_id)
         session = stripe_manager.create_checkout_session(user_id, line_user_id)
-        return jsonify({'session_id': session.id, 'url': session.url})
+        return redirect(session.url)
     except Exception as e:
         current_app.logger.error(f"Checkout session creation failed: {str(e)}")
         return jsonify({'error': str(e)}), 400
@@ -2312,6 +2318,19 @@ def handle_line_message(event):
     except Exception as e:
         logger.error(f"handle_line_message error: {str(e)}")
         return {'type': 'text', 'text': 'エラーが発生しました。'}
+
+async def reply_flex(reply_token, flex_content):
+    message = FlexMessage(alt_text=flex_content["altText"], contents=flex_content["contents"])
+    async with async_timeout(TIMEOUT_SECONDS):
+        asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    reply_token=reply_token,
+                    messages=[message]
+                )
+            )
+        )
 
 if __name__ == "__main__":
     try:
