@@ -2301,18 +2301,17 @@ def handle_line_message(event):
         # ユーザーのサブスクリプション状態を確認
         conn = get_db_connection()
         cursor = conn.cursor()
-        cursor.execute('SELECT subscription_status FROM users WHERE line_user_id = ?', (user_id,))
+        cursor.execute('SELECT subscription_status FROM users WHERE user_id = ?', (user_id,))
         user = cursor.fetchone()
         conn.close()
-        
         if not user or user['subscription_status'] != 'active':
-            # 未課金ユーザーへのメッセージ
-            return {
-                'type': 'text',
-                'text': 'この機能をご利用いただくには、月額プランへのご登録が必要です。\n'
-                       '以下のURLからご登録ください：\n'
-                       f'{os.getenv("BASE_URL")}/payment/checkout?user_id={user_id}'
-            }
+            msg = (
+                'この機能をご利用いただくには、月額プランへのご登録が必要です。\n'
+                f'以下のURLからご登録ください：\n'
+                f'{os.getenv("BASE_URL")}/payment/checkout?user_id={user_id}'
+            )
+            await reply_text(reply_token, msg)
+            return
         # 既存のメッセージ処理ロジック
         pass
     except Exception as e:
