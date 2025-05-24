@@ -2339,17 +2339,20 @@ async def handle_line_message(event):
         return {'type': 'text', 'text': 'エラーが発生しました。'}
 
 async def reply_flex(reply_token, flex_content):
-    message = FlexMessage(alt_text=flex_content["altText"], contents=flex_content["contents"])
-    async with async_timeout(TIMEOUT_SECONDS):
-        asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: line_bot_api.reply_message(
+    try:
+        message = FlexMessage(alt_text=flex_content["altText"], contents=flex_content["contents"])
+        async with async_timeout(TIMEOUT_SECONDS):
+            # 同期的に送信し、例外をキャッチ
+            line_bot_api.reply_message(
                 ReplyMessageRequest(
                     reply_token=reply_token,
                     messages=[message]
                 )
             )
-        )
+        logger.info(f"[reply_flex] Flex Message送信成功: {flex_content}")
+    except Exception as e:
+        logger.error(f"[reply_flex] Flex Message送信エラー: {str(e)}")
+        logger.error(traceback.format_exc())
 
 def get_db_connection():
     conn = sqlite3.connect('calendar_bot.db')
