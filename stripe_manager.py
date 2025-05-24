@@ -62,7 +62,7 @@ class StripeManager:
                 SET subscription_status = 'active',
                     stripe_customer_id = ?,
                     subscription_start_date = CURRENT_TIMESTAMP
-                WHERE line_user_id = ?
+                WHERE user_id = ?
             ''', (session.customer, session.metadata.line_user_id))
             
             conn.commit()
