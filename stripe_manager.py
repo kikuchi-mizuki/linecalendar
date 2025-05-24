@@ -3,7 +3,7 @@ from flask import current_app
 from database import get_db_connection
 import os
 from linebot.v3.messaging import PushMessageRequest, TextMessage
-from app import line_bot_api
+# Removed circular import: from app import line_bot_api
 
 class StripeManager:
     def __init__(self):
@@ -33,7 +33,7 @@ class StripeManager:
             current_app.logger.error(f"Stripe checkout session creation failed: {str(e)}")
             raise
 
-    def handle_webhook(self, payload, sig_header):
+    def handle_webhook(self, payload, sig_header, line_bot_api=None):
         """StripeのWebhookを処理"""
         try:
             event = self.stripe.Webhook.construct_event(
@@ -42,7 +42,7 @@ class StripeManager:
             
             if event['type'] == 'checkout.session.completed':
                 session = event['data']['object']
-                self._handle_successful_payment(session)
+                self._handle_successful_payment(session, line_bot_api)
             elif event['type'] == 'customer.subscription.deleted':
                 subscription = event['data']['object']
                 self._handle_subscription_cancelled(subscription)
@@ -52,7 +52,7 @@ class StripeManager:
             current_app.logger.error(f"Stripe webhook handling failed: {str(e)}")
             return False
 
-    def _handle_successful_payment(self, session):
+    def _handle_successful_payment(self, session, line_bot_api=None):
         """支払い成功時の処理"""
         try:
             conn = get_db_connection()
@@ -71,7 +71,7 @@ class StripeManager:
             conn.close()
             # LINEに決済完了通知をPush
             line_user_id = getattr(session.metadata, 'line_user_id', None) or getattr(session.metadata, 'user_id', None)
-            if line_user_id:
+            if line_user_id and line_bot_api:
                 try:
                     line_bot_api.push_message(PushMessageRequest(
                         to=line_user_id,
@@ -101,4 +101,12 @@ class StripeManager:
             conn.close()
         except Exception as e:
             current_app.logger.error(f"Failed to update cancelled subscription: {str(e)}")
-            raise 
+            raise
+
+def send_payment_success_message(line_user_id, line_bot_api):
+    """Send payment success message to user via LINE"""
+    try:
+        message = TextSendMessage(text="決済が完了しました！\nこれで全ての機能が使えるようになりました。")
+        line_bot_api.push_message(line_user_id, message)
+    except Exception as e:
+        print(f"Error sending payment success message: {e}") 

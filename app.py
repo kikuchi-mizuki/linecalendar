@@ -2298,8 +2298,7 @@ def create_checkout_session():
 def stripe_webhook():
     payload = request.data
     sig_header = request.headers.get('Stripe-Signature')
-    
-    if stripe_manager.handle_webhook(payload, sig_header):
+    if stripe_manager.handle_webhook(payload, sig_header, line_bot_api):
         return jsonify({'status': 'success'})
     return jsonify({'status': 'error'}), 400
 
