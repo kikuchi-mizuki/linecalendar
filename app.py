@@ -881,6 +881,21 @@ async def handle_message(event):
         user_id = event.source.user_id
         message = event.message.text
         reply_token = event.reply_token
+        
+        # 課金判定
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT subscription_status FROM users WHERE user_id = ?', (user_id,))
+        user = cursor.fetchone()
+        conn.close()
+        if not user or user['subscription_status'] != 'active':
+            msg = (
+                'この機能をご利用いただくには、月額プランへのご登録が必要です。\n'
+                f'以下のURLからご登録ください：\n'
+                f'{os.getenv("BASE_URL")}/payment/checkout?user_id={user_id}'
+            )
+            await reply_text(reply_token, msg)
+            return
 
         if not reply_token:
             logger.error("reply_tokenが取得できません")
@@ -1023,6 +1038,7 @@ async def handle_message(event):
                         logger.info(f"[handle_message][read] event[{i}]: {event}")
                     # ここを修正: 予定がなくてもカレンダー風で返す
                     message = format_event_list(events, result['start_time'], result['end_time'])
+                    logger.debug(f"[DEBUG] format_event_list返り値: {message}")
                     user_last_event_list[user_id] = {
                         'events': events,
                         'start_time': result['start_time'],
