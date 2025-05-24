@@ -571,9 +571,11 @@ def format_event_list(events, start_time=None, end_time=None):
                     "contents": [
                         {
                             "type": "text",
-                            "text": "予定はありません",
+                            "text": "今日は予定がありません",
                             "weight": "bold",
-                            "size": "xl"
+                            "size": "xl",
+                            "align": "center",
+                            "color": "#888888"
                         }
                     ]
                 }
