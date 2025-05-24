@@ -1083,8 +1083,8 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 start_hour = int(match.group('start_hour'))
                 start_minute = int(match.group('start_minute') or 0)
                 if 'end_hour' in match.groupdict():
-                end_hour = int(match.group('end_hour'))
-                end_minute = int(match.group('end_minute') or 0)
+                    end_hour = int(match.group('end_hour'))
+                    end_minute = int(match.group('end_minute') or 0)
                 elif 'end_hour2' in match.groupdict():
                     end_hour = int(match.group('end_hour2'))
                     end_minute = 0
