@@ -2,6 +2,8 @@ import stripe
 from flask import current_app
 from database import get_db_connection
 import os
+from linebot.v3.messaging import PushMessageRequest, TextMessage
+from app import line_bot_api
 
 class StripeManager:
     def __init__(self):
@@ -67,6 +69,16 @@ class StripeManager:
             
             conn.commit()
             conn.close()
+            # LINEに決済完了通知をPush
+            line_user_id = getattr(session.metadata, 'line_user_id', None) or getattr(session.metadata, 'user_id', None)
+            if line_user_id:
+                try:
+                    line_bot_api.push_message(PushMessageRequest(
+                        to=line_user_id,
+                        messages=[TextMessage(text="決済が完了しました！ご利用ありがとうございます。")]
+                    ))
+                except Exception as e:
+                    current_app.logger.error(f"LINE決済完了Pushに失敗: {str(e)}")
         except Exception as e:
             current_app.logger.error(f"Failed to update user subscription: {str(e)}")
             raise
