@@ -2340,9 +2340,9 @@ async def handle_line_message(event):
 
 async def reply_flex(reply_token, flex_content):
     try:
+        logger.info(f"[reply_flex] 送信直前のflex_content: {flex_content}")
         message = FlexMessage(alt_text=flex_content["altText"], contents=flex_content["contents"])
         async with async_timeout(TIMEOUT_SECONDS):
-            # 同期的に送信し、例外をキャッチ
             line_bot_api.reply_message(
                 ReplyMessageRequest(
                     reply_token=reply_token,
