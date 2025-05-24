@@ -2234,7 +2234,6 @@ def handle_line_message(event):
     try:
         user_id = event.source.user_id
         message_text = event.message.text
-        
         # ユーザーのサブスクリプション状態を確認
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -2250,8 +2249,11 @@ def handle_line_message(event):
                        '以下のURLからご登録ください：\n'
                        f'{os.getenv("BASE_URL")}/payment/checkout?user_id={user_id}'
             }
-        
         # 既存のメッセージ処理ロジック
+        pass
+    except Exception as e:
+        logger.error(f"handle_line_message error: {str(e)}")
+        return {'type': 'text', 'text': 'エラーが発生しました。'}
 
 if __name__ == "__main__":
     try:
