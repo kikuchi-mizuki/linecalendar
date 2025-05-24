@@ -82,6 +82,7 @@ import string
 from flask import render_template_string
 from constants import WEEKDAYS
 from stripe_manager import StripeManager
+import sqlite3
 
 # 警告の抑制
 warnings.filterwarnings('ignore', category=DeprecationWarning)
@@ -2349,6 +2350,11 @@ async def reply_flex(reply_token, flex_content):
                 )
             )
         )
+
+def get_db_connection():
+    conn = sqlite3.connect('calendar_bot.db')
+    conn.row_factory = sqlite3.Row
+    return conn
 
 if __name__ == "__main__":
     try:
