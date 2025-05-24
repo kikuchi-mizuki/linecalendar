@@ -1624,8 +1624,24 @@ async def reply_text(reply_token: str, texts: Union[str, List[str]]) -> None:
         if isinstance(texts, str):
             texts = [texts]
         
-        messages = [TextMessage(text=text) for text in texts]
-        logger.debug(f"送信するメッセージ: {messages}")
+        # FlexMessageのコンテンツを作成
+        flex_content = {
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": text,
+                        "wrap": True
+                    } for text in texts
+                ]
+            }
+        }
+        
+        message = FlexMessage(alt_text="メッセージ", contents=flex_content)
+        logger.debug(f"送信するメッセージ: {message}")
         
         # リトライロジックを実装
         for attempt in range(MAX_RETRIES):
@@ -1636,7 +1652,7 @@ async def reply_text(reply_token: str, texts: Union[str, List[str]]) -> None:
                         lambda: line_bot_api.reply_message(
                             ReplyMessageRequest(
                                 reply_token=reply_token,
-                                messages=messages
+                                messages=[message]
                             )
                         )
                     )
@@ -1663,8 +1679,24 @@ async def push_message(user_id: str, texts: Union[str, List[str]]) -> None:
         if isinstance(texts, str):
             texts = [texts]
         
-        messages = [TextMessage(text=text) for text in texts]
-        logger.debug(f"送信するメッセージ: {messages}")
+        # FlexMessageのコンテンツを作成
+        flex_content = {
+            "type": "bubble",
+            "body": {
+                "type": "box",
+                "layout": "vertical",
+                "contents": [
+                    {
+                        "type": "text",
+                        "text": text,
+                        "wrap": True
+                    } for text in texts
+                ]
+            }
+        }
+        
+        message = FlexMessage(alt_text="メッセージ", contents=flex_content)
+        logger.debug(f"送信するメッセージ: {message}")
         
         # リトライロジックを実装
         for attempt in range(MAX_RETRIES):
@@ -1675,7 +1707,7 @@ async def push_message(user_id: str, texts: Union[str, List[str]]) -> None:
                         lambda: line_bot_api.push_message(
                             PushMessageRequest(
                                 to=user_id,
-                                messages=messages
+                                messages=[message]
                             )
                         )
                     )
