@@ -13,9 +13,14 @@ if client_secret_json:
 from dotenv import load_dotenv
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
 
-# 環境変数の確認
-print('STRIPE_WEBHOOK_SECRET:', os.getenv('STRIPE_WEBHOOK_SECRET'))
-print('環境変数一覧:', {k: v for k, v in os.environ.items() if 'STRIPE' in k})
+# LINE Messaging APIのハンドラーを初期化
+from linebot.v3 import WebhookHandler
+handler = WebhookHandler(os.getenv('LINE_CHANNEL_SECRET'))
+
+# LINE Messaging APIクライアントの初期化
+from linebot.v3.messaging import Configuration, ApiClient, MessagingApi
+configuration = Configuration(access_token=os.getenv('LINE_CHANNEL_ACCESS_TOKEN'))
+line_bot_api = MessagingApi(ApiClient(configuration))
 
 import logging
 import sys
