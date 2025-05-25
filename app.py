@@ -380,13 +380,7 @@ async def handle_text_message(event):
         
         if not credentials:
             logger.warning(f"[handle_text_message] 認証情報が見つかりません: user_id={user_id}")
-            # 非同期関数を同期的に実行
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                loop.run_until_complete(handle_unauthenticated_user(user_id, reply_token))
-            finally:
-                loop.close()
+            await handle_unauthenticated_user(user_id, reply_token)
             return
         
         # キャンセルパターンのチェック
@@ -395,38 +389,26 @@ async def handle_text_message(event):
             if pending_event:
                 cancel_pending_event(user_id)
                 reply_message = f"予定の{pending_event['action']}をキャンセルしました。"
-                send_reply_message(reply_token, reply_message)
+                await send_reply_message(reply_token, reply_message)
                 return
         
         # 確認応答の処理
         pending_event = get_pending_event(user_id)
         if pending_event and pending_event.get('waiting_confirmation'):
             if message_text.lower() in ['はい', 'yes', 'y']:
-                # 非同期関数を同期的に実行
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-                try:
-                    loop.run_until_complete(handle_message(event))
-                finally:
-                    loop.close()
+                await handle_message(event)
             else:
                 cancel_pending_event(user_id)
-                send_reply_message(reply_token, "操作をキャンセルしました。")
+                await send_reply_message(reply_token, "操作をキャンセルしました。")
             return
         
         # 通常のメッセージ処理
-        # 非同期関数を同期的に実行
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(handle_message(event))
-        finally:
-            loop.close()
+        await handle_message(event)
             
     except Exception as e:
         logger.error(f"[handle_text_message] エラー: {str(e)}", exc_info=True)
         try:
-            send_reply_message(reply_token, "申し訳ありません。エラーが発生しました。")
+            await send_reply_message(reply_token, "申し訳ありません。エラーが発生しました。")
         except Exception as send_error:
             logger.error(f"[handle_text_message] エラーメッセージ送信失敗: {str(send_error)}", exc_info=True)
 
