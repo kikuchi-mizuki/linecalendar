@@ -1240,7 +1240,9 @@ def oauth2callback():
 
         if session.get('auth_state') != 'started':
             logger.error("認証状態が不正です")
-            send_one_time_code(user_id)
+            user_id = session.get('line_user_id')
+            if user_id:
+                send_one_time_code(user_id)
             return '認証状態が不正です。最初からやり直してください。', 400
 
         # 認証セッションの有効期限チェック
@@ -1258,12 +1260,14 @@ def oauth2callback():
         flow.redirect_uri = url_for('oauth2callback', _external=True)
         
         try:
+            user_id = session.get('line_user_id')  # ここで先に取得
             authorization_response = request.url
             flow.fetch_token(authorization_response=authorization_response)
         except Exception as e:
             logger.error(f"トークンの取得に失敗: {str(e)}")
             session.clear()
-            send_one_time_code(user_id)
+            if user_id:
+                send_one_time_code(user_id)
             return '認証に失敗しました。もう一度お試しください。', 400
 
         credentials = flow.credentials
