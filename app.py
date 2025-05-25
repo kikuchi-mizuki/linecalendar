@@ -382,11 +382,11 @@ async def handle_text_message(event):
         message_text = event.message.text
         reply_token = event.reply_token
         
-        logger.info(f"[handle_text_message] メッセージ受信: user_id={user_id}, message={message_text}")
+        logger.info(f"[handle_text_message] 処理開始: user_id={user_id}, message={message_text}")
         
         # ユーザーの認証情報を取得
         credentials = get_user_credentials(user_id)
-        logger.debug(f"[handle_text_message] credentials: {credentials}")
+        logger.debug(f"[handle_text_message] 認証情報: {credentials}")
         
         if not credentials:
             logger.warning(f"[handle_text_message] 認証情報が見つかりません: user_id={user_id}")
@@ -413,14 +413,27 @@ async def handle_text_message(event):
             return
         
         # 通常のメッセージ処理
-        await handle_message(event)
+        logger.info("[handle_text_message] メッセージ解析開始")
+        result = parse_message(message_text)
+        logger.debug(f"[handle_text_message] メッセージ解析結果: {result}")
+        
+        if not result.get('success', False):
+            error_message = result.get('error', 'メッセージの解析に失敗しました。')
+            logger.warning(f"[handle_text_message] メッセージ解析失敗: {error_message}")
+            await send_reply_message(reply_token, error_message)
+            return
             
+        await handle_parsed_message(result, user_id, reply_token)
+        logger.info("[handle_text_message] 処理完了")
+        
     except Exception as e:
-        logger.error(f"[handle_text_message] エラー: {str(e)}", exc_info=True)
+        logger.error(f"[handle_text_message] エラーが発生しました: {str(e)}")
+        logger.error(traceback.format_exc())
         try:
             await send_reply_message(reply_token, "申し訳ありません。エラーが発生しました。")
-        except Exception as send_error:
-            logger.error(f"[handle_text_message] エラーメッセージ送信失敗: {str(send_error)}", exc_info=True)
+        except Exception as reply_error:
+            logger.error(f"[handle_text_message] エラー通知の送信に失敗: {str(reply_error)}")
+            logger.error(traceback.format_exc())
 
 # --- 追加: pending_eventから予定追加を行う非同期関数 ---
 async def add_event_from_pending(user_id, reply_token, pending_event):
@@ -763,35 +776,26 @@ def callback():
         abort(500)
 
 @line_handler.add(MessageEvent, message=TextMessage)
-def handle_message(event):
+async def handle_message(event):
     """
     LINE Messaging APIからのメッセージイベントを処理する
     """
     try:
-        # イベントループを取得
-        loop = asyncio.get_event_loop()
+        logger.info(f"[handle_message] メッセージ受信開始: user_id={event.source.user_id}, message={event.message.text}")
         
-        # イベントループの状態に応じて非同期関数を実行
-        if loop.is_running():
-            # イベントループが実行中の場合は、新しいタスクとして実行
-            asyncio.ensure_future(handle_text_message(event))
-        else:
-            # イベントループが実行されていない場合は、同期的に実行
-            loop.run_until_complete(handle_text_message(event))
+        # handle_text_messageを直接await
+        await handle_text_message(event)
             
     except Exception as e:
-        logger.error(f"[handle_message] エラーが発生しました: {str(e)}")
+        logger.error(f"[handle_message] エラーが発生: {str(e)}")
         logger.error(traceback.format_exc())
+        # エラーが発生した場合でも、ユーザーに応答を返す
         try:
-            # エラー通知を送信
-            line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    reply_token=event.reply_token,
-                    messages=[TextMessage(text="申し訳ありません。エラーが発生しました。")]
-                )
-            )
+            reply_token = event.reply_token
+            error_message = "申し訳ありません。メッセージの処理中にエラーが発生しました。"
+            await send_reply_message(reply_token, error_message)
         except Exception as reply_error:
-            logger.error(f"[handle_message] エラー通知の送信に失敗: {str(reply_error)}")
+            logger.error(f"[handle_message] エラーメッセージ送信中にエラーが発生: {str(reply_error)}")
             logger.error(traceback.format_exc())
 
 @app.route('/webhook', methods=['POST'])
