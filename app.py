@@ -748,36 +748,22 @@ def callback():
 
 @line_handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    """
-    メッセージを処理する関数（同期）
-    """
     try:
-        user_id = event.source.user_id
-        message_text = event.message.text
-        reply_token = event.reply_token
-        
-        logger.info(f"[handle_message] 受信メッセージ: user_id={user_id}, message={message_text}")
-        
-        # 簡易的な応答メッセージを送信
+        logger.info(f"[handle_message] メッセージを受信: {event.message.text}")
         line_bot_api.reply_message(
-            ReplyMessageRequest(
-                reply_token=reply_token,
-                messages=[TextMessage(text="✅ メッセージを受け取りました！")]
-            )
+            event.reply_token,
+            TextSendMessage(text="✅ メッセージを受け取りました！")
         )
-            
+        logger.info("[handle_message] 応答メッセージを送信しました")
     except Exception as e:
-        logger.error(f"[handle_message] エラー発生: {str(e)}")
-        logger.error(f"[handle_message] エラーの詳細: {traceback.format_exc()}")
+        logger.error(f"[handle_message] エラーが発生しました: {str(e)}")
         try:
             line_bot_api.reply_message(
-                ReplyMessageRequest(
-                    reply_token=reply_token,
-                    messages=[TextMessage(text="申し訳ありません。メッセージの処理中にエラーが発生しました。")]
-                )
+                event.reply_token,
+                TextSendMessage(text="申し訳ありません。エラーが発生しました。")
             )
         except Exception as reply_error:
-            logger.error(f"[handle_message] エラーメッセージ送信失敗: {str(reply_error)}")
+            logger.error(f"[handle_message] エラー通知の送信に失敗: {str(reply_error)}")
 
 @app.route('/webhook', methods=['POST'])
 def stripe_webhook():

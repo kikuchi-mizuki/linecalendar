@@ -31,3 +31,5 @@ nohup.out
 *.log
 *.db
 nohup.out
+*.db
+nohup.out
