@@ -718,30 +718,51 @@ def callback():
     return 'OK'
 
 @handler.add(MessageEvent, message=TextMessage)
-def handle_text_message(event):
+async def handle_text_message(event):
     try:
         logger.info(f"[handle_text_message] メッセージ処理開始: type={event.type}, message={event.message.text}, userId={event.source.user_id}")
         
-        # メッセージ処理の実行
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(handle_message(event))
-        finally:
-            loop.close()
+        user_id = event.source.user_id
+        message_text = event.message.text
+        reply_token = event.reply_token
         
-        logger.info(f"[handle_text_message] メッセージ処理完了: userId={event.source.user_id}")
+        # ユーザーの認証情報を取得
+        credentials = get_user_credentials(user_id)
+        logger.debug(f"[handle_text_message] credentials: {credentials}")
+        
+        if not credentials:
+            logger.warning(f"[handle_text_message] 認証情報が見つかりません: user_id={user_id}")
+            await handle_unauthenticated_user(user_id, reply_token)
+            return
+        
+        # キャンセルパターンのチェック
+        if message_text.lower() in ['キャンセル', 'cancel', 'やめる']:
+            pending_event = get_pending_event(user_id)
+            if pending_event:
+                cancel_pending_event(user_id)
+                reply_message = f"予定の{pending_event['action']}をキャンセルしました。"
+                await send_reply_message(reply_token, reply_message)
+                return
+        
+        # 確認応答の処理
+        pending_event = get_pending_event(user_id)
+        if pending_event and pending_event.get('waiting_confirmation'):
+            if message_text.lower() in ['はい', 'yes', 'y']:
+                await handle_message(event)
+            else:
+                cancel_pending_event(user_id)
+                await send_reply_message(reply_token, "操作をキャンセルしました。")
+            return
+        
+        # 通常のメッセージ処理
+        await handle_message(event)
+            
     except Exception as e:
-        logger.error(f"[handle_text_message] エラー発生: {str(e)}")
-        logger.error(f"[handle_text_message] エラーの詳細: {traceback.format_exc()}")
+        logger.error(f"[handle_text_message] エラー: {str(e)}", exc_info=True)
         try:
-            # エラーメッセージをユーザーに送信
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text="申し訳ありません。メッセージの処理中にエラーが発生しました。しばらく時間をおいて再度お試しください。")
-            )
-        except Exception as reply_error:
-            logger.error(f"[handle_text_message] エラーメッセージ送信失敗: {str(reply_error)}")
+            await send_reply_message(reply_token, "申し訳ありません。エラーが発生しました。")
+        except Exception as send_error:
+            logger.error(f"[handle_text_message] エラーメッセージ送信失敗: {str(send_error)}", exc_info=True)
 
 @app.route('/webhook', methods=['POST'])
 def stripe_webhook():
@@ -2015,7 +2036,7 @@ def test_redis_write():
 
 # handlerの登録部分でasync対応
 @line_handler.add(MessageEvent, message=TextMessage)
-def handle_message(event):
+async def handle_message(event):
     """
     メッセージを処理する非同期関数
     """
