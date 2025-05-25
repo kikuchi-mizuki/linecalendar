@@ -1552,6 +1552,21 @@ async def handle_message(event):
             logger.warning("reply_tokenがありません。返信できません。")
             return
 
+        # ★ ここでサブスクリプション確認を先に行う
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('SELECT subscription_status FROM users WHERE user_id = ?', (user_id,))
+        user = cursor.fetchone()
+        conn.close()
+        if not user or user['subscription_status'] != 'active':
+            msg = (
+                'この機能をご利用いただくには、月額プランへのご登録が必要です。\n'
+                f'以下のURLからご登録ください：\n'
+                f'{os.getenv("BASE_URL")}/payment/checkout?user_id={user_id}'
+            )
+            await reply_text(reply_token, msg)
+            return
+
         # メッセージを解析
         result = parse_message(message)
         if not result:
