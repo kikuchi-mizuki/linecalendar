@@ -418,7 +418,7 @@ class DatabaseManager:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    SELECT token, refresh_token, token_uri, client_id, client_secret, scopes, expires_at
+                    SELECT user_id, token, refresh_token, token_uri, client_id, client_secret, scopes, expires_at
                     FROM google_credentials
                     WHERE user_id = ?
                 ''', (user_id,))
@@ -426,24 +426,26 @@ class DatabaseManager:
                 logger.info(f"[get_user_credentials] user_id={user_id}, row={row}")
                 if row:
                     expires_at = None
-                    if row[6]:
-                        dt = datetime.fromisoformat(row[6])
+                    if row[7]:
+                        dt = datetime.fromisoformat(row[7])
                         if dt.tzinfo is None:
                             dt = dt.replace(tzinfo=timezone.utc)
                         expires_at = dt.timestamp()
                     # user_idをstrで返す
-                    if isinstance(user_id, bytes):
-                        user_id = user_id.decode()
+                    db_user_id = row[0]
+                    if isinstance(db_user_id, bytes):
+                        db_user_id = db_user_id.decode()
                     result = {
-                        'token': row[0],
-                        'refresh_token': row[1],
-                        'token_uri': row[2].replace(';', ''),
-                        'client_id': row[3],
-                        'client_secret': row[4],
-                        'scopes': json.loads(row[5].replace(';', '')),
+                        'user_id': db_user_id,
+                        'token': row[1],
+                        'refresh_token': row[2],
+                        'token_uri': row[3].replace(';', ''),
+                        'client_id': row[4],
+                        'client_secret': row[5],
+                        'scopes': json.loads(row[6].replace(';', '')),
                         'expires_at': expires_at
                     }
-                    logger.info(f"[get_user_credentials] result for user_id={user_id}: {result}")
+                    logger.info(f"[get_user_credentials] result for user_id={db_user_id}: {result}")
                     return result
                 logger.warning(f"[get_user_credentials] 認証情報が見つかりません: user_id={user_id}")
                 return None
