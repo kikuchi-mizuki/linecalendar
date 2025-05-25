@@ -698,18 +698,24 @@ def format_overlapping_events(events):
 
 @app.route("/callback", methods=['POST'])
 async def callback():
-    # X-Line-Signatureヘッダーの値を取得
+    # リクエストヘッダーからX-Line-Signatureを取得
     signature = request.headers['X-Line-Signature']
-
     # リクエストボディを取得
     body = request.get_data(as_text=True)
     app.logger.info("Request body: " + body)
 
     try:
+        # 署名を検証し、問題なければhandleに定義されている関数を呼び出す
         await handler.handle(body, signature)
     except InvalidSignatureError:
+        # 署名検証で失敗したときは例外をあげる
         abort(400)
+    except Exception as e:
+        app.logger.error(f"Error in callback: {str(e)}")
+        app.logger.error(f"Traceback: {traceback.format_exc()}")
+        abort(500)
 
+    # handleの処理に成功したらOK
     return 'OK'
 
 @handler.add(MessageEvent, message=TextMessage)
