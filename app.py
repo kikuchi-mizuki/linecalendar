@@ -14,12 +14,11 @@ from dotenv import load_dotenv
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
 
 # LINE Messaging APIのハンドラーを初期化
-from linebot.v3.webhooks import WebhookParser
 from linebot.v3.webhooks import MessageEvent, TextMessageContent, FollowEvent, UnfollowEvent, JoinEvent, LeaveEvent, PostbackEvent
+from linebot.v3.exceptions import InvalidSignatureError
 LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
 if not LINE_CHANNEL_SECRET:
     raise ValueError("LINE_CHANNEL_SECRET is not set")
-parser = WebhookParser(LINE_CHANNEL_SECRET)
 
 # LINE Messaging APIクライアントの初期化
 from linebot.v3.messaging import Configuration, ApiClient, MessagingApi
@@ -72,12 +71,6 @@ from linebot.v3.messaging import (
     URIAction, TemplateMessage, ButtonsTemplate, PushMessageRequest,
     TextMessage, FlexMessage
 )
-from linebot.v3.exceptions import InvalidSignatureError
-from linebot.v3.webhooks import (
-    MessageEvent, TextMessageContent, FollowEvent, UnfollowEvent,
-    JoinEvent, LeaveEvent, PostbackEvent
-)
-from linebot.v3.messaging import TextMessage
 from linebot import LineBotApi  # この行を追加
 import os
 import traceback
@@ -1482,26 +1475,27 @@ def callback():
         logger.info(f"Webhook request received: {body}")
 
         try:
-            # 署名を検証し、イベントを取得
-            events = parser.parse(body, signature)
+            # リクエストボディをJSONとしてパース
+            events = json.loads(body)["events"]
             logger.info(f"Parsed events: {events}")
 
             # イベントの種類に応じて処理
             for event in events:
-                if isinstance(event, MessageEvent) and isinstance(event.message, TextMessageContent):
-                    asyncio.run(handle_message(event))
-                elif isinstance(event, FollowEvent):
-                    asyncio.run(handle_follow(event))
-                elif isinstance(event, UnfollowEvent):
-                    asyncio.run(handle_unfollow(event))
-                elif isinstance(event, JoinEvent):
-                    asyncio.run(handle_join(event))
-                elif isinstance(event, LeaveEvent):
-                    asyncio.run(handle_leave(event))
-                elif isinstance(event, PostbackEvent):
-                    asyncio.run(handle_postback(event))
+                event_type = event.get("type")
+                if event_type == "message" and event.get("message", {}).get("type") == "text":
+                    asyncio.run(handle_message(MessageEvent.from_dict(event)))
+                elif event_type == "follow":
+                    asyncio.run(handle_follow(FollowEvent.from_dict(event)))
+                elif event_type == "unfollow":
+                    asyncio.run(handle_unfollow(UnfollowEvent.from_dict(event)))
+                elif event_type == "join":
+                    asyncio.run(handle_join(JoinEvent.from_dict(event)))
+                elif event_type == "leave":
+                    asyncio.run(handle_leave(LeaveEvent.from_dict(event)))
+                elif event_type == "postback":
+                    asyncio.run(handle_postback(PostbackEvent.from_dict(event)))
                 else:
-                    logger.info(f"Unhandled event type: {type(event)}")
+                    logger.info(f"Unhandled event type: {event_type}")
 
             logger.info("Webhook request processed successfully")
             return 'OK'
