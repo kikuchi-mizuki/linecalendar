@@ -1683,7 +1683,7 @@ def oauth2callback():
 def format_event_list(events: List[Dict], start_time: datetime = None, end_time: datetime = None) -> str:
     """イベント一覧をカレンダー風テキストでフォーマット（罫線・アイコン・日付・番号付きリストで統一）"""
     def border():
-        return '────────────────'
+        return '━━━━━━━━━━━━━━━━'
 
     lines = []
     # 日付リストを作成
