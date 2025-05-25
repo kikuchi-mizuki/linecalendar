@@ -11,7 +11,7 @@ class DatabaseManager:
     """
     データベース操作を管理するクラス
     """
-    def __init__(self, db_path: str = 'calendar_bot.db'):
+    def __init__(self, db_path: str = 'instance/calendar.db'):
         """
         データベースマネージャーの初期化
         
@@ -393,7 +393,7 @@ class DatabaseManager:
             logger.error(f"[save_google_credentials] Google認証情報の保存に失敗: user_id={user_id}, error={str(e)}")
             raise
 
-    def get_google_credentials(self, user_id: str) -> dict:
+    def get_user_credentials(self, user_id: str) -> dict:
         """Google認証情報を取得"""
         try:
             with sqlite3.connect(self.db_path) as conn:
@@ -404,7 +404,7 @@ class DatabaseManager:
                     WHERE user_id = ?
                 ''', (user_id,))
                 row = cursor.fetchone()
-                logger.info(f"[get_google_credentials] user_id={user_id}, row={row}")
+                logger.info(f"[get_user_credentials] user_id={user_id}, row={row}")
                 if row:
                     expires_at = None
                     if row[6]:
@@ -421,12 +421,12 @@ class DatabaseManager:
                         'scopes': json.loads(row[5]),
                         'expires_at': expires_at
                     }
-                    logger.info(f"[get_google_credentials] result for user_id={user_id}: {result}")
+                    logger.info(f"[get_user_credentials] result for user_id={user_id}: {result}")
                     return result
-                logger.warning(f"[get_google_credentials] 認証情報が見つかりません: user_id={user_id}")
+                logger.warning(f"[get_user_credentials] 認証情報が見つかりません: user_id={user_id}")
                 return None
         except Exception as e:
-            logger.error(f"[get_google_credentials] Google認証情報の取得に失敗: user_id={user_id}, error={str(e)}")
+            logger.error(f"[get_user_credentials] Google認証情報の取得に失敗: user_id={user_id}, error={str(e)}")
             return None
 
     def delete_google_credentials(self, user_id: str):
@@ -546,6 +546,6 @@ class DatabaseManager:
             conn.commit()
 
 def get_db_connection():
-    conn = sqlite3.connect('calendar_bot.db')
+    conn = sqlite3.connect('instance/calendar.db')
     conn.row_factory = sqlite3.Row
     return conn 
