@@ -730,7 +730,7 @@ def callback():
     return 'OK'
 
 @line_handler.add(MessageEvent, message=TextMessage)
-async def handle_text_message(event):
+def handle_text_message(event):
     try:
         user_id = event.source.user_id
         message_text = event.message.text
@@ -744,7 +744,9 @@ async def handle_text_message(event):
         
         if not credentials:
             logger.warning(f"[handle_text_message] 認証情報が見つかりません: user_id={user_id}")
-            await handle_unauthenticated_user(user_id, reply_token)
+            # 非同期関数を同期的に実行
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(handle_unauthenticated_user(user_id, reply_token))
             return
         
         # キャンセルパターンのチェック
@@ -753,26 +755,36 @@ async def handle_text_message(event):
             if pending_event:
                 cancel_pending_event(user_id)
                 reply_message = f"予定の{pending_event['action']}をキャンセルしました。"
-                await send_reply_message(reply_token, reply_message)
+                # 非同期関数を同期的に実行
+                loop = asyncio.get_event_loop()
+                loop.run_until_complete(send_reply_message(reply_token, reply_message))
                 return
         
         # 確認応答の処理
         pending_event = get_pending_event(user_id)
         if pending_event and pending_event.get('waiting_confirmation'):
             if message_text.lower() in ['はい', 'yes', 'y']:
-                await handle_message(event)
+                # 非同期関数を同期的に実行
+                loop = asyncio.get_event_loop()
+                loop.run_until_complete(handle_message(event))
             else:
                 cancel_pending_event(user_id)
-                await send_reply_message(reply_token, "操作をキャンセルしました。")
+                # 非同期関数を同期的に実行
+                loop = asyncio.get_event_loop()
+                loop.run_until_complete(send_reply_message(reply_token, "操作をキャンセルしました。"))
             return
         
         # 通常のメッセージ処理
-        await handle_message(event)
+        # 非同期関数を同期的に実行
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(handle_message(event))
             
     except Exception as e:
         logger.error(f"[handle_text_message] エラー: {str(e)}", exc_info=True)
         try:
-            await send_reply_message(reply_token, "申し訳ありません。エラーが発生しました。")
+            # 非同期関数を同期的に実行
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(send_reply_message(reply_token, "申し訳ありません。エラーが発生しました。"))
         except Exception as send_error:
             logger.error(f"[handle_text_message] エラーメッセージ送信失敗: {str(send_error)}", exc_info=True)
 
