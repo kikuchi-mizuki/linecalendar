@@ -1229,7 +1229,7 @@ def oauth2callback():
         # スコープを明示的に指定
         flow = Flow.from_client_secrets_file(
             'client_secret.json',
-            scopes=['https://www.googleapis.com/auth/calendar.readonly'],
+            scopes=['https://www.googleapis.com/auth/calendar'],
             redirect_uri=url_for('oauth2callback', _external=True)
         )
 
