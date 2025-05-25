@@ -748,21 +748,36 @@ async def callback():
             
             # イベントの解析を試みる
             try:
-                events = json.loads(body).get('events', [])
+                body_json = json.loads(body)
+                events = body_json.get('events', [])
                 logger.info(f"[callback] Parsed events: {events}")
             except json.JSONDecodeError as e:
                 logger.error(f"[callback] Failed to parse request body as JSON: {str(e)}")
                 logger.error(f"[callback] Request body: {body}")
                 abort(400)
             
+            # 署名の検証
+            try:
+                line_handler.verify_signature(body, signature)
+            except InvalidSignatureError as e:
+                logger.error(f"[callback] Invalid signature: {str(e)}")
+                logger.error(traceback.format_exc())
+                abort(400)
+            
             # イベントの処理
-            await line_handler.handle(body, signature)
+            for event in events:
+                if event['type'] == 'message' and event['message']['type'] == 'text':
+                    # テキストメッセージの場合、自前でhandle_messageを呼び出す
+                    from linebot.v3.webhooks.models import MessageEvent, TextMessageContent
+                    evt = MessageEvent.from_dict(event)
+                    logger.info(f"[callback] Calling handle_message for text message: {evt.message.text}")
+                    await handle_message(evt)
+                else:
+                    # その他のイベントはLINE SDKで処理
+                    line_handler.handle(body, signature)
+            
             logger.info("[callback] Successfully handled webhook request")
             
-        except InvalidSignatureError as e:
-            logger.error(f"[callback] Invalid signature: {str(e)}")
-            logger.error(traceback.format_exc())
-            abort(400)
         except Exception as e:
             logger.error(f"[callback] Error in line_handler.handle: {str(e)}")
             logger.error(traceback.format_exc())
