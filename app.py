@@ -730,10 +730,13 @@ def callback():
         # 署名の検証とイベントの処理
         try:
             logger.info("[callback] Starting to handle webhook request")
+            logger.info(f"[callback] Signature: {signature}")
+            logger.info(f"[callback] LINE_CHANNEL_SECRET: {LINE_CHANNEL_SECRET}")
             line_handler.handle(body, signature)
             logger.info("[callback] Successfully handled webhook request")
-        except InvalidSignatureError:
-            logger.error("[callback] Invalid signature")
+        except InvalidSignatureError as e:
+            logger.error(f"[callback] Invalid signature: {str(e)}")
+            logger.error(traceback.format_exc())
             abort(400)
         except Exception as e:
             logger.error(f"[callback] Error in line_handler.handle: {str(e)}")
