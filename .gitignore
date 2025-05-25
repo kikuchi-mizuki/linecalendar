@@ -24,7 +24,7 @@ nohup.out
 # Database files
 *.db
 instance/*.db
-calendar_bot.db
+instance/calendar.db
 
 # Log files
 nohup.out
