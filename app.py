@@ -758,56 +758,24 @@ def handle_message(event):
         
         logger.info(f"[handle_message] 受信メッセージ: user_id={user_id}, message={message_text}")
         
-        # ユーザーの認証情報を取得
-        credentials = get_user_credentials(user_id)
-        logger.info(f"[handle_message] credentials: {credentials}")
-        
-        if not credentials:
-            logger.warning(f"[handle_message] 認証情報が見つかりません: user_id={user_id}")
-            handle_unauthenticated_user(user_id, reply_token)
-            return
-        
-        # 保留中のイベントを取得
-        pending_event = get_pending_event(user_id)
-        logger.debug(f"[handle_message] pending_event: {pending_event}")
-        
-        # キャンセルパターンの確認
-        cancel_patterns = [
-            'いいえ', 'キャンセル', 'やめる', '中止', 'いらない', 'no', 'NO', 'No', 'cancel', 'CANCEL', 'Cancel'
-        ]
-        normalized_text = message_text.strip().lower() if message_text else ''
-        if pending_event and normalized_text in cancel_patterns:
-            clear_pending_event(user_id)
-            logger.info(f"[handle_message] 予定の追加をキャンセルしました: reply_token={reply_token}")
-            reply_text(reply_token, '予定の追加をキャンセルしました。')
-            return
-        
-        # 確認応答の処理
-        if is_confirmation_reply(message_text):
-            if pending_event:
-                op_type = pending_event.get('operation_type')
-                if op_type == 'add':
-                    add_event_from_pending(user_id, reply_token, pending_event)
-                    clear_pending_event(user_id)
-                    return
-                elif op_type == 'update':
-                    result_msg = handle_yes_response(user_id)
-                    clear_pending_event(user_id)
-                    reply_text(reply_token, result_msg)
-                    return
-        
-        # メッセージの解析と処理
-        result = parse_message(message_text)
-        if result:
-            handle_parsed_message(result, user_id, reply_token)
-        else:
-            reply_text(reply_token, "申し訳ありません。メッセージを理解できませんでした。\n予定の追加、確認、削除、更新のいずれかを指定してください。")
+        # 簡易的な応答メッセージを送信
+        line_bot_api.reply_message(
+            ReplyMessageRequest(
+                reply_token=reply_token,
+                messages=[TextMessage(text="✅ メッセージを受け取りました！")]
+            )
+        )
             
     except Exception as e:
         logger.error(f"[handle_message] エラー発生: {str(e)}")
         logger.error(f"[handle_message] エラーの詳細: {traceback.format_exc()}")
         try:
-            reply_text(reply_token, "申し訳ありません。メッセージの処理中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    reply_token=reply_token,
+                    messages=[TextMessage(text="申し訳ありません。メッセージの処理中にエラーが発生しました。")]
+                )
+            )
         except Exception as reply_error:
             logger.error(f"[handle_message] エラーメッセージ送信失敗: {str(reply_error)}")
 

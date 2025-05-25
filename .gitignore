@@ -29,3 +29,5 @@ calendar_bot.db
 # Log files
 nohup.out
 *.log
+*.db
+nohup.out
