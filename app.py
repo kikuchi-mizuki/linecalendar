@@ -1379,9 +1379,21 @@ async def handle_read_event(result, calendar_manager, user_id, reply_token):
             title=result.get('title')
         )
         
-        message = format_event_list(events, result['start_time'], result['end_time'])
+        # イベントの日時情報を正しく処理
+        formatted_events = []
+        for event in events:
+            start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date'))
+            end = event.get('end', {}).get('dateTime', event.get('end', {}).get('date'))
+            if start and end:
+                start_dt = datetime.fromisoformat(start.replace('Z', '+00:00')).astimezone(JST)
+                end_dt = datetime.fromisoformat(end.replace('Z', '+00:00')).astimezone(JST)
+                event['start']['dateTime'] = start_dt.isoformat()
+                event['end']['dateTime'] = end_dt.isoformat()
+            formatted_events.append(event)
+        
+        message = format_event_list(formatted_events, result['start_time'], result['end_time'])
         user_last_event_list[user_id] = {
-            'events': events,
+            'events': formatted_events,
             'start_time': result['start_time'],
             'end_time': result['end_time']
         }
