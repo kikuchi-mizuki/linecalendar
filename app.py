@@ -1,4 +1,6 @@
 import os
+os.makedirs('instance', exist_ok=True)
+
 import pytz
 JST = pytz.timezone('Asia/Tokyo')
 
