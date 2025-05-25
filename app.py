@@ -1495,10 +1495,10 @@ async def callback():
                         await handle_message(event)
                     else:
                         # その他のメッセージタイプの場合
-                        await line_handler.handle(body, signature)
+                        line_handler.handle(body, signature)
                 else:
                     # その他のイベントタイプの場合
-                    await line_handler.handle(body, signature)
+                    line_handler.handle(body, signature)
 
             logger.info("Webhook request processed successfully")
         except InvalidSignatureError:
