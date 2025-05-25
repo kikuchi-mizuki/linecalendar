@@ -33,3 +33,11 @@ nohup.out
 nohup.out
 *.db
 nohup.out
+
+# Database files
+*.db
+instance/*.db
+
+# Log files
+nohup.out
+*.log
