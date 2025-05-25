@@ -1609,5 +1609,36 @@ async def handle_message(event):
 # --- Google認証コールバック用エンドポイントを追加 ---
 @app.route('/oauth2callback', methods=['GET'])
 def oauth2callback():
-    # Google認証後の処理（仮実装）
-    return "Google認証コールバック成功"
+    try:
+        state = session.get('state')
+        flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
+            CLIENT_SECRETS_FILE,
+            scopes=SCOPES,
+            state=state
+        )
+        flow.redirect_uri = url_for('oauth2callback', _external=True)
+        authorization_response = request.url
+        flow.fetch_token(authorization_response=authorization_response)
+        credentials = flow.credentials
+
+        # ユーザーIDをセッションから取得
+        user_id = session.get('line_user_id')
+        if not user_id:
+            return "ユーザーIDが見つかりません", 400
+
+        # 認証情報をDBに保存
+        db_manager.save_google_credentials(user_id, {
+            'token': credentials.token,
+            'refresh_token': credentials.refresh_token,
+            'token_uri': credentials.token_uri,
+            'client_id': credentials.client_id,
+            'client_secret': credentials.client_secret,
+            'scopes': credentials.scopes,
+            'expires_at': credentials.expiry.timestamp() if credentials.expiry else None
+        })
+
+        return "Google認証が完了しました。LINEに戻って操作してください。"
+    except Exception as e:
+        logger.error(f"Google認証コールバックでエラー: {str(e)}")
+        logger.error(traceback.format_exc())
+        return "認証処理中にエラーが発生しました。"
