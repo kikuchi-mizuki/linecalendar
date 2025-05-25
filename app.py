@@ -1468,6 +1468,35 @@ async def handle_update_event(result, calendar_manager, user_id, reply_token):
         logger.error(traceback.format_exc())
         await reply_text(reply_token, "予定の更新中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
 
+@app.route('/callback', methods=['POST'])
+async def callback():
+    """
+    LINE Messaging APIからのwebhookを受け取るエンドポイント
+    """
+    try:
+        # リクエストヘッダーからX-Line-Signatureを取得
+        signature = request.headers['X-Line-Signature']
+        # リクエストボディを取得
+        body = request.get_data(as_text=True)
+        logger.info(f"Webhook request received: {body}")
+
+        try:
+            # 署名を検証し、問題なければhandleに定義されている関数を呼び出す
+            line_handler.handle(body, signature)
+        except InvalidSignatureError:
+            logger.error("Invalid signature. Please check your channel access token/channel secret.")
+            abort(400)
+        except Exception as e:
+            logger.error(f"Error in line_handler.handle: {str(e)}")
+            logger.error(traceback.format_exc())
+            abort(500)
+
+        return 'OK'
+    except Exception as e:
+        logger.error(f"Error in callback: {str(e)}")
+        logger.error(traceback.format_exc())
+        abort(500)
+
 if __name__ == "__main__":
     try:
         # アプリケーションの初期設定
