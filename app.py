@@ -813,22 +813,29 @@ def get_auth_url(user_id: str) -> str:
         # セッションの保存を確実に行う
         session.modified = True
         
+        # ワンタイムコードを生成しRedisに保存
+        code = generate_one_time_code()
+        save_one_time_code(code, user_id)
+        
         flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
             CLIENT_SECRETS_FILE,
             scopes=SCOPES
         )
-        flow.redirect_uri = url_for('oauth2callback', _external=True)  # '/oauth2callback' に統一
+        flow.redirect_uri = url_for('oauth2callback', _external=True)
         authorization_url, state = flow.authorization_url(
             access_type='offline',
             include_granted_scopes='true',
             prompt='consent'
         )
         
+        # 認証URLにワンタイムコードを付与
+        authorization_url += f"&code={code}"
+        
         # セッションにstateを保存
         session['state'] = state
         session.modified = True
         
-        logger.info(f"認証URLを生成: user_id={user_id}, state={state}")
+        logger.info(f"認証URLを生成: user_id={user_id}, state={state}, code={code}")
         
         return authorization_url
     except Exception as e:
