@@ -282,17 +282,28 @@ def init_session():
 # NGROK_URL = "https://3656-113-32-186-176.ngrok-free.app"
 
 # LINE Bot SDKの初期化
-access_token = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
-channel_secret = os.getenv('LINE_CHANNEL_SECRET')
-logger.info(f"LINE_CHANNEL_ACCESS_TOKEN: {access_token}")
-logger.info(f"LINE_CHANNEL_SECRET: {channel_secret}")
-if not access_token or not channel_secret:
-    logger.error("LINE_CHANNEL_ACCESS_TOKENまたはLINE_CHANNEL_SECRETが設定されていません。サーバーを停止します。")
-    sys.exit(1)
-configuration = Configuration(access_token=access_token)
-api_client = ApiClient(configuration)
-line_bot_api = MessagingApi(api_client)
-handler = WebhookHandler(channel_secret)
+LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
+LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
+STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY')
+STRIPE_PRICE_ID = os.getenv('STRIPE_PRICE_ID')
+STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET')
+REDIS_URL = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
+
+# 環境変数の検証
+if not LINE_CHANNEL_ACCESS_TOKEN:
+    raise ValueError("LINE_CHANNEL_ACCESS_TOKEN is not set")
+if not LINE_CHANNEL_SECRET:
+    raise ValueError("LINE_CHANNEL_SECRET is not set")
+if not STRIPE_SECRET_KEY:
+    raise ValueError("STRIPE_SECRET_KEY is not set")
+if not STRIPE_PRICE_ID:
+    raise ValueError("STRIPE_PRICE_ID is not set")
+if not STRIPE_WEBHOOK_SECRET:
+    raise ValueError("STRIPE_WEBHOOK_SECRET is not set")
+
+# LINE Bot APIの初期化
+line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
+line_handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
 db_manager = DatabaseManager()
 
@@ -701,7 +712,7 @@ def callback():
         logger.info(f"[callback] received body: {body}")
         logger.info("Webhookの処理を開始")
         # 署名の検証とイベントの処理
-        handler.handle(body, signature)
+        line_handler.handle(body, signature)
         logger.info("Webhookの処理が完了")
         return 'OK'
     except InvalidSignatureError:
