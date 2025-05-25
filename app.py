@@ -1483,23 +1483,9 @@ async def callback():
 
         try:
             # 署名を検証し、イベントを取得
-            events = line_handler.handle(body, signature)
-            logger.info(f"Parsed events: {events}")
-
-            # 各イベントを処理
-            for event in events:
-                if isinstance(event, MessageEvent):
-                    if isinstance(event.message, TextMessageContent):
-                        # テキストメッセージの場合
-                        await handle_message(event)
-                    else:
-                        # その他のメッセージタイプの場合
-                        logger.info(f"Unhandled message type: {type(event.message)}")
-                else:
-                    # その他のイベントタイプの場合
-                    logger.info(f"Unhandled event type: {type(event)}")
-
+            await line_handler.handle(body, signature)
             logger.info("Webhook request processed successfully")
+            return 'OK'
         except InvalidSignatureError:
             logger.error("Invalid signature. Please check your channel access token/channel secret.")
             abort(400)
@@ -1508,7 +1494,6 @@ async def callback():
             logger.error(traceback.format_exc())
             abort(500)
 
-        return 'OK'
     except Exception as e:
         logger.error(f"Error in callback: {str(e)}")
         logger.error(traceback.format_exc())
