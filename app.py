@@ -18,7 +18,7 @@ from linebot.v3 import WebhookHandler
 LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
 if not LINE_CHANNEL_SECRET:
     raise ValueError("LINE_CHANNEL_SECRET is not set")
-handler = WebhookHandler(LINE_CHANNEL_SECRET)
+line_handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
 # LINE Messaging APIクライアントの初期化
 from linebot.v3.messaging import Configuration, ApiClient, MessagingApi
@@ -317,7 +317,6 @@ if not STRIPE_WEBHOOK_SECRET:
 
 # LINE Messaging APIの初期化
 line_bot_api = LineBotApi(os.getenv('LINE_CHANNEL_ACCESS_TOKEN'))
-handler = WebhookHandler(os.getenv('LINE_CHANNEL_SECRET'))
 
 db_manager = DatabaseManager()
 
@@ -717,10 +716,10 @@ async def callback():
 
     try:
         # 署名を検証し、問題なければhandleに定義されている関数を呼び出す
-        if handler is None:
+        if line_handler is None:
             app.logger.error("LINE Messaging API handler is not initialized")
             abort(500)
-        await handler.handle(body, signature)
+        await line_handler.handle(body, signature)
     except InvalidSignatureError:
         # 署名検証で失敗したときは例外をあげる
         app.logger.error("Invalid signature")
