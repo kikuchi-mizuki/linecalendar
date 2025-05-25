@@ -697,7 +697,7 @@ def format_overlapping_events(events):
     return "\n".join(formatted_events)
 
 @app.route("/callback", methods=['POST'])
-def callback():
+async def callback():
     # X-Line-Signatureヘッダーの値を取得
     signature = request.headers['X-Line-Signature']
 
@@ -706,7 +706,7 @@ def callback():
     app.logger.info("Request body: " + body)
 
     try:
-        handler.handle(body, signature)
+        await handler.handle(body, signature)
     except InvalidSignatureError:
         abort(400)
 
@@ -715,11 +715,11 @@ def callback():
 @handler.add(MessageEvent, message=TextMessage)
 async def handle_text_message(event):
     try:
-        logger.info(f"[handle_text_message] メッセージ処理開始: type={event.type}, message={event.message.text}, userId={event.source.user_id}")
-        
         user_id = event.source.user_id
         message_text = event.message.text
         reply_token = event.reply_token
+        
+        logger.info(f"[handle_text_message] メッセージ受信: user_id={user_id}, message={message_text}")
         
         # ユーザーの認証情報を取得
         credentials = get_user_credentials(user_id)
