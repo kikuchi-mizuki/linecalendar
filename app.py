@@ -1669,26 +1669,44 @@ def oauth2callback():
         return "認証処理中にエラーが発生しました。"
 
 def format_event_list(events: List[Dict], start_time: datetime = None, end_time: datetime = None) -> str:
-    """イベント一覧をフォーマットしてテキストに変換する"""
+    """イベント一覧をカレンダー風テキストでフォーマット"""
     if not events:
+        if start_time and end_time and (end_time - start_time).days >= 1:
+            # 複数日分の場合
+            lines = []
+            current = start_time
+            while current <= end_time:
+                lines.append(f"📅 {current.strftime('%Y/%m/%d (%a)')}")
+                lines.append("予定はありません。\n")
+                current += timedelta(days=1)
+            return "\n".join(lines)
         return "予定は見つかりませんでした。"
 
-    lines = []
-    for i, event in enumerate(events, 1):
-        summary = event.get('summary', '（タイトルなし）')
-        start = event.get('start', {}).get('dateTime')
-        end = event.get('end', {}).get('dateTime')
-        if start and end:
-            start_dt = datetime.fromisoformat(start.replace('Z', '+00:00')).astimezone(JST)
-            end_dt = datetime.fromisoformat(end.replace('Z', '+00:00')).astimezone(JST)
-            lines.append(f"{i}. {summary} {start_dt.strftime('%H:%M')}〜{end_dt.strftime('%H:%M')}")
-        else:
-            lines.append(f"{i}. {summary}（終日）")
+    # 日付ごとにグループ化
+    events_by_date = {}
+    for event in events:
+        start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date'))
+        if start:
+            date = datetime.fromisoformat(start.replace('Z', '+00:00')).strftime('%Y/%m/%d (%a)')
+            if date not in events_by_date:
+                events_by_date[date] = []
+            events_by_date[date].append(event)
 
-    header = ""
-    if start_time:
-        header = start_time.strftime('%Y年%m月%d日') + "の予定:\n"
-    return header + "\n".join(lines)
+    lines = []
+    for date in sorted(events_by_date.keys()):
+        lines.append(f"📅 {date}")
+        for i, event in enumerate(events_by_date[date], 1):
+            summary = event.get('summary', '（タイトルなし）')
+            start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date'))
+            end = event.get('end', {}).get('dateTime', event.get('end', {}).get('date'))
+            if start and end:
+                start_dt = datetime.fromisoformat(start.replace('Z', '+00:00')).astimezone(JST)
+                end_dt = datetime.fromisoformat(end.replace('Z', '+00:00')).astimezone(JST)
+                lines.append(f"{i}. {summary} 🕒 {start_dt.strftime('%H:%M')}〜{end_dt.strftime('%H:%M')}")
+            else:
+                lines.append(f"{i}. {summary}（終日）")
+        lines.append("")
+    return "\n".join(lines)
 
 @app.route('/webhook/stripe', methods=['POST'])
 def stripe_webhook():
