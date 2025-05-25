@@ -304,9 +304,9 @@ if not STRIPE_PRICE_ID:
 if not STRIPE_WEBHOOK_SECRET:
     raise ValueError("STRIPE_WEBHOOK_SECRET is not set")
 
-# LINE Bot APIの初期化
-line_bot_api = LineBotApi(LINE_CHANNEL_ACCESS_TOKEN)
-line_handler = WebhookHandler(LINE_CHANNEL_SECRET)
+# LINE Messaging APIの初期化
+line_bot_api = LineBotApi(os.getenv('LINE_CHANNEL_ACCESS_TOKEN'))
+handler = WebhookHandler(os.getenv('LINE_CHANNEL_SECRET'))
 
 db_manager = DatabaseManager()
 
@@ -703,17 +703,12 @@ def callback():
 
     # リクエストボディを取得
     body = request.get_data(as_text=True)
-    logger.info(f"[callback] received body: {body}")
+    app.logger.info("Request body: " + body)
 
     try:
-        logger.info("Webhookの処理を開始")
-        # 署名を検証し、問題なければhandleに定義されている関数を呼び出す
-        line_handler.handle(body, signature)
-        logger.info("Webhookの処理が完了")
-    except Exception as e:
-        logger.error(f"Webhookの処理中にエラーが発生: {str(e)}")
-        logger.error(f"エラーの詳細: {traceback.format_exc()}")
-        return 'Error', 500
+        handler.handle(body, signature)
+    except InvalidSignatureError:
+        abort(400)
 
     return 'OK'
 
@@ -2035,7 +2030,7 @@ def test_redis_write():
         }), 500
 
 # handlerの登録部分でasync対応
-@line_handler.add(MessageEvent, message=TextMessage)
+@handler.add(MessageEvent, message=TextMessage)
 async def handle_message(event):
     """
     メッセージを処理する非同期関数
@@ -2100,27 +2095,27 @@ async def handle_message(event):
         except Exception as reply_error:
             logger.error(f"[handle_message] エラーメッセージ送信失敗: {str(reply_error)}")
 
-@line_handler.add(FollowEvent)
+@handler.add(FollowEvent)
 def handle_follow(event):
     # フォローイベントの処理
     pass
 
-@line_handler.add(UnfollowEvent)
+@handler.add(UnfollowEvent)
 def handle_unfollow(event):
     # アンフォローイベントの処理
     pass
 
-@line_handler.add(JoinEvent)
+@handler.add(JoinEvent)
 def handle_join(event):
     # グループ参加イベントの処理
     pass
 
-@line_handler.add(LeaveEvent)
+@handler.add(LeaveEvent)
 def handle_leave(event):
     # グループ退出イベントの処理
     pass
 
-@line_handler.add(PostbackEvent)
+@handler.add(PostbackEvent)
 def handle_postback(event):
     # ポストバックイベントの処理
     pass
