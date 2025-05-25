@@ -732,8 +732,20 @@ def callback():
             logger.info("[callback] Starting to handle webhook request")
             logger.info(f"[callback] Signature: {signature}")
             logger.info(f"[callback] LINE_CHANNEL_SECRET: {LINE_CHANNEL_SECRET}")
+            
+            # イベントの解析を試みる
+            try:
+                events = json.loads(body).get('events', [])
+                logger.info(f"[callback] Parsed events: {events}")
+            except json.JSONDecodeError as e:
+                logger.error(f"[callback] Failed to parse request body as JSON: {str(e)}")
+                logger.error(f"[callback] Request body: {body}")
+                abort(400)
+            
+            # イベントの処理
             line_handler.handle(body, signature)
             logger.info("[callback] Successfully handled webhook request")
+            
         except InvalidSignatureError as e:
             logger.error(f"[callback] Invalid signature: {str(e)}")
             logger.error(traceback.format_exc())
@@ -752,27 +764,29 @@ def callback():
 
 @line_handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
+    """
+    LINE Messaging APIからのメッセージイベントを処理する
+    """
     try:
-        user_id = event.source.user_id
-        message_text = event.message.text
-        reply_token = event.reply_token
-        logger.info(f"[handle_message] 受信メッセージ: {message_text}（user_id={user_id}）")
-        logger.info(f"[handle_message] reply_token: {reply_token}")
+        # イベントループを取得
+        loop = asyncio.get_event_loop()
         
-        line_bot_api.reply_message(
-            ReplyMessageRequest(
-                reply_token=reply_token,
-                messages=[TextMessage(text="✅ 受け取ったよ！")]
-            )
-        )
-        logger.info("[handle_message] 応答メッセージを送信しました")
+        # イベントループの状態に応じて非同期関数を実行
+        if loop.is_running():
+            # イベントループが実行中の場合は、新しいタスクとして実行
+            asyncio.ensure_future(handle_text_message(event))
+        else:
+            # イベントループが実行されていない場合は、同期的に実行
+            loop.run_until_complete(handle_text_message(event))
+            
     except Exception as e:
         logger.error(f"[handle_message] エラーが発生しました: {str(e)}")
         logger.error(traceback.format_exc())
         try:
+            # エラー通知を送信
             line_bot_api.reply_message(
                 ReplyMessageRequest(
-                    reply_token=reply_token,
+                    reply_token=event.reply_token,
                     messages=[TextMessage(text="申し訳ありません。エラーが発生しました。")]
                 )
             )
