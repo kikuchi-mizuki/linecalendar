@@ -1360,6 +1360,20 @@ async def handle_add_event(result, calendar_manager, user_id, reply_token):
             msg = f"✅ 予定を追加しました：\n{result['title']}\n{result['start_time'].strftime('%m月%d日 %H:%M')}～{result['end_time'].strftime('%H:%M')}\n\n" + format_event_list(events, day, day_end)
             await reply_text(reply_token, msg)
         else:
+            # 重複時はpending_eventsに保存
+            if add_result.get('error') == 'duplicate':
+                pending_event = {
+                    'operation_type': 'add',
+                    'title': result['title'],
+                    'start_time': result['start_time'].isoformat(),
+                    'end_time': result['end_time'].isoformat(),
+                    'location': result.get('location'),
+                    'person': result.get('person'),
+                    'description': result.get('description'),
+                    'recurrence': result.get('recurrence'),
+                    'force_add': True
+                }
+                db_manager.save_pending_event(user_id, pending_event)
             await reply_text(reply_token, f"予定の追加に失敗しました: {add_result.get('message', '不明なエラー')}")
     except Exception as e:
         logger.error(f"予定の追加中にエラーが発生: {str(e)}")
@@ -1555,14 +1569,14 @@ async def handle_message(event):
     """
     try:
         user_id = event.source.user_id
-        message = event.message.text
+        message = event.message.text.strip()
         reply_token = event.reply_token
 
         if not reply_token:
             logger.warning("reply_tokenがありません。返信できません。")
             return
 
-        # ★ ここでサブスクリプション確認を先に行う
+        # サブスクリプション確認
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('SELECT subscription_status FROM users WHERE user_id = ?', (user_id,))
@@ -1577,7 +1591,34 @@ async def handle_message(event):
             await reply_text(reply_token, msg)
             return
 
-        # メッセージを解析
+        # 「はい」返答時のpendingイベント強制追加対応
+        if message in ["はい", "はい。", "追加して", "追加", "OK", "ok", "Yes", "yes"]:
+            pending_event = db_manager.get_pending_event(user_id)
+            if pending_event and pending_event.get('operation_type') == 'add':
+                # 予定追加を強制実行
+                calendar_manager = get_calendar_manager(user_id)
+                add_result = await calendar_manager.add_event(
+                    title=pending_event['title'],
+                    start_time=datetime.fromisoformat(pending_event['start_time']),
+                    end_time=datetime.fromisoformat(pending_event['end_time']),
+                    location=pending_event.get('location'),
+                    person=pending_event.get('person'),
+                    description=pending_event.get('description'),
+                    recurrence=pending_event.get('recurrence'),
+                    skip_overlap_check=True
+                )
+                db_manager.clear_pending_event(user_id)
+                if add_result['success']:
+                    day = datetime.fromisoformat(pending_event['start_time']).replace(hour=0, minute=0, second=0, microsecond=0)
+                    day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
+                    events = await calendar_manager.get_events(start_time=day, end_time=day_end)
+                    msg = f"✅ 予定を追加しました：\n{pending_event['title']}\n{day.strftime('%m月%d日 %H:%M')}～{datetime.fromisoformat(pending_event['end_time']).strftime('%H:%M')}\n\n" + format_event_list(events, day, day_end)
+                    await reply_text(reply_token, msg)
+                else:
+                    await reply_text(reply_token, f"予定の追加に失敗しました: {add_result.get('message', '不明なエラー')}")
+                return
+
+        # 通常のメッセージ解析
         result = parse_message(message)
         if not result:
             await reply_text(reply_token, "申し訳ありません。メッセージを理解できませんでした。\n予定の追加、確認、削除、更新のいずれかの操作を指定してください。")
