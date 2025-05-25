@@ -14,12 +14,12 @@ from dotenv import load_dotenv
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
 
 # LINE Messaging APIのハンドラーを初期化
-from linebot.v3 import WebhookHandler
+from linebot.v3.webhooks import WebhookParser
 from linebot.v3.webhooks import MessageEvent, TextMessageContent, FollowEvent, UnfollowEvent, JoinEvent, LeaveEvent, PostbackEvent
 LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
 if not LINE_CHANNEL_SECRET:
     raise ValueError("LINE_CHANNEL_SECRET is not set")
-line_handler = WebhookHandler(LINE_CHANNEL_SECRET)
+parser = WebhookParser(LINE_CHANNEL_SECRET)
 
 # LINE Messaging APIクライアントの初期化
 from linebot.v3.messaging import Configuration, ApiClient, MessagingApi
@@ -1470,7 +1470,7 @@ async def handle_update_event(result, calendar_manager, user_id, reply_token):
         await reply_text(reply_token, "予定の更新中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
 
 @app.route('/callback', methods=['POST'])
-async def callback():
+def callback():
     """
     LINE Messaging APIからのwebhookを受け取るエンドポイント
     """
@@ -1483,14 +1483,33 @@ async def callback():
 
         try:
             # 署名を検証し、イベントを取得
-            line_handler.handle(body, signature)
+            events = parser.parse(body, signature)
+            logger.info(f"Parsed events: {events}")
+
+            # イベントの種類に応じて処理
+            for event in events:
+                if isinstance(event, MessageEvent) and isinstance(event.message, TextMessageContent):
+                    asyncio.run(handle_message(event))
+                elif isinstance(event, FollowEvent):
+                    asyncio.run(handle_follow(event))
+                elif isinstance(event, UnfollowEvent):
+                    asyncio.run(handle_unfollow(event))
+                elif isinstance(event, JoinEvent):
+                    asyncio.run(handle_join(event))
+                elif isinstance(event, LeaveEvent):
+                    asyncio.run(handle_leave(event))
+                elif isinstance(event, PostbackEvent):
+                    asyncio.run(handle_postback(event))
+                else:
+                    logger.info(f"Unhandled event type: {type(event)}")
+
             logger.info("Webhook request processed successfully")
             return 'OK'
         except InvalidSignatureError:
             logger.error("Invalid signature. Please check your channel access token/channel secret.")
             abort(400)
         except Exception as e:
-            logger.error(f"Error in line_handler.handle: {str(e)}")
+            logger.error(f"Error in parsing events: {str(e)}")
             logger.error(traceback.format_exc())
             abort(500)
 
