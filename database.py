@@ -351,9 +351,55 @@ class DatabaseManager:
                 'last_operation': None
             } 
 
+    def get_user_credentials(self, user_id: str) -> dict:
+        """Google認証情報を取得"""
+        try:
+            # user_idがbytes型ならstrに変換
+            if isinstance(user_id, bytes):
+                user_id = user_id.decode()
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT user_id, token, refresh_token, token_uri, client_id, client_secret, scopes, expires_at
+                    FROM google_credentials
+                    WHERE user_id = ?
+                ''', (user_id,))
+                row = cursor.fetchone()
+                logger.info(f"[get_user_credentials] user_id={user_id}, row={row}")
+                if row:
+                    expires_at = None
+                    if row[7]:
+                        dt = datetime.fromisoformat(row[7])
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=timezone.utc)
+                        expires_at = dt.timestamp()
+                    db_user_id = row[0]
+                    if isinstance(db_user_id, bytes):
+                        db_user_id = db_user_id.decode()
+                    result = {
+                        'user_id': db_user_id,
+                        'token': row[1],
+                        'refresh_token': row[2],
+                        'token_uri': row[3].replace(';', ''),
+                        'client_id': row[4],
+                        'client_secret': row[5],
+                        'scopes': json.loads(row[6].replace(';', '')),
+                        'expires_at': expires_at
+                    }
+                    logger.info(f"[get_user_credentials] result for user_id={db_user_id}: {result}")
+                    return result
+                logger.warning(f"[get_user_credentials] 認証情報が見つかりません: user_id={user_id}")
+                return None
+        except Exception as e:
+            logger.error(f"[get_user_credentials] Google認証情報の取得に失敗: user_id={user_id}, error={str(e)}")
+            return None
+
     def save_google_credentials(self, user_id: str, credentials: dict):
         """Google認証情報を保存"""
         try:
+            # user_idがbytes型ならstrに変換
+            if isinstance(user_id, bytes):
+                user_id = user_id.decode()
             abs_path = os.path.abspath(self.db_path)
             can_write = os.access(abs_path, os.W_OK)
             logger.info(f"[save_google_credentials] DBファイル: {abs_path}, 書き込み可: {can_write}")
@@ -383,7 +429,6 @@ class DatabaseManager:
                         if dt.tzinfo is None:
                             dt = dt.replace(tzinfo=timezone.utc)
                     expires_at_str = dt.isoformat()
-                # scopesはjson.dumpsで保存
                 scopes = credentials['scopes']
                 if not isinstance(scopes, str):
                     scopes = json.dumps(scopes)
@@ -412,50 +457,12 @@ class DatabaseManager:
             logger.error(traceback.format_exc())
             raise
 
-    def get_user_credentials(self, user_id: str) -> dict:
-        """Google認証情報を取得"""
-        try:
-            with sqlite3.connect(self.db_path) as conn:
-                cursor = conn.cursor()
-                cursor.execute('''
-                    SELECT user_id, token, refresh_token, token_uri, client_id, client_secret, scopes, expires_at
-                    FROM google_credentials
-                    WHERE user_id = ?
-                ''', (user_id,))
-                row = cursor.fetchone()
-                logger.info(f"[get_user_credentials] user_id={user_id}, row={row}")
-                if row:
-                    expires_at = None
-                    if row[7]:
-                        dt = datetime.fromisoformat(row[7])
-                        if dt.tzinfo is None:
-                            dt = dt.replace(tzinfo=timezone.utc)
-                        expires_at = dt.timestamp()
-                    # user_idをstrで返す
-                    db_user_id = row[0]
-                    if isinstance(db_user_id, bytes):
-                        db_user_id = db_user_id.decode()
-                    result = {
-                        'user_id': db_user_id,
-                        'token': row[1],
-                        'refresh_token': row[2],
-                        'token_uri': row[3].replace(';', ''),
-                        'client_id': row[4],
-                        'client_secret': row[5],
-                        'scopes': json.loads(row[6].replace(';', '')),
-                        'expires_at': expires_at
-                    }
-                    logger.info(f"[get_user_credentials] result for user_id={db_user_id}: {result}")
-                    return result
-                logger.warning(f"[get_user_credentials] 認証情報が見つかりません: user_id={user_id}")
-                return None
-        except Exception as e:
-            logger.error(f"[get_user_credentials] Google認証情報の取得に失敗: user_id={user_id}, error={str(e)}")
-            return None
-
     def delete_google_credentials(self, user_id: str):
         """Google認証情報を削除"""
         try:
+            # user_idがbytes型ならstrに変換
+            if isinstance(user_id, bytes):
+                user_id = user_id.decode()
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute('DELETE FROM google_credentials WHERE user_id = ?', (user_id,))
