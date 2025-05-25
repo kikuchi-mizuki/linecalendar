@@ -3,6 +3,8 @@ import logging
 from datetime import datetime, timezone
 from typing import List, Dict, Optional, Tuple
 import json
+import os
+import traceback
 
 # ログ設定
 logger = logging.getLogger(__name__)
@@ -19,6 +21,13 @@ class DatabaseManager:
             db_path (str): データベースファイルのパス
         """
         self.db_path = db_path
+        abs_path = os.path.abspath(self.db_path)
+        can_write = os.access(abs_path, os.W_OK)
+        logger.info(f"[DatabaseManager] DBファイル: {abs_path}, 書き込み可: {can_write}")
+        if not os.path.exists(abs_path):
+            logger.warning(f"[DatabaseManager] DBファイルが存在しません: {abs_path}")
+        elif not can_write:
+            logger.error(f"[DatabaseManager] DBファイルが書き込み不可: {abs_path}")
         self._initialize_database()
         
     def _initialize_database(self):
@@ -376,9 +385,14 @@ class DatabaseManager:
                     expires_at_str
                 ))
                 conn.commit()
+                logger.info(f"[save_google_credentials] commit完了。rowcount={cursor.rowcount}")
+                cursor.execute('SELECT * FROM google_credentials WHERE user_id = ?', (user_id,))
+                saved_row = cursor.fetchone()
+                logger.info(f"[save_google_credentials] 保存後の行: {saved_row}")
                 logger.info(f"Google認証情報を保存しました: {user_id}")
         except Exception as e:
             logger.error(f"[save_google_credentials] Google認証情報の保存に失敗: user_id={user_id}, error={str(e)}")
+            logger.error(traceback.format_exc())
             raise
 
     def get_user_credentials(self, user_id: str) -> dict:
