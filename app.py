@@ -790,56 +790,27 @@ def get_user_credentials(user_id: str) -> Optional[google.oauth2.credentials.Cre
 
 def get_auth_url(user_id: str) -> str:
     """
-    認証URLを生成する
-    
+    ワンタイムコードを生成し、保存して返す（認証URLは返さない）
     Args:
         user_id (str): ユーザーID
-        
     Returns:
-        str: 認証URL
+        str: ワンタイムコード
     """
     try:
-        # 既存の認証情報を削除
         db_manager.delete_google_credentials(user_id)
-        
-        # セッションの初期化
         session.clear()
         session['line_user_id'] = user_id
         session['auth_start_time'] = time.time()
         session['last_activity'] = time.time()
         session['auth_state'] = 'started'
         session.permanent = True
-        
-        # セッションの保存を確実に行う
         session.modified = True
-        
-        # ワンタイムコードを生成しRedisに保存
         code = generate_one_time_code()
         save_one_time_code(code, user_id)
-        
-        flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
-            CLIENT_SECRETS_FILE,
-            scopes=SCOPES
-        )
-        flow.redirect_uri = url_for('oauth2callback', _external=True)
-        authorization_url, state = flow.authorization_url(
-            access_type='offline',
-            include_granted_scopes='true',
-            prompt='consent'
-        )
-        
-        # 認証URLにワンタイムコードを付与
-        authorization_url += f"&code={code}"
-        
-        # セッションにstateを保存
-        session['state'] = state
-        session.modified = True
-        
-        logger.info(f"認証URLを生成: user_id={user_id}, state={state}, code={code}")
-        
-        return authorization_url
+        logger.info(f"ワンタイムコードを生成: user_id={user_id}, code={code}")
+        return code
     except Exception as e:
-        logger.error(f"認証URLの生成中にエラーが発生: {str(e)}")
+        logger.error(f"ワンタイムコード生成中にエラー: {str(e)}")
         logger.error(traceback.format_exc())
         return ""
 
@@ -1588,14 +1559,11 @@ async def handle_message(event):
             calendar_manager = get_calendar_manager(user_id)
         except ValueError as e:
             if "Google認証情報が見つかりません" in str(e):
-                auth_url = get_auth_url(user_id)
-                await reply_text(reply_token, 
-                    "はじめまして！LINEカレンダーをご利用いただきありがとうございます。\n"
-                    "カレンダーを利用するには、Googleアカウントとの連携が必要です。\n"
-                    "以下のURLから認証を行ってください：\n"
-                    f"{auth_url}\n\n"
-                    "※認証後は、LINEに戻って予定の確認や追加ができるようになります。"
-                )
+                code = get_auth_url(user_id)
+                login_url = f"{os.getenv('BASE_URL', 'https://linecalendar-production.up.railway.app')}/onetimelogin"
+                msg1 = f"はじめまして！LINEカレンダーをご利用いただきありがとうございます。\nカレンダーを利用するには、Googleアカウントとの連携が必要です。\n\nあなたのワンタイムコードは【{code}】です。"
+                msg2 = f"下記のURLから認証ページにアクセスし、ワンタイムコードを入力してください：\n{login_url}\n\n※認証後は、LINEに戻って予定の確認や追加ができるようになります。"
+                await reply_text(reply_token, [msg1, msg2])
             else:
                 await reply_text(reply_token, "申し訳ありません。エラーが発生しました。\nしばらく時間をおいて再度お試しください。")
             return
