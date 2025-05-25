@@ -706,9 +706,13 @@ async def callback():
 
     try:
         # 署名を検証し、問題なければhandleに定義されている関数を呼び出す
+        if handler is None:
+            app.logger.error("LINE Messaging API handler is not initialized")
+            abort(500)
         await handler.handle(body, signature)
     except InvalidSignatureError:
         # 署名検証で失敗したときは例外をあげる
+        app.logger.error("Invalid signature")
         abort(400)
     except Exception as e:
         app.logger.error(f"Error in callback: {str(e)}")

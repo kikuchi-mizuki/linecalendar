@@ -1,1 +1,1 @@
-web: gunicorn app:app --worker-class aiohttp.worker.GunicornWebWorker --bind 0.0.0.0:$PORT --timeout 120 
+web: gunicorn app:app --worker-class aiohttp.worker.GunicornWebWorker --bind 0.0.0.0:$PORT --timeout 120 --workers 4 --threads 4 
