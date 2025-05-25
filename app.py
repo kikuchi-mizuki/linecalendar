@@ -758,8 +758,11 @@ async def callback():
             
             # 署名の検証
             try:
-                line_handler.verify_signature(body, signature)
-            except InvalidSignatureError as e:
+                # LINE Messaging API v3での署名検証
+                from linebot.v3.webhooks import WebhookParser
+                parser = WebhookParser(LINE_CHANNEL_SECRET)
+                parser.parse(body, signature)
+            except Exception as e:
                 logger.error(f"[callback] Invalid signature: {str(e)}")
                 logger.error(traceback.format_exc())
                 abort(400)
