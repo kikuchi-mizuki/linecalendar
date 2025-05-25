@@ -712,6 +712,7 @@ def get_user_credentials(user_id: str) -> Optional[google.oauth2.credentials.Cre
     try:
         # データベースから認証情報を取得
         credentials_dict = db_manager.get_user_credentials(user_id)
+        logger.debug(f"[get_user_credentials] credentials_dict: {credentials_dict}")
         if not credentials_dict:
             logger.warning(f"認証情報が見つかりません: user_id={user_id}")
             return None
@@ -1612,9 +1613,15 @@ def oauth2callback():
                     # ワンタイムコードを削除
                     redis_client.delete(f"one_time_code:{code}")
         if not user_id:
+            logger.error("[oauth2callback] user_idが見つかりません")
             return "ユーザーIDが見つかりません", 400
 
-        # セミコロンや空白を除去したスコープリストを作成
+        # expires_atの安全な保存
+        logger.debug(f"[oauth2callback] expiry: {credentials.expiry}")
+        expires_at = credentials.expiry.timestamp() if credentials.expiry else (time.time() + 3600)
+        logger.debug(f"[oauth2callback] expires_at: {expires_at}")
+
+        # スコープの整形
         scopes_cleaned = [s.strip().replace(';', '') for s in credentials.scopes]
 
         # 認証情報をDBに保存
@@ -1625,8 +1632,15 @@ def oauth2callback():
             'client_id': credentials.client_id,
             'client_secret': credentials.client_secret,
             'scopes': scopes_cleaned,
-            'expires_at': credentials.expiry.timestamp() if credentials.expiry else None
+            'expires_at': expires_at
         })
+        logger.info(f"認証情報を保存しました: user_id={user_id}, expires_at={credentials.expiry}, refresh_token={credentials.refresh_token}, scopes={scopes_cleaned}")
+
+        # 保存直後にget_user_credentialsで取得できるかチェック
+        cred_check = get_user_credentials(user_id)
+        logger.info(f"[oauth2callback後チェック] 認証情報取得できたか: {cred_check is not None}")
+        if cred_check:
+            logger.debug(f"[oauth2callback後チェック] cred_check内容: {cred_check}")
 
         return "Google認証が完了しました。LINEに戻って操作してください。"
     except Exception as e:
