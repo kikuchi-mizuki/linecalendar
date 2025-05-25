@@ -1147,12 +1147,17 @@ def send_one_time_code(user_id):
     save_one_time_code(code, user_id)
     log_all_one_time_codes()  # 本番でもログは残す
     message = f"Googleカレンダー連携用ワンタイムコード: {code}\nhttps://linecalendar-production.up.railway.app/onetimelogin"
-    line_bot_api.push_message(
-        PushMessageRequest(
-            to=user_id,
-            messages=[TextMessage(text=message)]
+    try:
+        line_bot_api.push_message(
+            PushMessageRequest(
+                to=user_id,
+                messages=[TextMessage(text=message)]
+            )
         )
-    )
+        logger.info(f"[send_one_time_code] push_message sent to {user_id} with code {code}")
+    except Exception as e:
+        logger.error(f"[send_one_time_code] LINE push_message error: {e}")
+        logger.error(traceback.format_exc())
 
 # ワンタイムコード削除時
 
