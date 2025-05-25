@@ -817,7 +817,7 @@ def get_auth_url(user_id: str) -> str:
             CLIENT_SECRETS_FILE,
             scopes=SCOPES
         )
-        flow.redirect_uri = url_for('callback', _external=True)  # 'oauth2callback' から 'callback' に変更
+        flow.redirect_uri = url_for('oauth2callback', _external=True)  # '/oauth2callback' に統一
         authorization_url, state = flow.authorization_url(
             access_type='offline',
             include_granted_scopes='true',
@@ -1605,3 +1605,9 @@ async def handle_message(event):
         except Exception as reply_error:
             logger.error(f"エラーメッセージの送信にも失敗: {str(reply_error)}")
             logger.error(traceback.format_exc())
+
+# --- Google認証コールバック用エンドポイントを追加 ---
+@app.route('/oauth2callback', methods=['GET'])
+def oauth2callback():
+    # Google認証後の処理（仮実装）
+    return "Google認証コールバック成功"
