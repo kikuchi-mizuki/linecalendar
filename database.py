@@ -354,6 +354,13 @@ class DatabaseManager:
     def save_google_credentials(self, user_id: str, credentials: dict):
         """Google認証情報を保存"""
         try:
+            abs_path = os.path.abspath(self.db_path)
+            can_write = os.access(abs_path, os.W_OK)
+            logger.info(f"[save_google_credentials] DBファイル: {abs_path}, 書き込み可: {can_write}")
+            if not os.path.exists(abs_path):
+                logger.warning(f"[save_google_credentials] DBファイルが存在しません: {abs_path}")
+            elif not can_write:
+                logger.error(f"[save_google_credentials] DBファイルが書き込み不可: {abs_path}")
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute('INSERT OR IGNORE INTO users (user_id) VALUES (?)', (user_id,))
