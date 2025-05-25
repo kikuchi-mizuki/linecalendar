@@ -20,3 +20,12 @@ bfg.jar
 instance/*.db
 # ログファイル
 nohup.out
+
+# Database files
+*.db
+instance/*.db
+calendar_bot.db
+
+# Log files
+nohup.out
+*.log

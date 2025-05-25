@@ -380,6 +380,7 @@ async def handle_text_message(event):
         
         # Google認証情報を取得
         credentials = get_user_credentials(user_id)
+        logger.debug(f"[handle_text_message] credentials: {credentials}")
         if not credentials:
             logger.warning(f"認証情報が見つかりません: user_id={user_id}")
             handle_unauthenticated_user(user_id, reply_token)
@@ -890,14 +891,17 @@ async def handle_message(event):
             logger.error("reply_tokenが取得できません")
             return
 
-        # 追加: pending_eventが存在する場合は重複登録を防止
-        if get_pending_event(user_id):
-            logger.info(f"[handle_message][pending_event exists] user_id={user_id}, pending_event={get_pending_event(user_id)}")
+        # 追加: pending
+        pending_event = get_pending_event(user_id)
+        logger.debug(f"[handle_message] pending_event: {pending_event}")
+        if pending_event:
+            logger.info(f"[handle_message][pending_event exists] user_id={user_id}, pending_event={pending_event}")
             return
 
         # ユーザーの認証情報を取得
         try:
             credentials = get_user_credentials(user_id)
+            logger.debug(f"[handle_message] credentials: {credentials}")
             if not credentials:
                 # 認証情報が無効な場合は再認証を促す
                 logger.debug(f"[handle_message] 認証情報が見つかりません: user_id={user_id}")
@@ -915,6 +919,7 @@ async def handle_message(event):
         logger.debug(f"[handle_message] 解析結果: {result}")
         
         if result:
+            logger.debug(f"[handle_message] 解析されたメッセージを処理: {result}")
             await handle_parsed_message(result, user_id, reply_token)
         else:
             logger.debug(f"[handle_message] メッセージの解析に失敗: {message}")
@@ -923,8 +928,10 @@ async def handle_message(event):
     except Exception as e:
         logger.error(f"メッセージ処理中にエラーが発生: {str(e)}")
         logger.error(traceback.format_exc())
-        if reply_token:
-            await reply_text(reply_token, "申し訳ありません。エラーが発生しました。\nしばらく時間をおいて再度お試しください。")
+        try:
+            await reply_text(reply_token, "申し訳ありません。メッセージの処理中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
+        except Exception as reply_error:
+            logger.error(f"エラーメッセージの送信に失敗: {str(reply_error)}")
 
 @app.route('/webhook', methods=['POST'])
 def stripe_webhook():

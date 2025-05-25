@@ -135,11 +135,11 @@ class CalendarChat:
             end = event['end'].get('dateTime', event['end'].get('date'))
             # 型チェック追加
             if isinstance(start, str):
-            start_dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
+                start_dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
             else:
                 start_dt = start
             if isinstance(end, str):
-            end_dt = datetime.fromisoformat(end.replace('Z', '+00:00'))
+                end_dt = datetime.fromisoformat(end.replace('Z', '+00:00'))
             else:
                 end_dt = end
             start_dt = start_dt.astimezone(self.timezone)
@@ -210,9 +210,9 @@ class CalendarChat:
                 if event_start and event_end:
                     # 型チェック追加
                     if isinstance(event_start, str):
-                    event_start = datetime.fromisoformat(event_start.replace('Z', '+00:00'))
+                        event_start = datetime.fromisoformat(event_start.replace('Z', '+00:00'))
                     if isinstance(event_end, str):
-                    event_end = datetime.fromisoformat(event_end.replace('Z', '+00:00'))
+                        event_end = datetime.fromisoformat(event_end.replace('Z', '+00:00'))
                     event_start = event_start.astimezone(self.timezone)
                     event_end = event_end.astimezone(self.timezone)
                     if (event_start < end_time and event_end > start_time and event_start != end_time and event_end != start_time):
@@ -663,87 +663,66 @@ class CalendarChat:
 
     def update_event_duration(self, target_date, title_keyword, duration_minutes):
         """
-        指定された予定の時間の長さを変更する
+        指定された日付とタイトルの予定の時間を更新する
         
         Args:
-            target_date (datetime): 対象の日時
-            title_keyword (str): 予定のタイトルのキーワード
-            duration_minutes (int): 新しい予定の長さ（分）
+            target_date (datetime): 対象の日付
+            title_keyword (str): 予定のタイトル（部分一致）
+            duration_minutes (int): 新しい時間（分）
             
         Returns:
-            tuple: (成功したかどうか, メッセージ)
+            tuple[bool, str]: (成功したかどうか, メッセージ)
         """
         try:
-            logger.info(f"Searching for events - Date: {target_date}, Title: {title_keyword}")
-            
-            # タイムゾーンを日本時間に設定
-            jst = timezone(timedelta(hours=9))
+            # タイムゾーンの設定
             if target_date.tzinfo is None:
-                target_date = target_date.replace(tzinfo=jst)
+                target_date = self.timezone.localize(target_date)
             
             # 指定された日付の予定を取得
-            search_start = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
-            search_end = target_date.replace(hour=23, minute=59, second=59, microsecond=999999)
+            start_of_day = target_date.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_of_day = start_of_day + timedelta(days=1)
+            events = self.get_events(time_min=start_of_day, time_max=end_of_day)
             
-            events_result = self.service.events().list(
-                calendarId='mmms.dy.23@gmail.com',
-                timeMin=search_start.isoformat(),
-                timeMax=search_end.isoformat(),
-                singleEvents=True,
-                orderBy='startTime',
-                timeZone='Asia/Tokyo'
-            ).execute()
-            
-            events = events_result.get('items', [])
-            logger.info(f"Found {len(events)} events for the day")
-            
-            # タイトルキーワードで予定を絞り込む
-            matched_events = []
+            # タイトルでフィルタリング
+            matching_events = []
             for event in events:
-                event_start = parser.parse(event['start'].get('dateTime'))
-                if title_keyword in event.get('summary', '') and abs((event_start - target_date).total_seconds()) <= 3600:
-                    matched_events.append(event)
+                if title_keyword in event.get('summary', ''):
+                    matching_events.append(event)
             
-            if not matched_events:
-                return False, f"{target_date.strftime('%m/%d %H:%M')}の「{title_keyword}」という予定は見つかりませんでした。"
+            if not matching_events:
+                return False, f"指定された日時（{target_date.strftime('%Y年%m月%d日 %H:%M')}）の予定が見つかりませんでした。"
             
-            if len(matched_events) > 1:
-                event_list = "\n".join([
-                    f"{i+1}. {event.get('summary')} ({self._format_event_time(event)})"
-                    for i, event in enumerate(matched_events)
-                ])
-                return False, f"複数の予定が見つかりました。番号を指定して変更してください：\n{event_list}"
+            # 最も近い時間の予定を選択
+            target_time = target_date.time()
+            closest_event = min(matching_events, key=lambda e: abs(
+                datetime.fromisoformat(e['start'].get('dateTime', e['start'].get('date')).replace('Z', '+00:00')).time() - target_time
+            ))
             
-            target_event = matched_events[0]
-            start_time = parser.parse(target_event['start'].get('dateTime'))
-            new_end_time = start_time + timedelta(minutes=duration_minutes)
+            # イベントの開始時間を取得
+            start_time = datetime.fromisoformat(closest_event['start'].get('dateTime', closest_event['start'].get('date')).replace('Z', '+00:00'))
+            start_time = start_time.astimezone(self.timezone)
             
-            # 他の予定との重複をチェック
-            for event in events:
-                if event['id'] == target_event['id']:
-                    continue
-                    
-                event_start = parser.parse(event['start'].get('dateTime'))
-                event_end = parser.parse(event['end'].get('dateTime'))
+            # 新しい終了時間を計算
+            end_time = start_time + timedelta(minutes=duration_minutes)
+            
+            # イベントを更新
+            updated_event = self.update_event(
+                event_id=closest_event['id'],
+                start_time=start_time,
+                end_time=end_time,
+                title=closest_event.get('summary'),
+                location=closest_event.get('location')
+            )
+            
+            if updated_event:
+                return True, f"予定を{duration_minutes}分に更新しました。\n開始: {start_time.strftime('%H:%M')}\n終了: {end_time.strftime('%H:%M')}"
+            else:
+                return False, "予定の更新に失敗しました。"
                 
-                if (start_time < event_end and new_end_time > event_start):
-                    return False, f"指定された時間に他の予定「{event.get('summary')}」が入っています。"
-            
-            # 予定を更新
-            target_event['end']['dateTime'] = new_end_time.isoformat()
-            self.service.events().update(
-                calendarId='mmms.dy.23@gmail.com',
-                eventId=target_event['id'],
-                body=target_event
-            ).execute()
-            
-            formatted_time = self._format_event_time(target_event)
-            return True, f"予定「{target_event.get('summary')}」の時間を{duration_minutes}分に変更しました。\n{formatted_time}"
-            
         except Exception as e:
-            logger.error(f"Error updating event duration: {str(e)}")
-            logger.error("Full error details:", exc_info=True)
-            return False, "予定の時間変更中にエラーが発生しました。"
+            logger.error(f"予定の更新中にエラーが発生: {str(e)}")
+            logger.error("詳細なエラー情報:", exc_info=True)
+            return False, f"予定の更新中にエラーが発生しました: {str(e)}"
 
     def add_event(self, start_time: datetime, end_time: datetime, title: str = None, location: str = None) -> Dict[str, Any]:
         """
