@@ -1436,10 +1436,8 @@ async def handle_delete_event(result, calendar_manager, user_id, reply_token):
             day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
             events = await calendar_manager.get_events(start_time=day, end_time=day_end)
             msg = delete_result.get('message', '予定を削除しました。')
-            if events:
-                msg += f"\n\n残りの予定：\n" + format_event_list(events, day, day_end)
-            else:
-                msg += "\n\nこの日の予定は全て削除されました。"
+            # 予定が残っていればそのまま、なければ「予定はありません」もカレンダー風で
+            msg += f"\n\n{format_event_list(events, day, day_end)}"
             await reply_text(reply_token, msg)
         else:
             await reply_text(reply_token, f"予定の削除に失敗しました: {delete_result.get('message', '不明なエラー')}")
