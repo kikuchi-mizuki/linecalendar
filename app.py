@@ -1626,6 +1626,9 @@ def oauth2callback():
         if not user_id:
             return "ユーザーIDが見つかりません", 400
 
+        # セミコロンや空白を除去したスコープリストを作成
+        scopes_cleaned = [s.strip().replace(';', '') for s in credentials.scopes]
+
         # 認証情報をDBに保存
         db_manager.save_google_credentials(user_id, {
             'token': credentials.token,
@@ -1633,7 +1636,7 @@ def oauth2callback():
             'token_uri': credentials.token_uri,
             'client_id': credentials.client_id,
             'client_secret': credentials.client_secret,
-            'scopes': credentials.scopes,
+            'scopes': scopes_cleaned,
             'expires_at': credentials.expiry.timestamp() if credentials.expiry else None
         })
 
