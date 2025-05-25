@@ -352,6 +352,34 @@ TIMEOUT_SECONDS = 30  # タイムアウトを30秒に延長
 nest_asyncio.apply()
 loop = asyncio.get_event_loop()
 
+async def send_reply_message(reply_token: str, text: str) -> None:
+    """
+    LINE Messaging APIを使用してテキストメッセージを送信する
+    
+    Args:
+        reply_token (str): リプライトークン
+        text (str): 送信するテキスト
+    """
+    try:
+        if not reply_token:
+            logger.error("reply_tokenが空です")
+            return
+
+        if not text:
+            logger.error("送信するテキストが空です")
+            return
+
+        line_bot_api.reply_message(
+            ReplyMessageRequest(
+                reply_token=reply_token,
+                messages=[TextMessage(text=text)]
+            )
+        )
+        logger.info(f"メッセージを送信しました: {text[:100]}...")
+    except Exception as e:
+        logger.error(f"メッセージの送信中にエラーが発生: {str(e)}")
+        logger.error(traceback.format_exc())
+
 def handle_unauthenticated_user(user_id, reply_token):
     """
     未認証ユーザーへのガイダンスメッセージを送信する
