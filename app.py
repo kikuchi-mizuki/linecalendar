@@ -366,31 +366,37 @@ def handle_unauthenticated_user(user_id, reply_token):
 
 # handle_text_messageを非同期化
 async def handle_text_message(event):
-    logger.info(f"[handle_text_message] called: event={event}")
+    logger.info("=== handle_text_message: 開始 ===")
+    print("=== handle_text_message: 開始 ===")
     try:
         user_id = event.source.user_id
-        message = event.message.text
+        message_text = event.message.text
         reply_token = event.reply_token
-        logger.debug(f"[handle_text_message] user_id={user_id}, message={message}, reply_token={reply_token}")
+        
+        logger.info(f"[handle_text_message] 受信メッセージ: user_id={user_id}, message={message_text}")
+        print(f"[handle_text_message] 受信メッセージ: user_id={user_id}, message={message_text}")
+        
+        # ユーザーの認証情報を取得
+        credentials = get_user_credentials(user_id)
+        logger.info(f"[handle_text_message] credentials: {credentials}")
+        print(f"[handle_text_message] credentials: {credentials}")
+        
+        if not credentials:
+            logger.warning(f"[handle_text_message] 認証情報が見つかりません: user_id={user_id}")
+            print(f"[handle_text_message] 認証情報が見つかりません: user_id={user_id}")
+            await handle_unauthenticated_user(event)
+            return
         
         # 保留中のイベントを取得
         pending_event = get_pending_event(user_id)
         logger.debug(f"[get_pending_event] user_id={user_id}, pending_event={pending_event}")
         logger.info(f"[get_pending_event][INFO] user_id={user_id}, pending_event={pending_event}")
         
-        # Google認証情報を取得
-        credentials = get_user_credentials(user_id)
-        logger.debug(f"[handle_text_message] credentials: {credentials}")
-        if not credentials:
-            logger.warning(f"認証情報が見つかりません: user_id={user_id}")
-            handle_unauthenticated_user(user_id, reply_token)
-            return
-        
         # キャンセルパターンの確認
         cancel_patterns = [
             'いいえ', 'キャンセル', 'やめる', '中止', 'いらない', 'no', 'NO', 'No', 'cancel', 'CANCEL', 'Cancel'
         ]
-        normalized_text = message.strip().lower() if message else ''
+        normalized_text = message_text.strip().lower() if message_text else ''
         if pending_event and normalized_text in cancel_patterns:
             clear_pending_event(user_id)
             logger.info(f"[handle_text_message] reply_text予定の追加をキャンセルしました: reply_token={reply_token}")
@@ -399,7 +405,7 @@ async def handle_text_message(event):
             return
         
         # 確認応答の処理
-        if is_confirmation_reply(message):
+        if is_confirmation_reply(message_text):
             if pending_event:
                 op_type = pending_event.get('operation_type')
                 if op_type == 'add':
@@ -2214,6 +2220,7 @@ def handle_message(event):
         try:
             print("before asyncio.run")
             logger.info("before asyncio.run")
+            logger.info(f"[on_message] event details: type={event.type}, message={event.message.text}, user_id={event.source.user_id}")
             asyncio.run(handle_text_message(event))
             print("after asyncio.run")
             logger.info("after asyncio.run")
@@ -2230,6 +2237,14 @@ def handle_message(event):
         logger.error(f"on_message error: {str(e)}")
         logger.error(traceback.format_exc())
         print(f"on_message error: {str(e)}")
+        # エラーをユーザーに通知
+        try:
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextMessage(text="申し訳ありません。メッセージの処理中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
+            )
+        except Exception as reply_error:
+            logger.error(f"Error sending error message: {str(reply_error)}")
 
 @line_handler.add(FollowEvent)
 def handle_follow(event):
