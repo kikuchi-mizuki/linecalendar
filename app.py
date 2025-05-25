@@ -817,7 +817,7 @@ def get_auth_url(user_id: str) -> str:
             CLIENT_SECRETS_FILE,
             scopes=SCOPES
         )
-        flow.redirect_uri = url_for('oauth2callback', _external=True)
+        flow.redirect_uri = url_for('callback', _external=True)  # 'oauth2callback' から 'callback' に変更
         authorization_url, state = flow.authorization_url(
             access_type='offline',
             include_granted_scopes='true',
