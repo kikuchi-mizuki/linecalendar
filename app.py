@@ -750,6 +750,7 @@ def callback():
 def handle_message(event):
     try:
         logger.info(f"[handle_message] メッセージを受信: {event.message.text}")
+        logger.info(f"[handle_message] reply_token: {event.reply_token}")
         line_bot_api.reply_message(
             event.reply_token,
             TextSendMessage(text="✅ メッセージを受け取りました！")
@@ -757,6 +758,7 @@ def handle_message(event):
         logger.info("[handle_message] 応答メッセージを送信しました")
     except Exception as e:
         logger.error(f"[handle_message] エラーが発生しました: {str(e)}")
+        logger.error(traceback.format_exc())
         try:
             line_bot_api.reply_message(
                 event.reply_token,
@@ -764,6 +766,7 @@ def handle_message(event):
             )
         except Exception as reply_error:
             logger.error(f"[handle_message] エラー通知の送信に失敗: {str(reply_error)}")
+            logger.error(traceback.format_exc())
 
 @app.route('/webhook', methods=['POST'])
 def stripe_webhook():
