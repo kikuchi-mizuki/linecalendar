@@ -61,7 +61,10 @@ from linebot.v3.messaging import (
     TextMessage, FlexMessage
 )
 from linebot.v3.exceptions import InvalidSignatureError
-from linebot.v3.webhooks import MessageEvent, TextMessageContent
+from linebot.v3.webhooks import (
+    MessageEvent, TextMessageContent, FollowEvent, UnfollowEvent,
+    JoinEvent, LeaveEvent, PostbackEvent
+)
 from linebot.v3.messaging import TextMessage
 from linebot import LineBotApi  # この行を追加
 import os
