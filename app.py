@@ -2194,8 +2194,8 @@ def test_redis_write():
         }), 500
 
 # handlerの登録部分でasync対応
-@handler.add(MessageEvent)
-def on_message(event):
+@line_handler.add(MessageEvent, message=TextMessage)
+def handle_message(event):
     print("=== on_message: 最初の1行目 ===")
     logger.info("=== on_message: 最初の1行目 ===")
     logger.info(f"[on_message] called: event={event}")
@@ -2220,6 +2220,31 @@ def on_message(event):
         logger.error(f"on_message error: {str(e)}")
         logger.error(traceback.format_exc())
         print(f"on_message error: {str(e)}")
+
+@line_handler.add(FollowEvent)
+def handle_follow(event):
+    # フォローイベントの処理
+    pass
+
+@line_handler.add(UnfollowEvent)
+def handle_unfollow(event):
+    # アンフォローイベントの処理
+    pass
+
+@line_handler.add(JoinEvent)
+def handle_join(event):
+    # グループ参加イベントの処理
+    pass
+
+@line_handler.add(LeaveEvent)
+def handle_leave(event):
+    # グループ退出イベントの処理
+    pass
+
+@line_handler.add(PostbackEvent)
+def handle_postback(event):
+    # ポストバックイベントの処理
+    pass
 
 async def handle_parsed_message(result, user_id, reply_token):
     """

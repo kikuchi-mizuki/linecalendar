@@ -15,3 +15,8 @@ GOOGLE_CREDENTIALS={"type": "service_account", "project_id": "your-project-id", 
 client_secret.json
 client_secret 2.json
 bfg.jar
+# データベースファイル
+*.db
+instance/*.db
+# ログファイル
+nohup.out
