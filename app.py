@@ -333,7 +333,7 @@ def get_calendar_manager(user_id: str) -> CalendarManager:
         # ユーザーの認証情報を取得
         credentials = get_user_credentials(user_id)
         if not credentials:
-            logger.error(f"ユーザー {user_id} の認証情報が見つかりません")
+            logger.info(f"ユーザー {user_id} の認証情報が見つかりません。認証が必要です。")
             raise ValueError("Google認証情報が見つかりません")
             
         # カレンダーマネージャーを初期化
@@ -1582,7 +1582,13 @@ async def handle_message(event):
         except ValueError as e:
             if "Google認証情報が見つかりません" in str(e):
                 auth_url = get_auth_url(user_id)
-                await reply_text(reply_token, f"カレンダーへのアクセス権限が必要です。\n以下のURLから認証を行ってください：\n{auth_url}")
+                await reply_text(reply_token, 
+                    "はじめまして！LINEカレンダーをご利用いただきありがとうございます。\n"
+                    "カレンダーを利用するには、Googleアカウントとの連携が必要です。\n"
+                    "以下のURLから認証を行ってください：\n"
+                    f"{auth_url}\n\n"
+                    "※認証後は、LINEに戻って予定の確認や追加ができるようになります。"
+                )
             else:
                 await reply_text(reply_token, "申し訳ありません。エラーが発生しました。\nしばらく時間をおいて再度お試しください。")
             return
