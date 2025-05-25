@@ -1621,17 +1621,19 @@ def oauth2callback():
         expires_at = credentials.expiry.timestamp() if credentials.expiry else (time.time() + 3600)
         logger.debug(f"[oauth2callback] expires_at: {expires_at}")
 
-        # スコープの整形
+        # token_uriとscopesの整形
+        token_uri_clean = credentials.token_uri.replace(';', '')
         scopes_cleaned = [s.strip().replace(';', '') for s in credentials.scopes]
+        scopes_json = json.dumps(scopes_cleaned)
 
         # 認証情報をDBに保存
         db_manager.save_google_credentials(user_id, {
             'token': credentials.token,
             'refresh_token': credentials.refresh_token,
-            'token_uri': credentials.token_uri,
+            'token_uri': token_uri_clean,
             'client_id': credentials.client_id,
             'client_secret': credentials.client_secret,
-            'scopes': scopes_cleaned,
+            'scopes': scopes_json,
             'expires_at': expires_at
         })
         logger.info(f"認証情報を保存しました: user_id={user_id}, expires_at={credentials.expiry}, refresh_token={credentials.refresh_token}, scopes={scopes_cleaned}")
@@ -1647,3 +1649,25 @@ def oauth2callback():
         logger.error(f"Google認証コールバックでエラー: {str(e)}")
         logger.error(traceback.format_exc())
         return "認証処理中にエラーが発生しました。"
+
+def format_event_list(events: List[Dict], start_time: datetime = None, end_time: datetime = None) -> str:
+    """イベント一覧をフォーマットしてテキストに変換する"""
+    if not events:
+        return "予定は見つかりませんでした。"
+
+    lines = []
+    for i, event in enumerate(events, 1):
+        summary = event.get('summary', '（タイトルなし）')
+        start = event.get('start', {}).get('dateTime')
+        end = event.get('end', {}).get('dateTime')
+        if start and end:
+            start_dt = datetime.fromisoformat(start.replace('Z', '+00:00')).astimezone(JST)
+            end_dt = datetime.fromisoformat(end.replace('Z', '+00:00')).astimezone(JST)
+            lines.append(f"{i}. {summary} {start_dt.strftime('%H:%M')}〜{end_dt.strftime('%H:%M')}")
+        else:
+            lines.append(f"{i}. {summary}（終日）")
+
+    header = ""
+    if start_time:
+        header = start_time.strftime('%Y年%m月%d日') + "の予定:\n"
+    return header + "\n".join(lines)
