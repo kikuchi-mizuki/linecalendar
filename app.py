@@ -1229,7 +1229,7 @@ def oauth2callback():
         # 認証フローの初期化
         flow = Flow.from_client_secrets_file(
             'client_secret.json',
-            scopes=['https://www.googleapis.com/auth/calendar.readonly'],
+            scopes=['https://www.googleapis.com/auth/calendar.readonly'],  # 明示的にreadonlyスコープを指定
             redirect_uri=url_for('oauth2callback', _external=True)
         )
         
@@ -1257,10 +1257,12 @@ def oauth2callback():
         
         # LINEへの通知
         try:
-            line_bot_api.push_message(PushMessageRequest(
-                to=user_id,
-                messages=[TextMessage(text="Googleカレンダーとの連携が完了しました！")]
-            ))
+            line_bot_api.push_message(
+                PushMessageRequest(
+                    to=user_id,
+                    messages=[TextMessage(text="Googleカレンダーとの連携が完了しました！")]
+                )
+            )
             logger.info(f"[oauth2callback] LINEに連携完了通知を送信しました: user_id={user_id}")
         except Exception as e:
             logger.error(f"[oauth2callback] LINE Pushに失敗: {e}")
@@ -1275,10 +1277,12 @@ def oauth2callback():
         # エラー時もLINEに通知を試みる
         if user_id:
             try:
-                line_bot_api.push_message(PushMessageRequest(
-                    to=user_id,
-                    messages=[TextMessage(text="認証中にエラーが発生しました。LINEから再度認証を開始してください。")]
-                ))
+                line_bot_api.push_message(
+                    PushMessageRequest(
+                        to=user_id,
+                        messages=[TextMessage(text="認証中にエラーが発生しました。LINEから再度認証を開始してください。")]
+                    )
+                )
                 logger.info(f"[oauth2callback] エラー通知をLINEに送信しました: user_id={user_id}")
             except Exception as push_error:
                 logger.error(f"[oauth2callback] エラー通知のLINE Pushに失敗: {push_error}")
