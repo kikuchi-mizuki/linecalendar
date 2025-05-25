@@ -1276,30 +1276,57 @@ def test_redis_write():
             'message': f'Redis書き込みテストエラー: {str(e)}'
         }), 500
 
-@line_handler.add(FollowEvent)
-def handle_follow(event):
-    # フォローイベントの処理
-    pass
+# イベントハンドラーの定義
+async def handle_follow(event):
+    """フォローイベントを処理する"""
+    try:
+        user_id = event.source.user_id
+        logger.info(f"User followed: {user_id}")
+        # フォロー時の処理を実装
+    except Exception as e:
+        logger.error(f"Error in handle_follow: {str(e)}")
+        logger.error(traceback.format_exc())
 
-@line_handler.add(UnfollowEvent)
-def handle_unfollow(event):
-    # アンフォローイベントの処理
-    pass
+async def handle_unfollow(event):
+    """アンフォローイベントを処理する"""
+    try:
+        user_id = event.source.user_id
+        logger.info(f"User unfollowed: {user_id}")
+        # アンフォロー時の処理を実装
+    except Exception as e:
+        logger.error(f"Error in handle_unfollow: {str(e)}")
+        logger.error(traceback.format_exc())
 
-@line_handler.add(JoinEvent)
-def handle_join(event):
-    # グループ参加イベントの処理
-    pass
+async def handle_join(event):
+    """グループ参加イベントを処理する"""
+    try:
+        group_id = event.source.group_id
+        logger.info(f"Bot joined group: {group_id}")
+        # グループ参加時の処理を実装
+    except Exception as e:
+        logger.error(f"Error in handle_join: {str(e)}")
+        logger.error(traceback.format_exc())
 
-@line_handler.add(LeaveEvent)
-def handle_leave(event):
-    # グループ退出イベントの処理
-    pass
+async def handle_leave(event):
+    """グループ退出イベントを処理する"""
+    try:
+        group_id = event.source.group_id
+        logger.info(f"Bot left group: {group_id}")
+        # グループ退出時の処理を実装
+    except Exception as e:
+        logger.error(f"Error in handle_leave: {str(e)}")
+        logger.error(traceback.format_exc())
 
-@line_handler.add(PostbackEvent)
-def handle_postback(event):
-    # ポストバックイベントの処理
-    pass
+async def handle_postback(event):
+    """ポストバックイベントを処理する"""
+    try:
+        user_id = event.source.user_id
+        data = event.postback.data
+        logger.info(f"Postback received from {user_id}: {data}")
+        # ポストバック時の処理を実装
+    except Exception as e:
+        logger.error(f"Error in handle_postback: {str(e)}")
+        logger.error(traceback.format_exc())
 
 async def handle_parsed_message(result, user_id, reply_token):
     """
