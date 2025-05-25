@@ -716,228 +716,50 @@ def format_overlapping_events(events):
 
 @app.route("/callback", methods=['POST'])
 def callback():
+    # X-Line-Signatureヘッダーの値を取得
+    signature = request.headers['X-Line-Signature']
+
+    # リクエストボディを取得
+    body = request.get_data(as_text=True)
+    logger.info(f"[callback] received body: {body}")
+
     try:
-        body = request.get_data(as_text=True)
-        signature = request.headers['X-Line-Signature']
-        logger.info(f"[callback] received body: {body}")
         logger.info("Webhookの処理を開始")
-        # 署名の検証とイベントの処理
+        # 署名を検証し、問題なければhandleに定義されている関数を呼び出す
         line_handler.handle(body, signature)
         logger.info("Webhookの処理が完了")
-        return 'OK'
-    except InvalidSignatureError:
-        logger.error("署名の検証に失敗しました")
-        abort(400)
     except Exception as e:
         logger.error(f"Webhookの処理中にエラーが発生: {str(e)}")
-        logger.error(traceback.format_exc())
-        abort(500)
+        logger.error(f"エラーの詳細: {traceback.format_exc()}")
+        return 'Error', 500
 
-# 確認返答の判定
-def is_confirmation_reply(text: str) -> bool:
-    """
-    テキストが確認の応答（はい/いいえ）かどうかを判定する
-    
-    Args:
-        text (str): 判定するテキスト
-        
-    Returns:
-        bool: 確認の応答（はい）の場合はTrue、それ以外はFalse
-    """
-    # 全角・半角、大文字・小文字を考慮した確認応答のパターン
-    confirm_patterns = [
-        'はい', 'ハイ', 'はいです', 'ハイです',
-        'yes', 'YES', 'Yes',
-        'ok', 'OK', 'Ok',
-        'おk', 'おけ', 'おけー',
-        '追加', '追加する', '追加します',
-        '登録', '登録する', '登録します',
-        '1', '１'
-    ]
-    
-    # テキストを正規化（全角→半角、大文字→小文字）
-    normalized_text = text.strip().lower()
-    normalized_text = normalized_text.replace('１', '1')
-    
-    return normalized_text in confirm_patterns
+    return 'OK'
 
-# 保留中のイベント情報を保存
-def save_pending_event(user_id: str, event_info: dict) -> None:
-    logger.debug(f"[save_pending_event] user_id={user_id}, event_info={event_info}")
-    logger.info(f"[save_pending_event][INFO] user_id={user_id}, event_info={event_info}")
-    
-    # 日時情報の処理
-    if event_info.get('start_time'):
-        if isinstance(event_info['start_time'], str):
-            event_info['start_time'] = datetime.fromisoformat(event_info['start_time'].replace('Z', '+00:00'))
-        if event_info['start_time'].tzinfo is None:
-            event_info['start_time'] = pytz.timezone('Asia/Tokyo').localize(event_info['start_time'])
-    
-    if event_info.get('end_time'):
-        if isinstance(event_info['end_time'], str):
-            event_info['end_time'] = datetime.fromisoformat(event_info['end_time'].replace('Z', '+00:00'))
-        if event_info['end_time'].tzinfo is None:
-            event_info['end_time'] = pytz.timezone('Asia/Tokyo').localize(event_info['end_time'])
-    
-    if event_info.get('new_start_time'):
-        if isinstance(event_info['new_start_time'], str):
-            event_info['new_start_time'] = datetime.fromisoformat(event_info['new_start_time'].replace('Z', '+00:00'))
-        if event_info['new_start_time'].tzinfo is None:
-            event_info['new_start_time'] = pytz.timezone('Asia/Tokyo').localize(event_info['new_start_time'])
-    
-    if event_info.get('new_end_time'):
-        if isinstance(event_info['new_end_time'], str):
-            event_info['new_end_time'] = datetime.fromisoformat(event_info['new_end_time'].replace('Z', '+00:00'))
-        if event_info['new_end_time'].tzinfo is None:
-            event_info['new_end_time'] = pytz.timezone('Asia/Tokyo').localize(event_info['new_end_time'])
-    
-    # 更新操作の場合のみ、新しい時間を設定
-    if event_info.get('operation_type') == 'update':
-        if event_info.get('new_start_time'):
-            event_info['start_time'] = event_info['new_start_time']
-        if event_info.get('new_end_time'):
-            event_info['end_time'] = event_info['new_end_time']
-    
-    db_manager.save_pending_event(user_id, event_info)
-    pending_check = get_pending_event(user_id)
-    logger.debug(f"[pending_event] after save: user_id={user_id}, pending_event={pending_check}")
-    logger.info(f"[pending_event][AFTER SAVE] user_id={user_id}, pending_event={pending_check}")
-    if pending_check is None:
-        logger.warning(f"[pending_event][AFTER SAVE][WARNING] pending_event is None for user_id={user_id}")
-
-# 保留中のイベント情報を取得
-def get_pending_event(user_id: str) -> dict:
+@handler.add(MessageEvent, message=TextMessage)
+def handle_text_message(event):
     try:
-        pending = db_manager.get_pending_event(user_id)
-        logger.debug(f"[get_pending_event] user_id={user_id}, pending_event={pending}")
-        logger.info(f"[get_pending_event][INFO] user_id={user_id}, pending_event={pending}")
+        logger.info(f"[handle_text_message] メッセージ処理開始: type={event.type}, message={event.message.text}, userId={event.source.user_id}")
         
-        if pending is None:
-            return None
-            
-        # 日時情報の処理
-        if pending.get('start_time'):
-            if isinstance(pending['start_time'], str):
-                pending['start_time'] = datetime.fromisoformat(pending['start_time'].replace('Z', '+00:00'))
-            if pending['start_time'].tzinfo is None:
-                pending['start_time'] = pytz.timezone('Asia/Tokyo').localize(pending['start_time'])
+        # メッセージ処理の実行
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(handle_message(event))
+        finally:
+            loop.close()
         
-        if pending.get('end_time'):
-            if isinstance(pending['end_time'], str):
-                pending['end_time'] = datetime.fromisoformat(pending['end_time'].replace('Z', '+00:00'))
-            if pending['end_time'].tzinfo is None:
-                pending['end_time'] = pytz.timezone('Asia/Tokyo').localize(pending['end_time'])
-        
-        if pending.get('new_start_time'):
-            if isinstance(pending['new_start_time'], str):
-                pending['new_start_time'] = datetime.fromisoformat(pending['new_start_time'].replace('Z', '+00:00'))
-            if pending['new_start_time'].tzinfo is None:
-                pending['new_start_time'] = pytz.timezone('Asia/Tokyo').localize(pending['new_start_time'])
-        
-        if pending.get('new_end_time'):
-            if isinstance(pending['new_end_time'], str):
-                pending['new_end_time'] = datetime.fromisoformat(pending['new_end_time'].replace('Z', '+00:00'))
-            if pending['new_end_time'].tzinfo is None:
-                pending['new_end_time'] = pytz.timezone('Asia/Tokyo').localize(pending['new_end_time'])
-        
-        return pending
+        logger.info(f"[handle_text_message] メッセージ処理完了: userId={event.source.user_id}")
     except Exception as e:
-        logger.error(f"[get_pending_event][ERROR] user_id={user_id}, error={str(e)}")
-        logger.error(traceback.format_exc())
-        return None
-
-# 保留中のイベント情報を削除
-def clear_pending_event(user_id: str) -> None:
-    """保留中のイベント情報を削除する"""
-    db_manager.clear_pending_event(user_id)
-
-@asynccontextmanager
-async def async_timeout(seconds):
-    """非同期タイムアウトコンテキストマネージャー"""
-    try:
-        yield await asyncio.wait_for(asyncio.sleep(0), timeout=seconds)
-    except asyncio.TimeoutError:
-        raise TimeoutError(f"処理が{seconds}秒でタイムアウトしました")
-
-async def handle_message(event):
-    """
-    メッセージを処理する
-    
-    Args:
-        event: LINE Messaging APIのイベントオブジェクト
-    """
-    try:
-        # ユーザーIDとメッセージを取得
-        user_id = event.source.user_id
-        message = event.message.text
-        reply_token = event.reply_token
-        
-        logger.debug(f"[handle_message] メッセージを受信: user_id={user_id}, message={message}")
-        
-        # 課金判定
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        cursor.execute('SELECT subscription_status FROM users WHERE line_user_id = ?', (user_id,))
-        user = cursor.fetchone()
-        conn.close()
-        
-        logger.debug(f"[handle_message] ユーザー情報: {user}")
-        
-        if not user or user['subscription_status'] != 'active':
-            msg = (
-                'この機能をご利用いただくには、月額プランへのご登録が必要です。\n'
-                f'以下のURLからご登録ください：\n'
-                f'{os.getenv("BASE_URL")}/payment/checkout?user_id={user_id}'
+        logger.error(f"[handle_text_message] エラー発生: {str(e)}")
+        logger.error(f"[handle_text_message] エラーの詳細: {traceback.format_exc()}")
+        try:
+            # エラーメッセージをユーザーに送信
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="申し訳ありません。メッセージの処理中にエラーが発生しました。しばらく時間をおいて再度お試しください。")
             )
-            logger.debug(f"[handle_message] 未登録ユーザーへのメッセージ送信: {msg}")
-            await reply_text(reply_token, msg)
-            return
-
-        if not reply_token:
-            logger.error("reply_tokenが取得できません")
-            return
-
-        # 追加: pending
-        pending_event = get_pending_event(user_id)
-        logger.debug(f"[handle_message] pending_event: {pending_event}")
-        if pending_event:
-            logger.info(f"[handle_message][pending_event exists] user_id={user_id}, pending_event={pending_event}")
-            return
-
-        # ユーザーの認証情報を取得
-        try:
-            credentials = get_user_credentials(user_id)
-            logger.debug(f"[handle_message] credentials: {credentials}")
-            if not credentials:
-                # 認証情報が無効な場合は再認証を促す
-                logger.debug(f"[handle_message] 認証情報が見つかりません: user_id={user_id}")
-                send_one_time_code(user_id)
-                return
-        except Exception as e:
-            logger.error(f"認証情報の取得に失敗: {str(e)}")
-            logger.error(traceback.format_exc())
-            await reply_text(reply_token, "認証情報の取得に失敗しました。\nしばらく時間をおいて再度お試しください。")
-            return
-            
-        # メッセージの解析と処理
-        logger.debug(f"[handle_message] メッセージを解析: {message}")
-        result = parse_message(message)
-        logger.debug(f"[handle_message] 解析結果: {result}")
-        
-        if result:
-            logger.debug(f"[handle_message] 解析されたメッセージを処理: {result}")
-            await handle_parsed_message(result, user_id, reply_token)
-        else:
-            logger.debug(f"[handle_message] メッセージの解析に失敗: {message}")
-            await reply_text(reply_token, "申し訳ありません。メッセージを理解できませんでした。\n予定の追加や確認の方法について、もう一度お試しください。")
-            
-    except Exception as e:
-        logger.error(f"メッセージ処理中にエラーが発生: {str(e)}")
-        logger.error(traceback.format_exc())
-        try:
-            await reply_text(reply_token, "申し訳ありません。メッセージの処理中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
         except Exception as reply_error:
-            logger.error(f"エラーメッセージの送信に失敗: {str(reply_error)}")
+            logger.error(f"[handle_text_message] エラーメッセージ送信失敗: {str(reply_error)}")
 
 @app.route('/webhook', methods=['POST'])
 def stripe_webhook():
@@ -2212,39 +2034,68 @@ def test_redis_write():
 # handlerの登録部分でasync対応
 @line_handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
-    print("=== on_message: 最初の1行目 ===")
-    logger.info("=== on_message: 最初の1行目 ===")
-    logger.info(f"[on_message] called: event={event}")
-    print("[on_message] called")
+    """
+    メッセージを処理する非同期関数
+    """
     try:
-        try:
-            print("before asyncio.run")
-            logger.info("before asyncio.run")
-            logger.info(f"[on_message] event details: type={event.type}, message={event.message.text}, user_id={event.source.user_id}")
-            asyncio.run(handle_text_message(event))
-            print("after asyncio.run")
-            logger.info("after asyncio.run")
-        except RuntimeError as e:
-            logger.error(f"asyncio.run error: {e}")
-            print(f"asyncio.run error: {e}")
-            new_loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(new_loop)
-            new_loop.run_until_complete(handle_text_message(event))
-            new_loop.close()
-            print("after run_until_complete")
-            logger.info("after run_until_complete")
+        user_id = event.source.user_id
+        message_text = event.message.text
+        reply_token = event.reply_token
+        
+        logger.info(f"[handle_message] 受信メッセージ: user_id={user_id}, message={message_text}")
+        
+        # ユーザーの認証情報を取得
+        credentials = get_user_credentials(user_id)
+        logger.info(f"[handle_message] credentials: {credentials}")
+        
+        if not credentials:
+            logger.warning(f"[handle_message] 認証情報が見つかりません: user_id={user_id}")
+            await handle_unauthenticated_user(user_id, reply_token)
+            return
+        
+        # 保留中のイベントを取得
+        pending_event = get_pending_event(user_id)
+        logger.debug(f"[handle_message] pending_event: {pending_event}")
+        
+        # キャンセルパターンの確認
+        cancel_patterns = [
+            'いいえ', 'キャンセル', 'やめる', '中止', 'いらない', 'no', 'NO', 'No', 'cancel', 'CANCEL', 'Cancel'
+        ]
+        normalized_text = message_text.strip().lower() if message_text else ''
+        if pending_event and normalized_text in cancel_patterns:
+            clear_pending_event(user_id)
+            logger.info(f"[handle_message] 予定の追加をキャンセルしました: reply_token={reply_token}")
+            await reply_text(reply_token, '予定の追加をキャンセルしました。')
+            return
+        
+        # 確認応答の処理
+        if is_confirmation_reply(message_text):
+            if pending_event:
+                op_type = pending_event.get('operation_type')
+                if op_type == 'add':
+                    await add_event_from_pending(user_id, reply_token, pending_event)
+                    clear_pending_event(user_id)
+                    return
+                elif op_type == 'update':
+                    result_msg = await handle_yes_response(user_id)
+                    clear_pending_event(user_id)
+                    await reply_text(reply_token, result_msg)
+                    return
+        
+        # メッセージの解析と処理
+        result = parse_message(message_text)
+        if result:
+            await handle_parsed_message(result, user_id, reply_token)
+        else:
+            await reply_text(reply_token, "申し訳ありません。メッセージを理解できませんでした。\n予定の追加、確認、削除、更新のいずれかを指定してください。")
+            
     except Exception as e:
-        logger.error(f"on_message error: {str(e)}")
-        logger.error(traceback.format_exc())
-        print(f"on_message error: {str(e)}")
-        # エラーをユーザーに通知
+        logger.error(f"[handle_message] エラー発生: {str(e)}")
+        logger.error(f"[handle_message] エラーの詳細: {traceback.format_exc()}")
         try:
-            line_bot_api.reply_message(
-                event.reply_token,
-                TextMessage(text="申し訳ありません。メッセージの処理中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
-            )
+            await reply_text(reply_token, "申し訳ありません。メッセージの処理中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
         except Exception as reply_error:
-            logger.error(f"Error sending error message: {str(reply_error)}")
+            logger.error(f"[handle_message] エラーメッセージ送信失敗: {str(reply_error)}")
 
 @line_handler.add(FollowEvent)
 def handle_follow(event):
