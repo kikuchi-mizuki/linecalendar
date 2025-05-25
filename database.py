@@ -371,7 +371,6 @@ class DatabaseManager:
                     if row and row[0]:
                         refresh_token = row[0]
                 logger.info(f"[save_google_credentials] user_id={user_id}, token={credentials.get('token')}, refresh_token={refresh_token}, expires_at={credentials.get('expires_at')}")
-                # expires_atを必ずUTCタイムゾーン付きで保存
                 expires_at = credentials.get('expires_at')
                 expires_at_str = None
                 if expires_at:
@@ -384,6 +383,10 @@ class DatabaseManager:
                         if dt.tzinfo is None:
                             dt = dt.replace(tzinfo=timezone.utc)
                     expires_at_str = dt.isoformat()
+                # scopesはjson.dumpsで保存
+                scopes = credentials['scopes']
+                if not isinstance(scopes, str):
+                    scopes = json.dumps(scopes)
                 cursor.execute('''
                     INSERT OR REPLACE INTO google_credentials 
                     (user_id, token, refresh_token, token_uri, client_id, client_secret, scopes, expires_at)
@@ -395,7 +398,7 @@ class DatabaseManager:
                     credentials['token_uri'],
                     credentials['client_id'],
                     credentials['client_secret'],
-                    json.dumps(credentials['scopes']),
+                    scopes,
                     expires_at_str
                 ))
                 conn.commit()
@@ -428,13 +431,16 @@ class DatabaseManager:
                         if dt.tzinfo is None:
                             dt = dt.replace(tzinfo=timezone.utc)
                         expires_at = dt.timestamp()
+                    # user_idをstrで返す
+                    if isinstance(user_id, bytes):
+                        user_id = user_id.decode()
                     result = {
                         'token': row[0],
                         'refresh_token': row[1],
-                        'token_uri': row[2],
+                        'token_uri': row[2].replace(';', ''),
                         'client_id': row[3],
                         'client_secret': row[4],
-                        'scopes': json.loads(row[5]),
+                        'scopes': json.loads(row[5].replace(';', '')),
                         'expires_at': expires_at
                     }
                     logger.info(f"[get_user_credentials] result for user_id={user_id}: {result}")
