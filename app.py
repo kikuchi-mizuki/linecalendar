@@ -1216,101 +1216,73 @@ def authorize():
 @app.route('/oauth2callback')
 @limiter.limit("5 per minute")
 def oauth2callback():
-    print(f"[PRINT Cookie: /oauth2callback] session={request.cookies.get('session')}")
-    logger.info(f"[Cookie: /oauth2callback] session={request.cookies.get('session')}")
-    logger.info(f"[セッション内容: /oauth2callback] {dict(session)}")
+    # セッションからuser_idを先に取得
+    user_id = session.get('line_user_id')
+    logger.info(f"[oauth2callback] 開始: user_id={user_id}, session={dict(session)}")
+    
+    if not user_id:
+        logger.error("[oauth2callback] セッションにuser_idが存在しません")
+        return '認証セッションが切れています。LINEから再度認証を開始してください。', 400
+
     try:
-        # state一致チェック
-        if request.args.get('state') != session.get('state'):
-            logger.error("OAuth state mismatch")
-            return '認証状態が不正です。最初からやり直してください。', 400
-        # セッションの有効性チェック
-        if not session.get('auth_start_time'):
-            logger.error("認証セッションが開始されていません")
-            return '認証セッションが開始されていません。最初からやり直してください。', 400
-
-        if not session.get('line_user_id'):
-            logger.error("ユーザーIDがセッションにありません")
-            return 'ユーザーIDが取得できませんでした。LINEからやり直してください。', 400
-
-        state = session.get('state')
-        if not state:
-            logger.error("セッションにstateがありません")
-            return '認証セッションが不正です。最初からやり直してください。', 400
-
-        if session.get('auth_state') != 'started':
-            logger.error("認証状態が不正です")
-            user_id = session.get('line_user_id')
-            if user_id:
-                send_one_time_code(user_id)
-            return '認証状態が不正です。最初からやり直してください。', 400
-
-        # 認証セッションの有効期限チェック
-        auth_start_time = datetime.fromtimestamp(session['auth_start_time'], tz=timezone.utc)
-        if datetime.now(timezone.utc) - auth_start_time > timedelta(minutes=30):
-            session.clear()
-            logger.info("認証セッションが期限切れ")
-            return '認証セッションが期限切れです。最初からやり直してください。', 400
-
-        flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
-            CLIENT_SECRETS_FILE,
-            scopes=SCOPES,
-            state=state
+        # 認証フローの初期化
+        flow = Flow.from_client_secrets_file(
+            'client_secret.json',
+            scopes=['https://www.googleapis.com/auth/calendar.readonly'],
+            redirect_uri=url_for('oauth2callback', _external=True)
         )
-        flow.redirect_uri = url_for('oauth2callback', _external=True)
         
-        try:
-            user_id = session.get('line_user_id')  # ここで先に取得
-            authorization_response = request.url
-            flow.fetch_token(authorization_response=authorization_response)
-        except Exception as e:
-            logger.error(f"トークンの取得に失敗: {str(e)}")
-            session.clear()
-            if user_id:
-                send_one_time_code(user_id)
-            return '認証に失敗しました。もう一度お試しください。', 400
-
+        # トークンの取得
+        flow.fetch_token(authorization_response=request.url)
         credentials = flow.credentials
-        user_id = session.get('line_user_id')
-
-        try:
-            # 認証情報を保存
-            db_manager.save_google_credentials(user_id, {
-                'token': credentials.token,
-                'refresh_token': credentials.refresh_token,
-                'token_uri': credentials.token_uri,
-                'client_id': credentials.client_id,
-                'client_secret': credentials.client_secret,
-                'scopes': credentials.scopes,
-                'expires_at': credentials.expiry.timestamp() if credentials.expiry else None
-            })
-            logger.info(f"Google認証情報を保存しました: user_id={user_id}")
-            
-            # セッションをクリア
-            session.clear()
-            
-            # LINEに連携完了メッセージをPush
-            if user_id:
-                try:
-                    # 完了メッセージのみ送信（シンプルな文言に）
-                    line_bot_api.push_message(PushMessageRequest(
-                        to=user_id,
-                        messages=[TextMessage(text="Googleカレンダーとの連携が完了しました！")]
-                    ))
-                except Exception as e:
-                    logger.error(f"LINEへの連携完了Pushに失敗: {str(e)}")
-            
-            return 'Google連携が完了しました！このウィンドウを閉じてLINEに戻ってください。'
-        except Exception as e:
-            logger.error(f"認証情報の保存に失敗: {str(e)}")
-            logger.error(traceback.format_exc())
-            session.clear()
-            return 'Google連携に失敗しました。もう一度お試しください。', 500
-    except Exception as e:
-        logger.error(f"認証コールバックの処理に失敗: {str(e)}")
-        logger.error(traceback.format_exc())
+        
+        # 認証情報の保存
+        credentials_dict = {
+            'token': credentials.token,
+            'refresh_token': credentials.refresh_token,
+            'token_uri': credentials.token_uri,
+            'client_id': credentials.client_id,
+            'client_secret': credentials.client_secret,
+            'scopes': credentials.scopes,
+            'expires_at': credentials.expiry.timestamp() if credentials.expiry else None
+        }
+        
+        # データベースに保存
+        db_manager.save_google_credentials(user_id, credentials_dict)
+        logger.info(f"[oauth2callback] 認証情報を保存しました: user_id={user_id}")
+        
+        # セッションのクリア
         session.clear()
-        return '認証の処理に失敗しました。もう一度お試しください。', 500
+        
+        # LINEへの通知
+        try:
+            line_bot_api.push_message(PushMessageRequest(
+                to=user_id,
+                messages=[TextMessage(text="Googleカレンダーとの連携が完了しました！")]
+            ))
+            logger.info(f"[oauth2callback] LINEに連携完了通知を送信しました: user_id={user_id}")
+        except Exception as e:
+            logger.error(f"[oauth2callback] LINE Pushに失敗: {e}")
+            # Push通知の失敗は致命的ではないので、処理は続行
+        
+        return 'Google連携が完了しました！このウィンドウを閉じてLINEに戻ってください。'
+        
+    except Exception as e:
+        logger.error(f"[oauth2callback] エラー発生: {str(e)}")
+        logger.error(traceback.format_exc())
+        
+        # エラー時もLINEに通知を試みる
+        if user_id:
+            try:
+                line_bot_api.push_message(PushMessageRequest(
+                    to=user_id,
+                    messages=[TextMessage(text="認証中にエラーが発生しました。LINEから再度認証を開始してください。")]
+                ))
+                logger.info(f"[oauth2callback] エラー通知をLINEに送信しました: user_id={user_id}")
+            except Exception as push_error:
+                logger.error(f"[oauth2callback] エラー通知のLINE Pushに失敗: {push_error}")
+        
+        return '認証中にエラーが発生しました。LINEから再度認証を開始してください。', 500
 
 SCOPES = ['https://www.googleapis.com/auth/calendar']
 CLIENT_SECRETS_FILE = "client_secret.json"
