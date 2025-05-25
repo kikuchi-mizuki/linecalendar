@@ -708,29 +708,47 @@ def format_overlapping_events(events):
 
 @app.route("/callback", methods=['POST'])
 def callback():
-    signature = request.headers['X-Line-Signature']
-    body = request.get_data(as_text=True)
-    app.logger.info("Request body: " + body)
-
+    """
+    LINE Messaging APIからのwebhookリクエストを処理する
+    """
     try:
-        if line_handler is None:
-            app.logger.error("LINE handler が未初期化です")
-            abort(500)
-        line_handler.handle(body, signature)  # awaitを削除
-    except InvalidSignatureError:
-        app.logger.error("Invalid signature")
-        abort(400)
-    except Exception as e:
-        app.logger.error(f"Error in callback: {str(e)}")
-        app.logger.error(f"Traceback: {traceback.format_exc()}")
-        abort(500)
+        # リクエストの署名を取得
+        signature = request.headers.get('X-Line-Signature', '')
+        if not signature:
+            logger.error("X-Line-Signature header is missing")
+            abort(400)
 
-    return 'OK'
+        # リクエストボディを取得
+        body = request.get_data(as_text=True)
+        logger.info(f"Request body: {body}")
+
+        # LINEハンドラーの存在確認
+        if line_handler is None:
+            logger.error("LINE handler is not initialized")
+            abort(500)
+
+        # 署名の検証とイベントの処理
+        try:
+            line_handler.handle(body, signature)
+        except InvalidSignatureError:
+            logger.error("Invalid signature")
+            abort(400)
+        except Exception as e:
+            logger.error(f"Error in line_handler.handle: {str(e)}")
+            logger.error(traceback.format_exc())
+            abort(500)
+
+        return 'OK'
+
+    except Exception as e:
+        logger.error(f"Error in callback: {str(e)}")
+        logger.error(traceback.format_exc())
+        abort(500)
 
 @line_handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     """
-    メッセージを処理する関数
+    メッセージを処理する関数（同期）
     """
     try:
         user_id = event.source.user_id
@@ -739,65 +757,17 @@ def handle_message(event):
         
         logger.info(f"[handle_message] 受信メッセージ: user_id={user_id}, message={message_text}")
         
-        # ユーザーの認証情報を取得
-        credentials = get_user_credentials(user_id)
-        logger.info(f"[handle_message] credentials: {credentials}")
-        
-        if not credentials:
-            logger.warning(f"[handle_message] 認証情報が見つかりません: user_id={user_id}")
-            # 非同期関数を同期的に実行
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(handle_unauthenticated_user(user_id, reply_token))
-            return
-        
-        # 保留中のイベントを取得
-        pending_event = get_pending_event(user_id)
-        logger.debug(f"[handle_message] pending_event: {pending_event}")
-        
-        # キャンセルパターンの確認
-        cancel_patterns = [
-            'いいえ', 'キャンセル', 'やめる', '中止', 'いらない', 'no', 'NO', 'No', 'cancel', 'CANCEL', 'Cancel'
-        ]
-        normalized_text = message_text.strip().lower() if message_text else ''
-        if pending_event and normalized_text in cancel_patterns:
-            clear_pending_event(user_id)
-            logger.info(f"[handle_message] 予定の追加をキャンセルしました: reply_token={reply_token}")
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(reply_text(reply_token, '予定の追加をキャンセルしました。'))
-            return
-        
-        # 確認応答の処理
-        if is_confirmation_reply(message_text):
-            if pending_event:
-                op_type = pending_event.get('operation_type')
-                if op_type == 'add':
-                    loop = asyncio.get_event_loop()
-                    loop.run_until_complete(add_event_from_pending(user_id, reply_token, pending_event))
-                    clear_pending_event(user_id)
-                    return
-                elif op_type == 'update':
-                    result_msg = loop.run_until_complete(handle_yes_response(user_id))
-                    clear_pending_event(user_id)
-                    loop.run_until_complete(reply_text(reply_token, result_msg))
-                    return
-        
-        # メッセージの解析と処理
-        result = parse_message(message_text)
-        if result:
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(handle_parsed_message(result, user_id, reply_token))
-        else:
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(reply_text(reply_token, "申し訳ありません。メッセージを理解できませんでした。\n予定の追加、確認、削除、更新のいずれかを指定してください。"))
+        # テスト返信
+        line_bot_api.reply_message(
+            ReplyMessageRequest(
+                reply_token=reply_token,
+                messages=[TextMessage(text="テスト返信です！")]
+            )
+        )
             
     except Exception as e:
         logger.error(f"[handle_message] エラー発生: {str(e)}")
         logger.error(f"[handle_message] エラーの詳細: {traceback.format_exc()}")
-        try:
-            loop = asyncio.get_event_loop()
-            loop.run_until_complete(reply_text(reply_token, "申し訳ありません。メッセージの処理中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。"))
-        except Exception as reply_error:
-            logger.error(f"[handle_message] エラーメッセージ送信失敗: {str(reply_error)}")
 
 @app.route('/webhook', methods=['POST'])
 def stripe_webhook():
