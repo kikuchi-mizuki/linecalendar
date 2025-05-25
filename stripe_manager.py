@@ -69,6 +69,8 @@ class StripeManager:
             current_app.logger.info(f"[Stripe Payment] user_id={line_user_id}, customer_id={stripe_customer_id}")
             conn = get_db_connection()
             cursor = conn.cursor()
+            # ユーザーがいなければ追加
+            cursor.execute('INSERT OR IGNORE INTO users (user_id) VALUES (?)', (line_user_id,))
             # ユーザーのサブスクリプション状態を更新
             cursor.execute('''
                 UPDATE users 
