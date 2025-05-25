@@ -366,69 +366,69 @@ def handle_unauthenticated_user(user_id, reply_token):
 
 # handle_text_messageを非同期化
 async def handle_text_message(event):
-    logger.info("=== handle_text_message: 開始 ===")
-    print("=== handle_text_message: 開始 ===")
+    """テキストメッセージを処理する関数"""
     try:
         user_id = event.source.user_id
         message_text = event.message.text
         reply_token = event.reply_token
         
-        logger.info(f"[handle_text_message] 受信メッセージ: user_id={user_id}, message={message_text}")
-        print(f"[handle_text_message] 受信メッセージ: user_id={user_id}, message={message_text}")
+        logger.info(f"[handle_text_message] メッセージ受信: user_id={user_id}, message={message_text}")
         
         # ユーザーの認証情報を取得
         credentials = get_user_credentials(user_id)
-        logger.info(f"[handle_text_message] credentials: {credentials}")
-        print(f"[handle_text_message] credentials: {credentials}")
+        logger.debug(f"[handle_text_message] credentials: {credentials}")
         
         if not credentials:
             logger.warning(f"[handle_text_message] 認証情報が見つかりません: user_id={user_id}")
-            print(f"[handle_text_message] 認証情報が見つかりません: user_id={user_id}")
-            await handle_unauthenticated_user(event)
+            # 非同期関数を同期的に実行
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                loop.run_until_complete(handle_unauthenticated_user(user_id, reply_token))
+            finally:
+                loop.close()
             return
         
-        # 保留中のイベントを取得
-        pending_event = get_pending_event(user_id)
-        logger.debug(f"[get_pending_event] user_id={user_id}, pending_event={pending_event}")
-        logger.info(f"[get_pending_event][INFO] user_id={user_id}, pending_event={pending_event}")
-        
-        # キャンセルパターンの確認
-        cancel_patterns = [
-            'いいえ', 'キャンセル', 'やめる', '中止', 'いらない', 'no', 'NO', 'No', 'cancel', 'CANCEL', 'Cancel'
-        ]
-        normalized_text = message_text.strip().lower() if message_text else ''
-        if pending_event and normalized_text in cancel_patterns:
-            clear_pending_event(user_id)
-            logger.info(f"[handle_text_message] reply_text予定の追加をキャンセルしました: reply_token={reply_token}")
-            await reply_text(reply_token, '予定の追加をキャンセルしました。')
-            logger.info(f"[handle_text_message] reply_text完了: reply_token={reply_token}")
-            return
+        # キャンセルパターンのチェック
+        if message_text.lower() in ['キャンセル', 'cancel', 'やめる']:
+            pending_event = get_pending_event(user_id)
+            if pending_event:
+                cancel_pending_event(user_id)
+                reply_message = f"予定の{pending_event['action']}をキャンセルしました。"
+                send_reply_message(reply_token, reply_message)
+                return
         
         # 確認応答の処理
-        if is_confirmation_reply(message_text):
-            if pending_event:
-                op_type = pending_event.get('operation_type')
-                if op_type == 'add':
-                    await add_event_from_pending(user_id, reply_token, pending_event)
-                    clear_pending_event(user_id)
-                    return
-                elif op_type == 'update':
-                    result_msg = await handle_yes_response(user_id)
-                    clear_pending_event(user_id)
-                    logger.info(f"[handle_text_message] reply_text確認応答: reply_token={reply_token}, result_msg={result_msg}")
-                    await reply_text(reply_token, result_msg)
-                    logger.info(f"[handle_text_message] reply_text完了: reply_token={reply_token}")
-                    return
+        pending_event = get_pending_event(user_id)
+        if pending_event and pending_event.get('waiting_confirmation'):
+            if message_text.lower() in ['はい', 'yes', 'y']:
+                # 非同期関数を同期的に実行
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+                try:
+                    loop.run_until_complete(handle_message(event))
+                finally:
+                    loop.close()
+            else:
+                cancel_pending_event(user_id)
+                send_reply_message(reply_token, "操作をキャンセルしました。")
+            return
         
         # 通常のメッセージ処理
-        logger.info(f"[handle_text_message] 通常メッセージ処理: event={event}")
-        await handle_message(event)
-        
+        # 非同期関数を同期的に実行
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(handle_message(event))
+        finally:
+            loop.close()
+            
     except Exception as e:
-        logger.error(f"メッセージ処理中にエラーが発生: {str(e)}")
-        logger.error(traceback.format_exc())
-        if reply_token:
-            await reply_text(reply_token, "申し訳ありません。エラーが発生しました。\nしばらく時間をおいて再度お試しください。")
+        logger.error(f"[handle_text_message] エラー: {str(e)}", exc_info=True)
+        try:
+            send_reply_message(reply_token, "申し訳ありません。エラーが発生しました。")
+        except Exception as send_error:
+            logger.error(f"[handle_text_message] エラーメッセージ送信失敗: {str(send_error)}", exc_info=True)
 
 # --- 追加: pending_eventから予定追加を行う非同期関数 ---
 async def add_event_from_pending(user_id, reply_token, pending_event):
