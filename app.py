@@ -1538,3 +1538,32 @@ REDIS_URL = os.getenv("REDIS_URL")
 print("REDIS_URL at startup:", REDIS_URL)
 if not REDIS_URL or not REDIS_URL.startswith("redis://"):
     raise ValueError("REDIS_URL is missing or invalid.")
+
+async def handle_message(event):
+    """
+    テキストメッセージを処理する
+    """
+    try:
+        user_id = event.source.user_id
+        message = event.message.text
+        reply_token = event.reply_token
+
+        # メッセージを解析
+        result = parse_message(message)
+        if not result:
+            await reply_text(reply_token, "申し訳ありません。メッセージを理解できませんでした。\n予定の追加、確認、削除、更新のいずれかの操作を指定してください。")
+            return
+
+        # カレンダーマネージャーを取得
+        calendar_manager = get_calendar_manager(user_id)
+        if not calendar_manager:
+            await reply_text(reply_token, "カレンダーへのアクセス権限が必要です。\n以下のURLから認証を行ってください：\n" + get_auth_url(user_id))
+            return
+
+        # メッセージの種類に応じて処理
+        await handle_parsed_message(result, user_id, reply_token)
+
+    except Exception as e:
+        logger.error(f"Error in handle_message: {str(e)}")
+        logger.error(traceback.format_exc())
+        await reply_text(event.reply_token, "申し訳ありません。エラーが発生しました。\nしばらく時間をおいて再度お試しください。")
