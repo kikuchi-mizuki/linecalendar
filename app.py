@@ -228,6 +228,9 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 app.config['PREFERRED_URL_SCHEME'] = 'https'
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'your-secret-key-here')
 
+# 予定確認時の一時保存用（ユーザーごと）
+user_last_event_list = {}
+
 # 静的ファイルの設定
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 31536000  # 1年間のキャッシュ
 
