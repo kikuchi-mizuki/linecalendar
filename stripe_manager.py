@@ -39,12 +39,20 @@ class StripeManager:
             event = self.stripe.Webhook.construct_event(
                 payload, sig_header, os.getenv('STRIPE_WEBHOOK_SECRET')
             )
-            
+            current_app.logger.info(f"[Stripe Webhook] event type: {event['type']}")
+            current_app.logger.info(f"[Stripe Webhook] event data: {event['data']}")
+            # イベントタイプに応じた処理
             if event['type'] == 'checkout.session.completed':
                 session = event['data']['object']
+                current_app.logger.info(f"[Stripe Webhook] checkout.session.completed: customer={getattr(session, 'customer', None)}, metadata={getattr(session, 'metadata', None)}")
                 self._handle_successful_payment(session, line_bot_api)
+            elif event['type'] == 'customer.subscription.created':
+                subscription = event['data']['object']
+                current_app.logger.info(f"[Stripe Webhook] customer.subscription.created: customer={getattr(subscription, 'customer', None)}")
+                self._handle_subscription_created(subscription)
             elif event['type'] == 'customer.subscription.deleted':
                 subscription = event['data']['object']
+                current_app.logger.info(f"[Stripe Webhook] customer.subscription.deleted: customer={getattr(subscription, 'customer', None)}")
                 self._handle_subscription_cancelled(subscription)
             
             return True
@@ -55,9 +63,10 @@ class StripeManager:
     def _handle_successful_payment(self, session, line_bot_api=None):
         """支払い成功時の処理"""
         try:
+            current_app.logger.info(f"[Stripe Payment] session.customer: {getattr(session, 'customer', None)}")
+            current_app.logger.info(f"[Stripe Payment] session.metadata: {getattr(session, 'metadata', None)}")
             conn = get_db_connection()
             cursor = conn.cursor()
-            
             # ユーザーのサブスクリプション状態を更新
             cursor.execute('''
                 UPDATE users 
@@ -66,7 +75,6 @@ class StripeManager:
                     subscription_start_date = CURRENT_TIMESTAMP
                 WHERE user_id = ?
             ''', (session.customer, session.metadata.line_user_id))
-            
             conn.commit()
             conn.close()
             # LINEに決済完了通知をPush
@@ -81,6 +89,26 @@ class StripeManager:
                     current_app.logger.error(f"LINE決済完了Pushに失敗: {str(e)}")
         except Exception as e:
             current_app.logger.error(f"Failed to update user subscription: {str(e)}")
+            raise
+
+    def _handle_subscription_created(self, subscription):
+        """サブスクリプション作成時の処理"""
+        try:
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            
+            # ユーザーのサブスクリプション状態を更新
+            cursor.execute('''
+                UPDATE users 
+                SET subscription_status = 'active',
+                    subscription_start_date = CURRENT_TIMESTAMP
+                WHERE stripe_customer_id = ?
+            ''', (subscription.customer,))
+            
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            current_app.logger.error(f"Failed to update subscription status: {str(e)}")
             raise
 
     def _handle_subscription_cancelled(self, subscription):
@@ -106,7 +134,7 @@ class StripeManager:
 def send_payment_success_message(line_user_id, line_bot_api):
     """Send payment success message to user via LINE"""
     try:
-        message = TextSendMessage(text="決済が完了しました！\nこれで全ての機能が使えるようになりました。")
+        message = TextMessage(text="決済が完了しました！\nこれで全ての機能が使えるようになりました。")
         line_bot_api.push_message(line_user_id, message)
     except Exception as e:
         print(f"Error sending payment success message: {e}") 
