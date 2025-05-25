@@ -1483,7 +1483,7 @@ async def callback():
 
         try:
             # 署名を検証し、イベントを取得
-            await line_handler.handle(body, signature)
+            line_handler.handle(body, signature)
             logger.info("Webhook request processed successfully")
             return 'OK'
         except InvalidSignatureError:
