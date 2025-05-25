@@ -720,7 +720,7 @@ def format_overlapping_events(events):
     return "\n".join(formatted_events)
 
 @app.route("/callback", methods=['POST'])
-def callback():
+async def callback():
     """
     LINE Messaging APIからのwebhookリクエストを処理する
     """
@@ -756,7 +756,7 @@ def callback():
                 abort(400)
             
             # イベントの処理
-            line_handler.handle(body, signature)
+            await line_handler.handle(body, signature)
             logger.info("[callback] Successfully handled webhook request")
             
         except InvalidSignatureError as e:
