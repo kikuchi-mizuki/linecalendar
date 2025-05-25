@@ -1621,8 +1621,21 @@ def oauth2callback():
         flow.fetch_token(authorization_response=authorization_response)
         credentials = flow.credentials
 
-        # ユーザーIDをセッションから取得
+        # ユーザーIDをセッションから取得（ワンタイムコード方式にも対応）
         user_id = session.get('line_user_id')
+        if not user_id:
+            # GETパラメータからワンタイムコードを取得
+            code = request.args.get('code')
+            if code:
+                # Redisからuser_idを取得
+                user_id = redis_client.get(f"one_time_code:{code}")
+                if user_id:
+                    user_id = user_id.decode()
+                    # セッションに保存
+                    session['line_user_id'] = user_id
+                    session.modified = True
+                    # ワンタイムコードを削除
+                    redis_client.delete(f"one_time_code:{code}")
         if not user_id:
             return "ユーザーIDが見つかりません", 400
 
