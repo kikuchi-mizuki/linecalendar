@@ -63,8 +63,10 @@ class StripeManager:
     def _handle_successful_payment(self, session, line_bot_api=None):
         """支払い成功時の処理"""
         try:
-            current_app.logger.info(f"[Stripe Payment] session.customer: {getattr(session, 'customer', None)}")
-            current_app.logger.info(f"[Stripe Payment] session.metadata: {getattr(session, 'metadata', None)}")
+            # sessionはdict型で渡される
+            line_user_id = session['metadata'].get('line_user_id') or session['metadata'].get('user_id')
+            stripe_customer_id = session.get('customer')
+            current_app.logger.info(f"[Stripe Payment] user_id={line_user_id}, customer_id={stripe_customer_id}")
             conn = get_db_connection()
             cursor = conn.cursor()
             # ユーザーのサブスクリプション状態を更新
@@ -74,11 +76,10 @@ class StripeManager:
                     stripe_customer_id = ?,
                     subscription_start_date = CURRENT_TIMESTAMP
                 WHERE user_id = ?
-            ''', (session.customer, session.metadata.line_user_id))
+            ''', (stripe_customer_id, line_user_id))
             conn.commit()
             conn.close()
             # LINEに決済完了通知をPush
-            line_user_id = getattr(session.metadata, 'line_user_id', None) or getattr(session.metadata, 'user_id', None)
             if line_user_id and line_bot_api:
                 try:
                     line_bot_api.push_message(PushMessageRequest(
