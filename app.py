@@ -732,7 +732,7 @@ async def callback():
     # handleの処理に成功したらOK
     return 'OK'
 
-@handler.add(MessageEvent, message=TextMessage)
+@line_handler.add(MessageEvent, message=TextMessage)
 async def handle_text_message(event):
     try:
         user_id = event.source.user_id
@@ -2050,7 +2050,7 @@ def test_redis_write():
         }), 500
 
 # handlerの登録部分でasync対応
-@handler.add(MessageEvent, message=TextMessage)
+@line_handler.add(MessageEvent, message=TextMessage)
 async def handle_message(event):
     """
     メッセージを処理する非同期関数
@@ -2115,27 +2115,27 @@ async def handle_message(event):
         except Exception as reply_error:
             logger.error(f"[handle_message] エラーメッセージ送信失敗: {str(reply_error)}")
 
-@handler.add(FollowEvent)
+@line_handler.add(FollowEvent)
 def handle_follow(event):
     # フォローイベントの処理
     pass
 
-@handler.add(UnfollowEvent)
+@line_handler.add(UnfollowEvent)
 def handle_unfollow(event):
     # アンフォローイベントの処理
     pass
 
-@handler.add(JoinEvent)
+@line_handler.add(JoinEvent)
 def handle_join(event):
     # グループ参加イベントの処理
     pass
 
-@handler.add(LeaveEvent)
+@line_handler.add(LeaveEvent)
 def handle_leave(event):
     # グループ退出イベントの処理
     pass
 
-@handler.add(PostbackEvent)
+@line_handler.add(PostbackEvent)
 def handle_postback(event):
     # ポストバックイベントの処理
     pass
