@@ -715,7 +715,7 @@ def callback():
         # リクエストの署名を取得
         signature = request.headers.get('X-Line-Signature', '')
         if not signature:
-            logger.error("X-Line-Signature header is missing")
+            logger.error("[callback] X-Line-Signature header is missing")
             abort(400)
 
         # リクエストボディを取得
@@ -729,7 +729,8 @@ def callback():
 
         # 署名の検証とイベントの処理
         try:
-            line_handler.handle(body, signature)  # awaitを削除
+            logger.info("[callback] Starting to handle webhook request")
+            line_handler.handle(body, signature)
             logger.info("[callback] Successfully handled webhook request")
         except InvalidSignatureError:
             logger.error("[callback] Invalid signature")
@@ -749,11 +750,17 @@ def callback():
 @line_handler.add(MessageEvent, message=TextMessage)
 def handle_message(event):
     try:
-        logger.info(f"[handle_message] メッセージを受信: {event.message.text}")
-        logger.info(f"[handle_message] reply_token: {event.reply_token}")
+        user_id = event.source.user_id
+        message_text = event.message.text
+        reply_token = event.reply_token
+        logger.info(f"[handle_message] 受信メッセージ: {message_text}（user_id={user_id}）")
+        logger.info(f"[handle_message] reply_token: {reply_token}")
+        
         line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text="✅ メッセージを受け取りました！")
+            ReplyMessageRequest(
+                reply_token=reply_token,
+                messages=[TextMessage(text="✅ 受け取ったよ！")]
+            )
         )
         logger.info("[handle_message] 応答メッセージを送信しました")
     except Exception as e:
@@ -761,8 +768,10 @@ def handle_message(event):
         logger.error(traceback.format_exc())
         try:
             line_bot_api.reply_message(
-                event.reply_token,
-                TextSendMessage(text="申し訳ありません。エラーが発生しました。")
+                ReplyMessageRequest(
+                    reply_token=reply_token,
+                    messages=[TextMessage(text="申し訳ありません。エラーが発生しました。")]
+                )
             )
         except Exception as reply_error:
             logger.error(f"[handle_message] エラー通知の送信に失敗: {str(reply_error)}")
