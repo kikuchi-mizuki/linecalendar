@@ -707,7 +707,7 @@ def format_overlapping_events(events):
     return "\n".join(formatted_events)
 
 @app.route("/callback", methods=['POST'])
-async def callback():
+def callback():
     # リクエストヘッダーからX-Line-Signatureを取得
     signature = request.headers['X-Line-Signature']
     # リクエストボディを取得
@@ -716,10 +716,7 @@ async def callback():
 
     try:
         # 署名を検証し、問題なければhandleに定義されている関数を呼び出す
-        if line_handler is None:
-            app.logger.error("LINE Messaging API handler is not initialized")
-            abort(500)
-        await line_handler.handle(body, signature)
+        line_handler.handle(body, signature)  # awaitを削除
     except InvalidSignatureError:
         # 署名検証で失敗したときは例外をあげる
         app.logger.error("Invalid signature")
