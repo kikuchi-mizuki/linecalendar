@@ -25,7 +25,7 @@ load_dotenv()
 stripe.api_key = os.getenv('STRIPE_SECRET_KEY')
 
 def get_db_connection():
-    conn = sqlite3.connect('calendar_bot.db')
+    conn = sqlite3.connect('instance/calendar.db')
     conn.row_factory = sqlite3.Row
     return conn
 

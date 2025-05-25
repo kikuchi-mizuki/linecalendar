@@ -1674,3 +1674,22 @@ def format_event_list(events: List[Dict], start_time: datetime = None, end_time:
     if start_time:
         header = start_time.strftime('%Y年%m月%d日') + "の予定:\n"
     return header + "\n".join(lines)
+
+@app.route('/webhook/stripe', methods=['POST'])
+def stripe_webhook():
+    try:
+        payload = request.get_data()
+        sig_header = request.headers.get('Stripe-Signature')
+        
+        if not sig_header:
+            logger.error("Stripe-Signature header is missing")
+            return jsonify({'error': 'Stripe-Signature header is missing'}), 400
+            
+        if stripe_manager.handle_webhook(payload, sig_header, line_bot_api):
+            return jsonify({'status': 'success'})
+        else:
+            return jsonify({'error': 'Webhook handling failed'}), 400
+            
+    except Exception as e:
+        logger.error(f"Stripe webhook error: {str(e)}")
+        return jsonify({'error': str(e)}), 400

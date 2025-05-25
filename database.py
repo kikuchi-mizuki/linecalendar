@@ -48,8 +48,7 @@ class DatabaseManager:
                 # ユーザーテーブルの作成
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS users (
-                        id INTEGER PRIMARY KEY AUTOINCREMENT,
-                        line_user_id TEXT UNIQUE NOT NULL,
+                        user_id TEXT PRIMARY KEY,
                         name TEXT,
                         email TEXT,
                         subscription_status TEXT DEFAULT 'inactive',
