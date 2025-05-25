@@ -35,6 +35,13 @@ class DatabaseManager:
         データベースの初期化
         """
         try:
+            abs_path = os.path.abspath(self.db_path)
+            can_write = os.access(abs_path, os.W_OK)
+            logger.info(f"[_initialize_database] DBファイル: {abs_path}, 書き込み可: {can_write}")
+            if not os.path.exists(abs_path):
+                logger.warning(f"[_initialize_database] DBファイルが存在しません: {abs_path}")
+            elif not can_write:
+                logger.error(f"[_initialize_database] DBファイルが書き込み不可: {abs_path}")
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 
