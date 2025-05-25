@@ -422,8 +422,10 @@ async def reply_text(reply_token: str, texts: Union[str, List[str]]) -> None:
         for message in messages:
             try:
                 line_bot_api.reply_message(
-                    reply_token,
-                    TextMessage(text=message)
+                    ReplyMessageRequest(
+                        reply_token=reply_token,
+                        messages=[TextMessage(text=message)]
+                    )
                 )
                 logger.info(f"メッセージを送信しました: {message[:100]}...")
             except Exception as e:
@@ -433,8 +435,10 @@ async def reply_text(reply_token: str, texts: Union[str, List[str]]) -> None:
                 try:
                     error_message = "申し訳ありません。メッセージの送信に失敗しました。しばらく時間をおいて再度お試しください。"
                     line_bot_api.reply_message(
-                        reply_token,
-                        TextMessage(text=error_message)
+                        ReplyMessageRequest(
+                            reply_token=reply_token,
+                            messages=[TextMessage(text=error_message)]
+                        )
                     )
                 except Exception as inner_e:
                     logger.error(f"エラーメッセージの送信にも失敗: {str(inner_e)}")
