@@ -10,6 +10,10 @@ if client_secret_json:
     with open("client_secret.json", "w") as f:
         f.write(client_secret_json)
 
+# 定数の定義
+CLIENT_SECRETS_FILE = "client_secret.json"
+SCOPES = ['https://www.googleapis.com/auth/calendar']
+
 from dotenv import load_dotenv
 load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
 
@@ -71,7 +75,6 @@ from linebot.v3.messaging import (
     URIAction, TemplateMessage, ButtonsTemplate, PushMessageRequest,
     TextMessage, FlexMessage
 )
-from linebot import LineBotApi  # この行を追加
 import os
 import traceback
 from datetime import datetime, timedelta, timezone
@@ -310,7 +313,8 @@ if not STRIPE_WEBHOOK_SECRET:
     raise ValueError("STRIPE_WEBHOOK_SECRET is not set")
 
 # LINE Messaging APIの初期化
-line_bot_api = LineBotApi(os.getenv('LINE_CHANNEL_ACCESS_TOKEN'))
+configuration = Configuration(access_token=LINE_CHANNEL_ACCESS_TOKEN)
+line_bot_api = MessagingApi(ApiClient(configuration))
 
 db_manager = DatabaseManager()
 
