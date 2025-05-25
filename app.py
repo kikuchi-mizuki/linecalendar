@@ -1618,6 +1618,14 @@ async def handle_message(event):
                     await reply_text(reply_token, f"予定の追加に失敗しました: {add_result.get('message', '不明なエラー')}")
                 return
 
+        # 「いいえ」や「キャンセル」返答時のpendingイベント削除対応
+        if message in ["いいえ", "いいえ。", "キャンセル", "やめる", "中止", "no", "No"]:
+            pending_event = db_manager.get_pending_event(user_id)
+            if pending_event and pending_event.get('operation_type') == 'add':
+                db_manager.clear_pending_event(user_id)
+                await reply_text(reply_token, "予定の追加をキャンセルしました。")
+                return
+
         # 通常のメッセージ解析
         result = parse_message(message)
         if not result:
