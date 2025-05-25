@@ -356,7 +356,7 @@ async def send_reply_message(reply_token: str, text: str) -> None:
     """
     try:
         if not reply_token:
-            logger.error("reply_tokenが空です")
+            logger.warning("reply_tokenがありません。返信できません。")
             return
 
         if not text:
@@ -384,7 +384,7 @@ async def reply_text(reply_token: str, texts: Union[str, List[str]]) -> None:
     """
     try:
         if not reply_token:
-            logger.error("reply_tokenが空です")
+            logger.warning("reply_tokenがありません。返信できません。")
             return
 
         if not texts:
@@ -425,17 +425,6 @@ async def reply_text(reply_token: str, texts: Union[str, List[str]]) -> None:
             except Exception as e:
                 logger.error(f"メッセージの送信中にエラーが発生: {str(e)}")
                 logger.error(traceback.format_exc())
-                # エラーメッセージを送信
-                try:
-                    error_message = "申し訳ありません。メッセージの送信に失敗しました。しばらく時間をおいて再度お試しください。"
-                    line_bot_api.reply_message(
-                        ReplyMessageRequest(
-                            reply_token=reply_token,
-                            messages=[TextMessage(text=error_message)]
-                        )
-                    )
-                except Exception as inner_e:
-                    logger.error(f"エラーメッセージの送信にも失敗: {str(inner_e)}")
 
     except Exception as e:
         logger.error(f"reply_textで予期せぬエラーが発生: {str(e)}")
@@ -1573,6 +1562,10 @@ async def handle_message(event):
         message = event.message.text
         reply_token = event.reply_token
 
+        if not reply_token:
+            logger.warning("reply_tokenがありません。返信できません。")
+            return
+
         # メッセージを解析
         result = parse_message(message)
         if not result:
@@ -1580,9 +1573,14 @@ async def handle_message(event):
             return
 
         # カレンダーマネージャーを取得
-        calendar_manager = get_calendar_manager(user_id)
-        if not calendar_manager:
-            await reply_text(reply_token, "カレンダーへのアクセス権限が必要です。\n以下のURLから認証を行ってください：\n" + get_auth_url(user_id))
+        try:
+            calendar_manager = get_calendar_manager(user_id)
+        except ValueError as e:
+            if "Google認証情報が見つかりません" in str(e):
+                auth_url = get_auth_url(user_id)
+                await reply_text(reply_token, f"カレンダーへのアクセス権限が必要です。\n以下のURLから認証を行ってください：\n{auth_url}")
+            else:
+                await reply_text(reply_token, "申し訳ありません。エラーが発生しました。\nしばらく時間をおいて再度お試しください。")
             return
 
         # メッセージの種類に応じて処理
@@ -1591,4 +1589,9 @@ async def handle_message(event):
     except Exception as e:
         logger.error(f"Error in handle_message: {str(e)}")
         logger.error(traceback.format_exc())
-        await reply_text(event.reply_token, "申し訳ありません。エラーが発生しました。\nしばらく時間をおいて再度お試しください。")
+        try:
+            if event.reply_token:
+                await reply_text(event.reply_token, "申し訳ありません。エラーが発生しました。\nしばらく時間をおいて再度お試しください。")
+        except Exception as reply_error:
+            logger.error(f"エラーメッセージの送信にも失敗: {str(reply_error)}")
+            logger.error(traceback.format_exc())
