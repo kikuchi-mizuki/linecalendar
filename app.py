@@ -708,17 +708,16 @@ def format_overlapping_events(events):
 
 @app.route("/callback", methods=['POST'])
 def callback():
-    # リクエストヘッダーからX-Line-Signatureを取得
     signature = request.headers['X-Line-Signature']
-    # リクエストボディを取得
     body = request.get_data(as_text=True)
     app.logger.info("Request body: " + body)
 
     try:
-        # 署名を検証し、問題なければhandleに定義されている関数を呼び出す
+        if line_handler is None:
+            app.logger.error("LINE handler が未初期化です")
+            abort(500)
         line_handler.handle(body, signature)  # awaitを削除
     except InvalidSignatureError:
-        # 署名検証で失敗したときは例外をあげる
         app.logger.error("Invalid signature")
         abort(400)
     except Exception as e:
@@ -726,67 +725,79 @@ def callback():
         app.logger.error(f"Traceback: {traceback.format_exc()}")
         abort(500)
 
-    # handleの処理に成功したらOK
     return 'OK'
 
 @line_handler.add(MessageEvent, message=TextMessage)
-def handle_text_message(event):
+def handle_message(event):
+    """
+    メッセージを処理する関数
+    """
     try:
         user_id = event.source.user_id
         message_text = event.message.text
         reply_token = event.reply_token
         
-        logger.info(f"[handle_text_message] メッセージ受信: user_id={user_id}, message={message_text}")
+        logger.info(f"[handle_message] 受信メッセージ: user_id={user_id}, message={message_text}")
         
         # ユーザーの認証情報を取得
         credentials = get_user_credentials(user_id)
-        logger.debug(f"[handle_text_message] credentials: {credentials}")
+        logger.info(f"[handle_message] credentials: {credentials}")
         
         if not credentials:
-            logger.warning(f"[handle_text_message] 認証情報が見つかりません: user_id={user_id}")
+            logger.warning(f"[handle_message] 認証情報が見つかりません: user_id={user_id}")
             # 非同期関数を同期的に実行
             loop = asyncio.get_event_loop()
             loop.run_until_complete(handle_unauthenticated_user(user_id, reply_token))
             return
         
-        # キャンセルパターンのチェック
-        if message_text.lower() in ['キャンセル', 'cancel', 'やめる']:
-            pending_event = get_pending_event(user_id)
-            if pending_event:
-                cancel_pending_event(user_id)
-                reply_message = f"予定の{pending_event['action']}をキャンセルしました。"
-                # 非同期関数を同期的に実行
-                loop = asyncio.get_event_loop()
-                loop.run_until_complete(send_reply_message(reply_token, reply_message))
-                return
-        
-        # 確認応答の処理
+        # 保留中のイベントを取得
         pending_event = get_pending_event(user_id)
-        if pending_event and pending_event.get('waiting_confirmation'):
-            if message_text.lower() in ['はい', 'yes', 'y']:
-                # 非同期関数を同期的に実行
-                loop = asyncio.get_event_loop()
-                loop.run_until_complete(handle_message(event))
-            else:
-                cancel_pending_event(user_id)
-                # 非同期関数を同期的に実行
-                loop = asyncio.get_event_loop()
-                loop.run_until_complete(send_reply_message(reply_token, "操作をキャンセルしました。"))
+        logger.debug(f"[handle_message] pending_event: {pending_event}")
+        
+        # キャンセルパターンの確認
+        cancel_patterns = [
+            'いいえ', 'キャンセル', 'やめる', '中止', 'いらない', 'no', 'NO', 'No', 'cancel', 'CANCEL', 'Cancel'
+        ]
+        normalized_text = message_text.strip().lower() if message_text else ''
+        if pending_event and normalized_text in cancel_patterns:
+            clear_pending_event(user_id)
+            logger.info(f"[handle_message] 予定の追加をキャンセルしました: reply_token={reply_token}")
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(reply_text(reply_token, '予定の追加をキャンセルしました。'))
             return
         
-        # 通常のメッセージ処理
-        # 非同期関数を同期的に実行
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(handle_message(event))
+        # 確認応答の処理
+        if is_confirmation_reply(message_text):
+            if pending_event:
+                op_type = pending_event.get('operation_type')
+                if op_type == 'add':
+                    loop = asyncio.get_event_loop()
+                    loop.run_until_complete(add_event_from_pending(user_id, reply_token, pending_event))
+                    clear_pending_event(user_id)
+                    return
+                elif op_type == 'update':
+                    result_msg = loop.run_until_complete(handle_yes_response(user_id))
+                    clear_pending_event(user_id)
+                    loop.run_until_complete(reply_text(reply_token, result_msg))
+                    return
+        
+        # メッセージの解析と処理
+        result = parse_message(message_text)
+        if result:
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(handle_parsed_message(result, user_id, reply_token))
+        else:
+            loop = asyncio.get_event_loop()
+            loop.run_until_complete(reply_text(reply_token, "申し訳ありません。メッセージを理解できませんでした。\n予定の追加、確認、削除、更新のいずれかを指定してください。"))
             
     except Exception as e:
-        logger.error(f"[handle_text_message] エラー: {str(e)}", exc_info=True)
+        logger.error(f"[handle_message] エラー発生: {str(e)}")
+        logger.error(f"[handle_message] エラーの詳細: {traceback.format_exc()}")
         try:
-            # 非同期関数を同期的に実行
             loop = asyncio.get_event_loop()
-            loop.run_until_complete(send_reply_message(reply_token, "申し訳ありません。エラーが発生しました。"))
-        except Exception as send_error:
-            logger.error(f"[handle_text_message] エラーメッセージ送信失敗: {str(send_error)}", exc_info=True)
+            loop.run_until_complete(reply_text(reply_token, "申し訳ありません。メッセージの処理中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。"))
+        except Exception as reply_error:
+            logger.error(f"[handle_message] エラーメッセージ送信失敗: {str(reply_error)}")
 
 @app.route('/webhook', methods=['POST'])
 def stripe_webhook():
