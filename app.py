@@ -15,11 +15,17 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
 
 # LINE Messaging APIのハンドラーを初期化
 from linebot.v3 import WebhookHandler
-handler = WebhookHandler(os.getenv('LINE_CHANNEL_SECRET'))
+LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
+if not LINE_CHANNEL_SECRET:
+    raise ValueError("LINE_CHANNEL_SECRET is not set")
+handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
 # LINE Messaging APIクライアントの初期化
 from linebot.v3.messaging import Configuration, ApiClient, MessagingApi
-configuration = Configuration(access_token=os.getenv('LINE_CHANNEL_ACCESS_TOKEN'))
+LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
+if not LINE_CHANNEL_ACCESS_TOKEN:
+    raise ValueError("LINE_CHANNEL_ACCESS_TOKEN is not set")
+configuration = Configuration(access_token=LINE_CHANNEL_ACCESS_TOKEN)
 line_bot_api = MessagingApi(ApiClient(configuration))
 
 import logging
