@@ -15,12 +15,11 @@ load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
 
 # LINE Messaging APIのハンドラーを初期化
 from linebot.v3 import WebhookHandler
-from linebot.v3.webhooks import WebhookParser
+from linebot.v3.webhooks import MessageEvent, TextMessageContent, FollowEvent, UnfollowEvent, JoinEvent, LeaveEvent, PostbackEvent
 LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
 if not LINE_CHANNEL_SECRET:
     raise ValueError("LINE_CHANNEL_SECRET is not set")
 line_handler = WebhookHandler(LINE_CHANNEL_SECRET)
-parser = WebhookParser(LINE_CHANNEL_SECRET)
 
 # LINE Messaging APIクライアントの初期化
 from linebot.v3.messaging import Configuration, ApiClient, MessagingApi
@@ -1484,7 +1483,7 @@ async def callback():
 
         try:
             # 署名を検証し、イベントを取得
-            events = parser.parse(body, signature)
+            events = line_handler.handle(body, signature)
             logger.info(f"Parsed events: {events}")
 
             # 各イベントを処理
@@ -1495,10 +1494,10 @@ async def callback():
                         await handle_message(event)
                     else:
                         # その他のメッセージタイプの場合
-                        line_handler.handle(body, signature)
+                        logger.info(f"Unhandled message type: {type(event.message)}")
                 else:
                     # その他のイベントタイプの場合
-                    line_handler.handle(body, signature)
+                    logger.info(f"Unhandled event type: {type(event)}")
 
             logger.info("Webhook request processed successfully")
         except InvalidSignatureError:
