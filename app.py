@@ -1683,16 +1683,19 @@ def oauth2callback():
 def format_event_list(events: List[Dict], start_time: datetime = None, end_time: datetime = None) -> str:
     """イベント一覧をカレンダー風テキストでフォーマット"""
     if not events:
-        if start_time and end_time and (end_time - start_time).days >= 1:
-            # 複数日分の場合
-            lines = []
+        lines = []
+        if start_time and end_time:
             current = start_time
             while current <= end_time:
                 lines.append(f"📅 {current.strftime('%Y/%m/%d (%a)')}")
                 lines.append("予定はありません。\n")
                 current += timedelta(days=1)
-            return "\n".join(lines)
-        return "予定は見つかりませんでした。"
+        elif start_time:
+            lines.append(f"📅 {start_time.strftime('%Y/%m/%d (%a)')}")
+            lines.append("予定はありません。\n")
+        else:
+            return "予定は見つかりませんでした。"
+        return "\n".join(lines)
 
     # 日付ごとにグループ化
     events_by_date = {}
