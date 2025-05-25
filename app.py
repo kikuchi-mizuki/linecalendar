@@ -1482,7 +1482,8 @@ async def callback():
 
         try:
             # 署名を検証し、問題なければhandleに定義されている関数を呼び出す
-            line_handler.handle(body, signature)
+            await line_handler.handle(body, signature)
+            logger.info("Webhook request processed successfully")
         except InvalidSignatureError:
             logger.error("Invalid signature. Please check your channel access token/channel secret.")
             abort(400)
