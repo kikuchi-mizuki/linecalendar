@@ -80,21 +80,9 @@ class DatabaseManager:
                 cursor.execute('''
                     CREATE TABLE IF NOT EXISTS pending_events (
                         user_id TEXT PRIMARY KEY,
-                        operation_type TEXT,
-                        delete_index INTEGER,
-                        event_index INTEGER,
-                        event_id TEXT,
-                        title TEXT,
-                        start_time TEXT,
-                        end_time TEXT,
-                        new_start_time TEXT,
-                        new_end_time TEXT,
-                        location TEXT,
-                        person TEXT,
-                        description TEXT,
-                        recurrence TEXT,
-                        force_update INTEGER DEFAULT 0,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                        event_info TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 ''')
                 
@@ -445,48 +433,12 @@ class DatabaseManager:
         try:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                # 各フィールドがdatetimeの場合のみisoformat()を呼ぶ
-                start_time = event_info.get('start_time')
-                if isinstance(start_time, datetime):
-                    start_time = start_time.isoformat()
-                end_time = event_info.get('end_time')
-                if isinstance(end_time, datetime):
-                    end_time = end_time.isoformat()
-                new_start_time = event_info.get('new_start_time')
-                if isinstance(new_start_time, datetime):
-                    new_start_time = new_start_time.isoformat()
-                new_end_time = event_info.get('new_end_time')
-                if isinstance(new_end_time, datetime):
-                    new_end_time = new_end_time.isoformat()
-                event_index = event_info.get('event_index')
-                event_id = event_info.get('event_id')
-                person = event_info.get('person')
-                force_update = 1 if event_info.get('force_update') else 0
+                event_info_json = json.dumps(event_info, default=str)
                 cursor.execute('''
                     INSERT OR REPLACE INTO pending_events (
-                        user_id, operation_type, delete_index, event_index, event_id,
-                        title, start_time, end_time,
-                        new_start_time, new_end_time,
-                        location, person, description, recurrence, force_update
-                    )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ''', (
-                    user_id,
-                    event_info.get('operation_type'),
-                    event_info.get('delete_index'),
-                    event_index,
-                    event_id,
-                    event_info.get('title'),
-                    start_time,
-                    end_time,
-                    new_start_time,
-                    new_end_time,
-                    event_info.get('location'),
-                    person,
-                    event_info.get('description'),
-                    event_info.get('recurrence'),
-                    force_update
-                ))
+                        user_id, event_info, created_at, updated_at
+                    ) VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ''', (user_id, event_info_json))
                 conn.commit()
                 logger.info(f"保留中のイベントを保存しました: {user_id}")
         except Exception as e:
@@ -498,42 +450,13 @@ class DatabaseManager:
             with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
                 cursor.execute('''
-                    SELECT operation_type, delete_index, event_index, event_id,
-                           title, start_time, end_time,
-                           new_start_time, new_end_time,
-                           location, person, description, recurrence, force_update
-                    FROM pending_events
-                    WHERE user_id = ?
+                    SELECT event_info FROM pending_events WHERE user_id = ?
                 ''', (user_id,))
                 result = cursor.fetchone()
                 if not result:
                     return None
-                def to_aware(dt_str):
-                    if not dt_str:
-                        return None
-                    try:
-                        dt = datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
-                        if dt.tzinfo is None:
-                            dt = dt.replace(tzinfo=timezone.utc)
-                        return dt
-                    except ValueError:
-                        return dt_str
-                return {
-                    'operation_type': result[0],
-                    'delete_index': result[1],
-                    'event_index': result[2],
-                    'event_id': result[3],
-                    'title': result[4],
-                    'start_time': to_aware(result[5]),
-                    'end_time': to_aware(result[6]),
-                    'new_start_time': to_aware(result[7]),
-                    'new_end_time': to_aware(result[8]),
-                    'location': result[9],
-                    'person': result[10],
-                    'description': result[11],
-                    'recurrence': result[12],
-                    'force_update': bool(result[13])
-                }
+                event_info = json.loads(result[0])
+                return event_info
         except Exception as e:
             logger.error(f"保留中のイベントの取得に失敗: {str(e)}")
             return None
