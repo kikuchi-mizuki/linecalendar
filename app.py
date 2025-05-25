@@ -720,28 +720,29 @@ def callback():
 
         # リクエストボディを取得
         body = request.get_data(as_text=True)
-        logger.info(f"Request body: {body}")
+        logger.info(f"[callback] Request body: {body}")
 
         # LINEハンドラーの存在確認
         if line_handler is None:
-            logger.error("LINE handler is not initialized")
+            logger.error("[callback] LINE handler is not initialized")
             abort(500)
 
         # 署名の検証とイベントの処理
         try:
-            line_handler.handle(body, signature)
+            line_handler.handle(body, signature)  # awaitを削除
+            logger.info("[callback] Successfully handled webhook request")
         except InvalidSignatureError:
-            logger.error("Invalid signature")
+            logger.error("[callback] Invalid signature")
             abort(400)
         except Exception as e:
-            logger.error(f"Error in line_handler.handle: {str(e)}")
+            logger.error(f"[callback] Error in line_handler.handle: {str(e)}")
             logger.error(traceback.format_exc())
             abort(500)
 
         return 'OK'
 
     except Exception as e:
-        logger.error(f"Error in callback: {str(e)}")
+        logger.error(f"[callback] Error in callback: {str(e)}")
         logger.error(traceback.format_exc())
         abort(500)
 
@@ -755,19 +756,29 @@ def handle_message(event):
         message_text = event.message.text
         reply_token = event.reply_token
         
-        logger.info(f"[handle_message] 受信メッセージ: user_id={user_id}, message={message_text}")
+        logger.info(f"[handle_message] メッセージ受信: user_id={user_id}, message={message_text}")
         
         # テスト返信
         line_bot_api.reply_message(
             ReplyMessageRequest(
                 reply_token=reply_token,
-                messages=[TextMessage(text="テスト返信です！")]
+                messages=[TextMessage(text="✅ LINEに届きました！")]
             )
         )
+        logger.info(f"[handle_message] テスト返信を送信しました: user_id={user_id}")
             
     except Exception as e:
         logger.error(f"[handle_message] エラー発生: {str(e)}")
         logger.error(f"[handle_message] エラーの詳細: {traceback.format_exc()}")
+        try:
+            line_bot_api.reply_message(
+                ReplyMessageRequest(
+                    reply_token=event.reply_token,
+                    messages=[TextMessage(text="申し訳ありません。エラーが発生しました。")]
+                )
+            )
+        except Exception as reply_error:
+            logger.error(f"[handle_message] エラーメッセージ送信失敗: {str(reply_error)}")
 
 @app.route('/webhook', methods=['POST'])
 def stripe_webhook():
