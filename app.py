@@ -744,7 +744,6 @@ async def callback():
         try:
             logger.info("[callback] Starting to handle webhook request")
             logger.info(f"[callback] Signature: {signature}")
-            logger.info(f"[callback] LINE_CHANNEL_SECRET: {LINE_CHANNEL_SECRET}")
             
             # イベントの解析を試みる
             try:
@@ -754,17 +753,6 @@ async def callback():
             except json.JSONDecodeError as e:
                 logger.error(f"[callback] Failed to parse request body as JSON: {str(e)}")
                 logger.error(f"[callback] Request body: {body}")
-                abort(400)
-            
-            # 署名の検証
-            try:
-                # LINE Messaging API v3での署名検証
-                from linebot.v3.webhooks import WebhookParser
-                parser = WebhookParser(LINE_CHANNEL_SECRET)
-                parser.parse(body, signature)
-            except Exception as e:
-                logger.error(f"[callback] Invalid signature: {str(e)}")
-                logger.error(traceback.format_exc())
                 abort(400)
             
             # イベントの処理
