@@ -14,6 +14,7 @@ import pytz
 import traceback
 import json
 import tempfile
+from app import format_event_list  # 先頭付近でimport
 
 # 警告メッセージを抑制
 warnings.filterwarnings('ignore', message='file_cache is only supported with oauth2client<4.0.0')
@@ -108,78 +109,11 @@ class CalendarChat:
             logger.error("詳細なエラー情報:", exc_info=True)
             return []  # エラー時は空のリストを返す
 
-    def format_events(self, events: list) -> str:
+    def format_events(self, events: list, start_time: datetime = None, end_time: datetime = None) -> str:
         """
-        予定一覧を整形して返す（改善版）
-        
-        Args:
-            events (list): 予定のリスト
-            
-        Returns:
-            str: 整形された予定一覧
+        予定一覧をカレンダー風テキストでフォーマット
         """
-        if not events:
-            today = datetime.now(self.timezone)
-            date_str = today.strftime('%Y年%m月%d日')
-            return (
-                f"📅 {date_str}の予定は特にありません。\n\n"
-                f"新しい予定を追加する場合は、以下のような形式でメッセージを送ってください：\n"
-                f"・「明日の15時に会議を追加して」\n"
-                f"・「来週の月曜日、10時から12時まで打ち合わせを入れて」\n"
-                f"・「今週の金曜日、14時からカフェで打ち合わせ」"
-            )
-
-        events_by_date = {}
-        for event in events:
-            start = event['start'].get('dateTime', event['start'].get('date'))
-            end = event['end'].get('dateTime', event['end'].get('date'))
-            # 型チェック追加
-            if isinstance(start, str):
-                start_dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
-            else:
-                start_dt = start
-            if isinstance(end, str):
-                end_dt = datetime.fromisoformat(end.replace('Z', '+00:00'))
-            else:
-                end_dt = end
-            start_dt = start_dt.astimezone(self.timezone)
-            end_dt = end_dt.astimezone(self.timezone)
-            date_key = start_dt.strftime('%Y/%m/%d')
-            weekday = ['月', '火', '水', '木', '金', '土', '日'][start_dt.weekday()]
-            time_str = f"{start_dt.strftime('%H:%M')}〜{end_dt.strftime('%H:%M')}"
-            event_details = []
-            event_details.append(f"📌 {event.get('summary', '予定なし')}")
-            event_details.append(f"⏰ {time_str}")
-            if event.get('location'):
-                event_details.append(f"📍 {event['location']}")
-            if event.get('description'):
-                event_details.append(f"📝 {event['description']}")
-            event_str = "\n".join(event_details)
-            if date_key not in events_by_date:
-                events_by_date[date_key] = {
-                    'weekday': weekday,
-                    'events': []
-                }
-            events_by_date[date_key]['events'].append(event_str)
-        formatted_events = []
-        formatted_events.append("📅 予定一覧")
-        formatted_events.append("=" * 20)
-        for date in sorted(events_by_date.keys()):
-            date_info = events_by_date[date]
-            formatted_events.append(f"\n■ {date}（{date_info['weekday']}）")
-            formatted_events.extend([f"  {event}" for event in date_info['events']])
-            formatted_events.append("-" * 20)
-        free_slots = self.get_free_time_slots(
-            datetime.now(self.timezone).replace(hour=0, minute=0, second=0, microsecond=0),
-            30
-        )
-        if free_slots:
-            formatted_events.append("\n⏰ 空き時間")
-            formatted_events.append("=" * 20)
-            formatted_events.extend([f"  {slot}" for slot in self.format_free_time_slots(free_slots)])
-        else:
-            formatted_events.append("\n⏰ 空き時間はありません")
-        return "\n".join(formatted_events)
+        return format_event_list(events, start_time, end_time)
 
     def check_availability(self, start_time: datetime, end_time: datetime) -> List[Dict]:
         """
@@ -884,63 +818,9 @@ class CalendarChat:
 
     def format_calendar_response(self, events: list, start_time: datetime, end_time: datetime) -> str:
         """
-        カレンダーのレスポンスを整形する
-        
-        Args:
-            events (list): 予定のリスト
-            start_time (datetime): 開始時刻
-            end_time (datetime): 終了時刻
-            
-        Returns:
-            str: 整形されたレスポンス
+        カレンダーのレスポンスをカレンダー風テキストでフォーマット
         """
-        if not events:
-            return (
-                "📅 予定はありません。\n\n"
-                "新しい予定を追加する場合は、以下のような形式でメッセージを送ってください：\n"
-                "・「明日の15時に会議を追加して」\n"
-                "・「来週の月曜日、10時から12時まで打ち合わせを入れて」\n"
-                "・「今週の金曜日、14時からカフェで打ち合わせ」"
-            )
-        
-        # 予定を日付ごとにグループ化
-        events_by_date = {}
-        for event in events:
-            start = event['start'].get('dateTime', event['start'].get('date'))
-            date = datetime.fromisoformat(start.replace('Z', '+00:00')).strftime('%Y年%m月%d日')
-            if date not in events_by_date:
-                events_by_date[date] = []
-            events_by_date[date].append(event)
-        
-        # メッセージを構築
-        message = "📅 予定一覧\n\n"
-        
-        for date in sorted(events_by_date.keys()):
-            message += f"■ {date}\n"
-            for event in events_by_date[date]:
-                start = event['start'].get('dateTime', event['start'].get('date'))
-                end = event['end'].get('dateTime', event['end'].get('date'))
-                start_dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
-                end_dt = datetime.fromisoformat(end.replace('Z', '+00:00'))
-                
-                message += (
-                    f"  📌 {event.get('summary', '予定なし')}\n"
-                    f"  ⏰ {start_dt.strftime('%H:%M')}〜{end_dt.strftime('%H:%M')}\n"
-                )
-                if event.get('location'):
-                    message += f"  📍 {event['location']}\n"
-                if event.get('description'):
-                    message += f"  👥 {event['description']}\n"
-                message += "\n"
-        
-        # 空き時間情報を追加
-        free_slots = self.get_free_time_slots(start_time)
-        if free_slots:
-            message += "\n空いている時間帯はこちらです👇\n"
-            message += self.format_free_time_slots(free_slots)
-        
-        message += "\n予定の追加、変更、削除が必要な場合は、お気軽にお申し付けくださいね！"
-        return message
+        return format_event_list(events, start_time, end_time)
 
     def check_overlapping_events(self, start_time: datetime, end_time: datetime) -> List[Dict]:
         """
