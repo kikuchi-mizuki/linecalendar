@@ -1721,7 +1721,24 @@ def oauth2callback():
         if cred_check:
             logger.debug(f"[oauth2callback後チェック] cred_check内容: {cred_check}")
 
-        return "Google認証が完了しました。LINEに戻って操作してください。"
+        # フォントサイズを大きくしたHTMLで返す
+        return '''
+        <!DOCTYPE html>
+        <html lang="ja">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Google認証完了</title>
+            <style>
+                body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #fff; }
+                .message { font-size: 2.2rem; color: #222; text-align: center; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+            </style>
+        </head>
+        <body>
+            <div class="message">Google認証が完了しました。<br>LINEに戻って操作してください。</div>
+        </body>
+        </html>
+        '''
     except Exception as e:
         logger.error(f"Google認証コールバックでエラー: {str(e)}")
         logger.error(traceback.format_exc())
