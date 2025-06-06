@@ -1730,8 +1730,17 @@ def oauth2callback():
             <meta name="viewport" content="width=device-width, initial-scale=1.0">
             <title>Google認証完了</title>
             <style>
-                body { display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #fff; }
-                .message { font-size: 2.2rem; color: #222; text-align: center; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+                body { 
+                    margin: 0; 
+                    padding: 20px;
+                    background: #fff; 
+                }
+                .message { 
+                    font-size: 1.2rem; 
+                    color: #222; 
+                    text-align: left; 
+                    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
+                }
             </style>
         </head>
         <body>
