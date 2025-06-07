@@ -1039,10 +1039,17 @@ async def handle_line_message(event):
         user = cursor.fetchone()
         conn.close()
         if not user or user['subscription_status'] != 'active':
+            base_url = os.getenv("BASE_URL")
+            if not base_url:
+                logger.error("BASE_URLが未設定です。環境変数を確認してください。")
+                await reply_text(reply_token, "システムエラー：BASE_URLが未設定です。管理者にご連絡ください。")
+                return
+            payment_url = f'{base_url}/payment/checkout?user_id={user_id}&line_user_id={user_id}'
+            logger.info(f"[決済案内] user_id={user_id}, url={payment_url}")
             msg = (
                 'この機能をご利用いただくには、月額プランへのご登録が必要です。\n'
                 f'以下のURLからご登録ください：\n'
-                f'{os.getenv("BASE_URL")}/payment/checkout?user_id={user_id}&line_user_id={user_id}'
+                f'{payment_url}'
             )
             await reply_text(reply_token, msg)
             return
