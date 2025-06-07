@@ -9,7 +9,7 @@ from message_parser import parse_message
 import os
 import traceback
 from datetime import datetime
-from utils.db import get_db_connection
+from utils.db import get_db_connection, db_manager
 import logging
 import google_auth_oauthlib
 from flask import url_for
@@ -60,11 +60,13 @@ def callback():
 @line_bp.route('/oauth2callback', methods=['GET'])
 def oauth2callback():
     try:
-        # Google認証のコールバック処理
+        state = session.get('state')
+        if not state:
+            return 'Error: セッションが切れています。もう一度LINEから認証をやり直してください。', 400
         flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
             CLIENT_SECRETS_FILE,
             scopes=SCOPES,
-            state=session['state']
+            state=state
         )
         flow.redirect_uri = url_for('line.oauth2callback', _external=True)
         authorization_response = request.url
