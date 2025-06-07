@@ -511,6 +511,10 @@ class DatabaseManager:
             conn.commit()
 
 def get_db_connection():
-    conn = sqlite3.connect('instance/calendar.db')
+    db_path = 'instance/calendar.db'
+    # DBファイルがなければ自動で初期化
+    if not os.path.exists(db_path):
+        DatabaseManager(db_path)
+    conn = sqlite3.connect(db_path)
     conn.row_factory = sqlite3.Row
     return conn 
