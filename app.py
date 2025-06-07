@@ -1134,17 +1134,6 @@ async def reply_flex(reply_token, flex_content):
         logger.error(f"[reply_flex] Flex Message送信エラー: {str(e)}")
         logger.error(traceback.format_exc())
 
-def get_db_connection():
-    """データベース接続を取得する"""
-    try:
-        conn = sqlite3.connect('instance/calendar.db')
-        conn.row_factory = sqlite3.Row
-        return conn
-    except Exception as e:
-        logger.error(f"データベース接続エラー: {str(e)}")
-        logger.error(traceback.format_exc())
-        raise
-
 def ensure_db_columns():
     """必要なデータベースカラムが存在することを確認する"""
     try:

@@ -9,6 +9,7 @@ from message_parser import parse_message
 import os
 import traceback
 from datetime import datetime
+from utils.db import get_db_connection
 
 line_bp = Blueprint('line', __name__)
 
