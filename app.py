@@ -745,7 +745,12 @@ def get_auth_url(user_id: str) -> str:
         str: ワンタイムコード
     """
     try:
-        db_manager.delete_google_credentials(user_id)
+        # 既存の認証情報を確認
+        existing_creds = db_manager.get_user_credentials(user_id)
+        if existing_creds:
+            logger.info(f"[get_auth_url] 既存の認証情報が見つかりました: user_id={user_id}")
+            return None
+
         session.clear()
         session['line_user_id'] = user_id
         session['auth_start_time'] = time.time()

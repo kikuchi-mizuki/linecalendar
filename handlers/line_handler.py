@@ -143,9 +143,31 @@ async def handle_message(event):
         try:
             creds = get_user_credentials(user_id)
             logger.info(f"[debug] get_user_credentials({user_id}) = {creds}")
+            
+            if not creds:
+                code = get_auth_url(user_id)
+                if code is None:
+                    # 既存の認証情報がある場合は、それを再利用
+                    logger.info(f"[handle_message] 既存の認証情報を再利用: user_id={user_id}")
+                    await handle_parsed_message(result, user_id, reply_token)
+                    return
+                    
+                login_url = f"{os.getenv('BASE_URL', 'https://linecalendar-production.up.railway.app')}/onetimelogin"
+                msg1 = f"カレンダーを利用するにはGoogle認証が必要です。\nあなたのワンタイムコードは【{code}】です。"
+                msg2 = f"下記URLから認証ページにアクセスし、ワンタイムコードを入力してください：\n{login_url}"
+                await reply_text(reply_token, [msg1, msg2])
+                logger.info(f"[handle_message] Google認証案内送信: user_id={user_id}, code={code}")
+                return
+                
             calendar_manager = get_calendar_manager(user_id)
             if not calendar_manager:
                 code = get_auth_url(user_id)
+                if code is None:
+                    # 既存の認証情報がある場合は、それを再利用
+                    logger.info(f"[handle_message] 既存の認証情報を再利用: user_id={user_id}")
+                    await handle_parsed_message(result, user_id, reply_token)
+                    return
+                    
                 login_url = f"{os.getenv('BASE_URL', 'https://linecalendar-production.up.railway.app')}/onetimelogin"
                 msg1 = f"カレンダーを利用するにはGoogle認証が必要です。\nあなたのワンタイムコードは【{code}】です。"
                 msg2 = f"下記URLから認証ページにアクセスし、ワンタイムコードを入力してください：\n{login_url}"
@@ -155,6 +177,12 @@ async def handle_message(event):
         except ValueError as e:
             if "Google認証情報が見つかりません" in str(e):
                 code = get_auth_url(user_id)
+                if code is None:
+                    # 既存の認証情報がある場合は、それを再利用
+                    logger.info(f"[handle_message] 既存の認証情報を再利用: user_id={user_id}")
+                    await handle_parsed_message(result, user_id, reply_token)
+                    return
+                    
                 login_url = f"{os.getenv('BASE_URL', 'https://linecalendar-production.up.railway.app')}/onetimelogin"
                 msg1 = f"カレンダーを利用するにはGoogle認証が必要です。\nあなたのワンタイムコードは【{code}】です。"
                 msg2 = f"下記URLから認証ページにアクセスし、ワンタイムコードを入力してください：\n{login_url}"
