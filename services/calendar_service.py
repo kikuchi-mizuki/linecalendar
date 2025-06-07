@@ -1,4 +1,6 @@
-from utils.logger import db_manager, logger
+from utils.logger import logger
+# db_managerが必要な場合は下記を有効化
+# from utils.db import db_manager
 from calendar_operations import CalendarManager
 from services.line_service import get_user_credentials
 
