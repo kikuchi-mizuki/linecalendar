@@ -65,7 +65,7 @@ async def handle_message(event):
             msg = (
                 'この機能をご利用いただくには、月額プランへのご登録が必要です。\n'
                 f'以下のURLからご登録ください：\n'
-                f'{os.getenv("BASE_URL", "https://linecalendar-production.up.railway.app")}/payment/checkout'
+                f'{os.getenv("BASE_URL", "https://linecalendar-production.up.railway.app")}/payment/checkout?user_id={user_id}'
             )
             await reply_text(reply_token, msg)
             return
