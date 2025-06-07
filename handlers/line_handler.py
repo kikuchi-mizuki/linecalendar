@@ -13,6 +13,7 @@ from utils.db import get_db_connection
 import logging
 import google_auth_oauthlib
 from flask import url_for
+from app import CLIENT_SECRETS_FILE
 
 logger = logging.getLogger('app')
 
