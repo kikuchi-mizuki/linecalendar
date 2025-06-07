@@ -47,7 +47,7 @@ if not LINE_CHANNEL_SECRET:
     raise ValueError("LINE_CHANNEL_SECRET is not set")
 
 # LINE Messaging APIクライアントの初期化
-from linebot.v3.messaging import Configuration, ApiClient, MessagingApi
+from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, ReplyMessageRequest, TextMessage
 LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
 if not LINE_CHANNEL_ACCESS_TOKEN:
     raise ValueError("LINE_CHANNEL_ACCESS_TOKEN is not set")
