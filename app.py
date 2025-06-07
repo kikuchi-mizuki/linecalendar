@@ -1383,21 +1383,28 @@ def callback():
 # Stripe webhook routeを他のrouteと一緒に配置
 @app.route('/webhook/stripe', methods=['POST'])
 def stripe_webhook():
+    logger.info("=== Stripe Webhook受信 ===")
     try:
         payload = request.get_data()
+        logger.info(f"Stripe Webhook payload: {payload}")
         sig_header = request.headers.get('Stripe-Signature')
+        logger.info(f"Stripe Webhook sig_header: {sig_header}")
         
         if not sig_header:
             logger.error("Stripe-Signature header is missing")
             return jsonify({'error': 'Stripe-Signature header is missing'}), 400
             
-        if stripe_manager.handle_webhook(payload, sig_header, line_bot_api):
+        result = stripe_manager.handle_webhook(payload, sig_header, line_bot_api)
+        logger.info(f"stripe_manager.handle_webhook result: {result}")
+        if result:
             return jsonify({'status': 'success'})
         else:
+            logger.error("Webhook handling failed (stripe_manager returned False)")
             return jsonify({'error': 'Webhook handling failed'}), 400
             
     except Exception as e:
         logger.error(f"Stripe webhook error: {str(e)}")
+        logger.error(traceback.format_exc())
         return jsonify({'error': str(e)}), 400
 
 if __name__ == "__main__":
