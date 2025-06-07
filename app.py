@@ -5,7 +5,7 @@ import pytz
 JST = pytz.timezone('Asia/Tokyo')
 
 # Flask関連のインポート
-from flask import Flask, request, jsonify, session, redirect, url_for, render_template_string
+from flask import Flask, request, jsonify, session, redirect, url_for, render_template, render_template_string
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_session import Session
