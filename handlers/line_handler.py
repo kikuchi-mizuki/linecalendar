@@ -13,7 +13,8 @@ from utils.db import get_db_connection
 import logging
 import google_auth_oauthlib
 from flask import url_for
-from app import CLIENT_SECRETS_FILE
+# ↓循環import回避のため直接定義
+CLIENT_SECRETS_FILE = "client_secret.json"
 
 logger = logging.getLogger('app')
 
