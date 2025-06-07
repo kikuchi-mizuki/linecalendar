@@ -19,7 +19,7 @@ LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
 line_bp = Blueprint('line', __name__)
 
 # --- LINEイベントハンドラ ---
-@line_bp.route('/callback', methods=['POST'])
+@line_bp.route('/callback', methods=['GET', 'POST'])
 def callback():
     try:
         body = request.get_data(as_text=True)
