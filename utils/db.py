@@ -76,6 +76,8 @@ class DatabaseManager:
 
     def get_user_credentials(self, user_id):
         """ユーザーの認証情報を取得する"""
+        if isinstance(user_id, bytes):
+            user_id = user_id.decode()
         try:
             with self.get_db_connection() as conn:
                 cursor = conn.cursor()
@@ -109,6 +111,8 @@ class DatabaseManager:
 
     def save_google_credentials(self, user_id, credentials):
         """Google認証情報を保存する"""
+        if isinstance(user_id, bytes):
+            user_id = user_id.decode()
         try:
             with self.get_db_connection() as conn:
                 cursor = conn.cursor()
@@ -141,6 +145,8 @@ class DatabaseManager:
 
     def delete_google_credentials(self, user_id):
         """Google認証情報を削除する"""
+        if isinstance(user_id, bytes):
+            user_id = user_id.decode()
         try:
             with self.get_db_connection() as conn:
                 cursor = conn.cursor()

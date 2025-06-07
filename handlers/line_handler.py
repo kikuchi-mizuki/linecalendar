@@ -75,6 +75,8 @@ def oauth2callback():
         flow.fetch_token(authorization_response=authorization_response)
         credentials = flow.credentials
         user_id = session.get('line_user_id')
+        if isinstance(user_id, bytes):
+            user_id = user_id.decode()
         logger.info(f"[oauth2callback] user_id={user_id}, credentials={credentials}")
         if not user_id:
             logger.error("[oauth2callback] user_idがセッションに存在しません")
