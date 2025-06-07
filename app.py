@@ -33,6 +33,8 @@ from services.calendar_service import get_calendar_manager
 from utils.formatters import format_event_list
 from utils.message_parser import extract_datetime_from_message
 
+print("=== APP STARTED ===")
+
 # 定数
 JST = pytz.timezone('Asia/Tokyo')
 MAX_RETRIES = 3
