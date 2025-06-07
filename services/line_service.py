@@ -211,4 +211,141 @@ def save_one_time_code(code, user_id):
         redis_client.setex(f"one_time_code:{code}", ONE_TIME_CODE_TTL, user_id)
         logger.debug(f"[one_time_code][redis][save] code={code}, user_id={user_id}")
     except Exception as e:
-        logger.error(f"[one_time_code][redis][save][error] code={code}, user_id={user_id}, error={e}", exc_info=True) 
+        logger.error(f"[one_time_code][redis][save][error] code={code}, user_id={user_id}, error={e}", exc_info=True)
+
+async def handle_add_event(result, calendar_manager, user_id, reply_token):
+    try:
+        if not all(k in result for k in ['title', 'start_time', 'end_time']):
+            await reply_text(reply_token, "予定の追加に必要な情報が不足しています。\nタイトル、開始時間、終了時間を指定してください。")
+            return
+        add_result = await calendar_manager.add_event(
+            title=result['title'],
+            start_time=result['start_time'],
+            end_time=result['end_time'],
+            location=result.get('location'),
+            person=result.get('person'),
+            description=result.get('description'),
+            recurrence=result.get('recurrence')
+        )
+        if add_result['success']:
+            day = result['start_time'].replace(hour=0, minute=0, second=0, microsecond=0)
+            day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
+            events = await calendar_manager.get_events(start_time=day, end_time=day_end)
+            msg = f"✅ 予定を追加しました：\n{result['title']}\n{result['start_time'].strftime('%m月%d日 %H:%M')}～{result['end_time'].strftime('%H:%M')}\n\n" + format_event_list(events, day, day_end)
+            await reply_text(reply_token, msg)
+        else:
+            if add_result.get('error') == 'duplicate':
+                pending_event = {
+                    'operation_type': 'add',
+                    'title': result['title'],
+                    'start_time': result['start_time'].isoformat(),
+                    'end_time': result['end_time'].isoformat(),
+                    'location': result.get('location'),
+                    'person': result.get('person'),
+                    'description': result.get('description'),
+                    'recurrence': result.get('recurrence'),
+                    'force_add': True
+                }
+                db_manager.save_pending_event(user_id, pending_event)
+            await reply_text(reply_token, f"予定の追加に失敗しました: {add_result.get('message', '不明なエラー')}")
+    except Exception as e:
+        logger.error(f"予定の追加中にエラーが発生: {str(e)}")
+        logger.error(traceback.format_exc())
+        await reply_text(reply_token, "予定の追加中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
+
+async def handle_read_event(result, calendar_manager, user_id, reply_token):
+    try:
+        if not all(k in result for k in ['start_time', 'end_time']):
+            await reply_text(reply_token, "予定の確認に必要な情報が不足しています。\n確認したい日付を指定してください。")
+            return
+        events = await calendar_manager.get_events(
+            start_time=result['start_time'],
+            end_time=result['end_time'],
+            title=result.get('title')
+        )
+        formatted_events = []
+        for event in events:
+            start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date'))
+            end = event.get('end', {}).get('dateTime', event.get('end', {}).get('date'))
+            if start and end:
+                start_dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
+                end_dt = datetime.fromisoformat(end.replace('Z', '+00:00'))
+                event['start']['dateTime'] = start_dt.isoformat()
+                event['end']['dateTime'] = end_dt.isoformat()
+            formatted_events.append(event)
+        message = format_event_list(formatted_events, result['start_time'], result['end_time'])
+        # user_last_event_list[user_id] = {
+        #     'events': formatted_events,
+        #     'start_time': result['start_time'],
+        #     'end_time': result['end_time']
+        # }
+        await reply_text(reply_token, message)
+    except Exception as e:
+        logger.error(f"予定の確認中にエラーが発生: {str(e)}")
+        logger.error(traceback.format_exc())
+        await reply_text(reply_token, "予定の確認中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
+
+async def handle_delete_event(result, calendar_manager, user_id, reply_token):
+    try:
+        delete_result = None
+        if 'index' in result:
+            delete_result = await calendar_manager.delete_event_by_index(
+                index=result['index'],
+                start_time=result.get('start_time')
+            )
+        elif 'start_time' in result and 'end_time' in result:
+            matched_events = await calendar_manager._find_events(
+                result['start_time'], result['end_time'], result.get('title'))
+            if not matched_events:
+                await reply_text(reply_token, "指定された日時の予定が見つかりませんでした。")
+                return
+            if len(matched_events) == 1:
+                event = matched_events[0]
+                delete_result = await calendar_manager.delete_event(event['id'])
+            else:
+                msg = "複数の予定が見つかりました。削除したい予定を選んでください:\n" + format_event_list(matched_events)
+                await reply_text(reply_token, msg)
+                return
+        elif 'event_id' in result:
+            delete_result = await calendar_manager.delete_event(result['event_id'])
+        else:
+            await reply_text(reply_token, "削除する予定を特定できませんでした。\n予定の番号またはIDを指定してください。")
+            return
+        if delete_result and delete_result.get('success'):
+            day = result.get('start_time', datetime.now()).replace(hour=0, minute=0, second=0, microsecond=0)
+            day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
+            events = await calendar_manager.get_events(start_time=day, end_time=day_end)
+            msg = delete_result.get('message', '予定を削除しました。')
+            msg += f"\n\n{format_event_list(events, day, day_end)}"
+            await reply_text(reply_token, msg)
+        else:
+            await reply_text(reply_token, f"予定の削除に失敗しました: {delete_result.get('message', '不明なエラー')}")
+    except Exception as e:
+        logger.error(f"予定の削除中にエラーが発生: {str(e)}")
+        logger.error(traceback.format_exc())
+        await reply_text(reply_token, "予定の削除中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
+
+async def handle_update_event(result, calendar_manager, user_id, reply_token):
+    try:
+        if not all(k in result for k in ['start_time', 'end_time', 'new_start_time', 'new_end_time']):
+            await reply_text(reply_token, "予定の更新に必要な情報が不足しています。\n更新する予定の時間と新しい時間を指定してください。")
+            return
+        update_result = await calendar_manager.update_event(
+            start_time=result['start_time'],
+            end_time=result['end_time'],
+            new_start_time=result['new_start_time'],
+            new_end_time=result['new_end_time'],
+            title=result.get('title')
+        )
+        if update_result['success']:
+            day = result['new_start_time'].replace(hour=0, minute=0, second=0, microsecond=0)
+            day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
+            events = await calendar_manager.get_events(start_time=day, end_time=day_end)
+            msg = f"予定を更新しました！\n\n" + format_event_list(events, day, day_end)
+            await reply_text(reply_token, msg)
+        else:
+            await reply_text(reply_token, f"予定の更新に失敗しました: {update_result.get('message', '不明なエラー')}")
+    except Exception as e:
+        logger.error(f"予定の更新中にエラーが発生: {str(e)}")
+        logger.error(traceback.format_exc())
+        await reply_text(reply_token, "予定の更新中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。") 
