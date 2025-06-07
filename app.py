@@ -1402,6 +1402,7 @@ async def handle_update_event(result, calendar_manager, user_id, reply_token):
 
 @app.route('/callback', methods=['POST'])
 def callback():
+    logger.info("app.py /callback called")
     try:
         signature = request.headers['X-Line-Signature']
         body = request.get_data(as_text=True)
