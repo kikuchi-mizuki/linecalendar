@@ -136,7 +136,7 @@ async def handle_message(event):
         logger.error(traceback.format_exc())
         try:
             if event.reply_token:
-                await reply_text(event.reply_token, "申し訳ありません。エラーが発生しました。\nしばらく時間をおいて再度お試しください。")
+                await reply_text(event.reply_token, "Google認証が必要です。LINEで「連携」や「認証」と送信してください。")
         except Exception as reply_error:
             logger.error(f"Error sending error message: {str(reply_error)}")
 
