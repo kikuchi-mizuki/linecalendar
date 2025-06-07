@@ -4,6 +4,21 @@ os.makedirs('instance', exist_ok=True)
 import pytz
 JST = pytz.timezone('Asia/Tokyo')
 
+# Flask関連のインポート
+from flask import Flask, request, jsonify, session, redirect, url_for, render_template_string
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_session import Session
+from werkzeug.middleware.proxy_fix import ProxyFix
+import redis
+from datetime import datetime, timedelta
+import asyncio
+import nest_asyncio
+from typing import Union, List, Dict, Optional
+import traceback
+import json
+import time
+
 # 環境変数からclient_secret.jsonを書き出す
 client_secret_json = os.getenv("GOOGLE_CLIENT_SECRET")
 if client_secret_json:
