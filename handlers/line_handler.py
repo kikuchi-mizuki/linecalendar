@@ -11,6 +11,8 @@ import traceback
 from datetime import datetime
 from utils.db import get_db_connection
 import logging
+import google_auth_oauthlib
+from flask import url_for
 
 logger = logging.getLogger('app')
 
@@ -19,8 +21,8 @@ LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
 line_bp = Blueprint('line', __name__)
 
 # --- LINEイベントハンドラ ---
-@line_bp.route('/callback', methods=['GET', 'POST'])
-def callback():
+@line_bp.route('/callback', methods=['POST'])
+def line_callback():
     try:
         body = request.get_data(as_text=True)
         signature = request.headers['X-Line-Signature']
@@ -41,7 +43,38 @@ def callback():
                 asyncio.run(handle_postback(PostbackEvent.from_dict(event)))
         return 'OK'
     except Exception as e:
-        logger.error(f"Error in callback: {str(e)}")
+        logger.error(f"Error in line_callback: {str(e)}")
+        logger.error(traceback.format_exc())
+        return 'Error', 500
+
+@line_bp.route('/oauth2callback', methods=['GET'])
+def oauth2callback():
+    try:
+        # Google認証のコールバック処理
+        flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
+            CLIENT_SECRETS_FILE,
+            scopes=SCOPES,
+            state=session['state']
+        )
+        flow.redirect_uri = url_for('line.oauth2callback', _external=True)
+        authorization_response = request.url
+        flow.fetch_token(authorization_response=authorization_response)
+        credentials = flow.credentials
+        user_id = session.get('line_user_id')
+        if not user_id:
+            return 'Error: No user ID in session', 400
+        db_manager.save_google_credentials(user_id, {
+            'token': credentials.token,
+            'refresh_token': credentials.refresh_token,
+            'token_uri': credentials.token_uri,
+            'client_id': credentials.client_id,
+            'client_secret': credentials.client_secret,
+            'scopes': credentials.scopes,
+            'expires_at': credentials.expiry.timestamp() if credentials.expiry else None
+        })
+        return '認証が完了しました。LINEに戻って予定の確認や追加ができるようになりました。'
+    except Exception as e:
+        logger.error(f"Error in oauth2callback: {str(e)}")
         logger.error(traceback.format_exc())
         return 'Error', 500
 
