@@ -80,12 +80,23 @@ class DatabaseManager:
             with self.get_db_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(
-                    'SELECT credentials FROM google_credentials WHERE user_id = ?',
+                    '''
+                    SELECT token, refresh_token, token_uri, client_id, client_secret, scopes, expires_at
+                    FROM google_credentials WHERE user_id = ?
+                    ''',
                     (user_id,)
                 )
                 result = cursor.fetchone()
                 if result:
-                    return json.loads(result['credentials'])
+                    return {
+                        'token': result['token'],
+                        'refresh_token': result['refresh_token'],
+                        'token_uri': result['token_uri'],
+                        'client_id': result['client_id'],
+                        'client_secret': result['client_secret'],
+                        'scopes': result['scopes'],
+                        'expires_at': result['expires_at']
+                    }
                 return None
         except Exception as e:
             logger.error(f"Error getting user credentials: {str(e)}")
@@ -98,10 +109,21 @@ class DatabaseManager:
                 cursor = conn.cursor()
                 cursor.execute(
                     '''
-                    INSERT OR REPLACE INTO google_credentials (user_id, credentials, updated_at)
-                    VALUES (?, ?, ?)
+                    INSERT OR REPLACE INTO google_credentials
+                    (user_id, token, refresh_token, token_uri, client_id, client_secret, scopes, expires_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ''',
-                    (user_id, json.dumps(credentials), datetime.now())
+                    (
+                        user_id,
+                        credentials.get('token'),
+                        credentials.get('refresh_token'),
+                        credentials.get('token_uri'),
+                        credentials.get('client_id'),
+                        credentials.get('client_secret'),
+                        credentials.get('scopes'),
+                        credentials.get('expires_at'),
+                        datetime.now()
+                    )
                 )
                 conn.commit()
                 logger.info(f"Google credentials saved for user: {user_id}")
