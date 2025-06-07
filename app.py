@@ -774,6 +774,56 @@ def get_auth_url(user_id: str) -> str:
         logger.error(traceback.format_exc())
         return ""
 
+# === ensure_db_columnsの定義をsetup_appより前に移動 ===
+def ensure_db_columns():
+    """必要なデータベースカラムが存在することを確認する"""
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        # usersテーブルのカラムを確認
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id TEXT PRIMARY KEY,
+                subscription_status TEXT DEFAULT 'inactive',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        # google_credentialsテーブルのカラムを確認
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS google_credentials (
+                user_id TEXT PRIMARY KEY,
+                token TEXT NOT NULL,
+                refresh_token TEXT,
+                token_uri TEXT NOT NULL,
+                client_id TEXT NOT NULL,
+                client_secret TEXT NOT NULL,
+                scopes TEXT NOT NULL,
+                expires_at TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        """)
+        # pending_eventsテーブルのカラムを確認
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS pending_events (
+                user_id TEXT PRIMARY KEY,
+                event_info TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            )
+        """)
+        conn.commit()
+        logger.info("データベースのカラム確認が完了しました")
+    except Exception as e:
+        logger.error(f"データベースのカラム確認中にエラーが発生: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise
+    finally:
+        if conn:
+            conn.close()
+
 # アプリケーション起動時の設定
 def setup_app():
     """
@@ -1037,330 +1087,6 @@ async def reply_flex(reply_token, flex_content):
     except Exception as e:
         logger.error(f"[reply_flex] Flex Message送信エラー: {str(e)}")
         logger.error(traceback.format_exc())
-
-def ensure_db_columns():
-    """必要なデータベースカラムが存在することを確認する"""
-    try:
-        conn = get_db_connection()
-        cursor = conn.cursor()
-        
-        # usersテーブルのカラムを確認
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                user_id TEXT PRIMARY KEY,
-                subscription_status TEXT DEFAULT 'inactive',
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        
-        # google_credentialsテーブルのカラムを確認
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS google_credentials (
-                user_id TEXT PRIMARY KEY,
-                token TEXT NOT NULL,
-                refresh_token TEXT,
-                token_uri TEXT NOT NULL,
-                client_id TEXT NOT NULL,
-                client_secret TEXT NOT NULL,
-                scopes TEXT NOT NULL,
-                expires_at TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(user_id)
-            )
-        """)
-        
-        # pending_eventsテーブルのカラムを確認
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS pending_events (
-                user_id TEXT PRIMARY KEY,
-                event_info TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(user_id)
-            )
-        """)
-        
-        conn.commit()
-        logger.info("データベースのカラム確認が完了しました")
-    except Exception as e:
-        logger.error(f"データベースのカラム確認中にエラーが発生: {str(e)}")
-        logger.error(traceback.format_exc())
-        raise
-    finally:
-        if conn:
-            conn.close()
-
-@app.route('/test_redis_write')
-def test_redis_write():
-    try:
-        # テスト用のデータを書き込む
-        test_key = 'test_key'
-        test_value = 'test_value'
-        redis_client.setex(test_key, 60, test_value)  # 60秒のTTL
-        
-        # 書き込みの確認
-        stored_value = redis_client.get(test_key)
-        if stored_value and stored_value.decode() == test_value:
-            logger.info(f"[Redis書き込みテスト] 成功: {test_key}={test_value}")
-            return jsonify({
-                'status': 'success',
-                'message': 'Redis書き込みテスト成功',
-                'data': {
-                    'key': test_key,
-                    'value': test_value,
-                    'ttl': redis_client.ttl(test_key)
-                }
-            })
-        else:
-            logger.error(f"[Redis書き込みテスト] 失敗: 値の不一致")
-            return jsonify({
-                'status': 'error',
-                'message': 'Redis書き込みテスト失敗: 値の不一致'
-            }), 500
-    except Exception as e:
-        logger.error(f"[Redis書き込みテスト] エラー: {str(e)}")
-        return jsonify({
-            'status': 'error',
-            'message': f'Redis書き込みテストエラー: {str(e)}'
-        }), 500
-
-# イベントハンドラーの定義
-async def handle_follow(event):
-    """フォローイベントを処理する"""
-    try:
-        user_id = event.source.user_id
-        logger.info(f"User followed: {user_id}")
-        # フォロー時の処理を実装
-    except Exception as e:
-        logger.error(f"Error in handle_follow: {str(e)}")
-        logger.error(traceback.format_exc())
-
-async def handle_unfollow(event):
-    """アンフォローイベントを処理する"""
-    try:
-        user_id = event.source.user_id
-        logger.info(f"User unfollowed: {user_id}")
-        # アンフォロー時の処理を実装
-    except Exception as e:
-        logger.error(f"Error in handle_unfollow: {str(e)}")
-        logger.error(traceback.format_exc())
-
-async def handle_join(event):
-    """グループ参加イベントを処理する"""
-    try:
-        group_id = event.source.group_id
-        logger.info(f"Bot joined group: {group_id}")
-        # グループ参加時の処理を実装
-    except Exception as e:
-        logger.error(f"Error in handle_join: {str(e)}")
-        logger.error(traceback.format_exc())
-
-async def handle_leave(event):
-    """グループ退出イベントを処理する"""
-    try:
-        group_id = event.source.group_id
-        logger.info(f"Bot left group: {group_id}")
-        # グループ退出時の処理を実装
-    except Exception as e:
-        logger.error(f"Error in handle_leave: {str(e)}")
-        logger.error(traceback.format_exc())
-
-async def handle_postback(event):
-    """ポストバックイベントを処理する"""
-    try:
-        user_id = event.source.user_id
-        data = event.postback.data
-        logger.info(f"Postback received from {user_id}: {data}")
-        # ポストバック時の処理を実装
-    except Exception as e:
-        logger.error(f"Error in handle_postback: {str(e)}")
-        logger.error(traceback.format_exc())
-
-async def handle_parsed_message(result, user_id, reply_token):
-    """
-    解析されたメッセージを処理する
-    
-    Args:
-        result: 解析結果
-        user_id: ユーザーID
-        reply_token: リプライトークン
-    """
-    try:
-        # カレンダーマネージャーの初期化
-        calendar_manager = get_calendar_manager(user_id)
-        
-        # 操作タイプに応じた処理
-        operation_type = result.get('operation_type')
-        logger.debug(f"[handle_parsed_message] 操作タイプ: {operation_type}")
-        
-        if operation_type == 'add':
-            await handle_add_event(result, calendar_manager, user_id, reply_token)
-        elif operation_type == 'read':
-            await handle_read_event(result, calendar_manager, user_id, reply_token)
-        elif operation_type == 'delete':
-            await handle_delete_event(result, calendar_manager, user_id, reply_token)
-        elif operation_type == 'update':
-            await handle_update_event(result, calendar_manager, user_id, reply_token)
-        else:
-            await reply_text(reply_token, "未対応の操作です。\n予定の追加、確認、削除、更新のいずれかを指定してください。")
-            
-    except Exception as e:
-        logger.error(f"メッセージ処理中にエラーが発生: {str(e)}")
-        logger.error(traceback.format_exc())
-        await reply_text(reply_token, "申し訳ありません。エラーが発生しました。\nしばらく時間をおいて再度お試しください。")
-
-async def handle_add_event(result, calendar_manager, user_id, reply_token):
-    """予定の追加を処理する"""
-    try:
-        if not all(k in result for k in ['title', 'start_time', 'end_time']):
-            await reply_text(reply_token, "予定の追加に必要な情報が不足しています。\nタイトル、開始時間、終了時間を指定してください。")
-            return
-
-        add_result = await calendar_manager.add_event(
-            title=result['title'],
-            start_time=result['start_time'],
-            end_time=result['end_time'],
-            location=result.get('location'),
-            person=result.get('person'),
-            description=result.get('description'),
-            recurrence=result.get('recurrence')
-        )
-
-        if add_result['success']:
-            day = result['start_time'].replace(hour=0, minute=0, second=0, microsecond=0)
-            day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
-            events = await calendar_manager.get_events(start_time=day, end_time=day_end)
-            msg = f"✅ 予定を追加しました：\n{result['title']}\n{result['start_time'].strftime('%m月%d日 %H:%M')}～{result['end_time'].strftime('%H:%M')}\n\n" + format_event_list(events, day, day_end)
-            await reply_text(reply_token, msg)
-        else:
-            # 重複時はpending_eventsに保存
-            if add_result.get('error') == 'duplicate':
-                pending_event = {
-                    'operation_type': 'add',
-                    'title': result['title'],
-                    'start_time': result['start_time'].isoformat(),
-                    'end_time': result['end_time'].isoformat(),
-                    'location': result.get('location'),
-                    'person': result.get('person'),
-                    'description': result.get('description'),
-                    'recurrence': result.get('recurrence'),
-                    'force_add': True
-                }
-                db_manager.save_pending_event(user_id, pending_event)
-            await reply_text(reply_token, f"予定の追加に失敗しました: {add_result.get('message', '不明なエラー')}")
-    except Exception as e:
-        logger.error(f"予定の追加中にエラーが発生: {str(e)}")
-        logger.error(traceback.format_exc())
-        await reply_text(reply_token, "予定の追加中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
-
-async def handle_read_event(result, calendar_manager, user_id, reply_token):
-    """予定の確認を処理する"""
-    try:
-        if not all(k in result for k in ['start_time', 'end_time']):
-            await reply_text(reply_token, "予定の確認に必要な情報が不足しています。\n確認したい日付を指定してください。")
-            return
-
-        events = await calendar_manager.get_events(
-            start_time=result['start_time'],
-            end_time=result['end_time'],
-            title=result.get('title')
-        )
-        
-        # イベントの日時情報を正しく処理
-        formatted_events = []
-        for event in events:
-            start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date'))
-            end = event.get('end', {}).get('dateTime', event.get('end', {}).get('date'))
-            if start and end:
-                start_dt = datetime.fromisoformat(start.replace('Z', '+00:00')).astimezone(JST)
-                end_dt = datetime.fromisoformat(end.replace('Z', '+00:00')).astimezone(JST)
-                event['start']['dateTime'] = start_dt.isoformat()
-                event['end']['dateTime'] = end_dt.isoformat()
-            formatted_events.append(event)
-        
-        message = format_event_list(formatted_events, result['start_time'], result['end_time'])
-        user_last_event_list[user_id] = {
-            'events': formatted_events,
-            'start_time': result['start_time'],
-            'end_time': result['end_time']
-        }
-        await reply_text(reply_token, message)
-    except Exception as e:
-        logger.error(f"予定の確認中にエラーが発生: {str(e)}")
-        logger.error(traceback.format_exc())
-        await reply_text(reply_token, "予定の確認中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
-
-async def handle_delete_event(result, calendar_manager, user_id, reply_token):
-    """予定の削除を処理する"""
-    try:
-        delete_result = None
-        if 'index' in result:
-            delete_result = await calendar_manager.delete_event_by_index(
-                index=result['index'],
-                start_time=result.get('start_time')
-            )
-        elif 'start_time' in result and 'end_time' in result:
-            matched_events = await calendar_manager._find_events(
-                result['start_time'], result['end_time'], result.get('title'))
-            if not matched_events:
-                await reply_text(reply_token, "指定された日時の予定が見つかりませんでした。")
-                return
-            if len(matched_events) == 1:
-                event = matched_events[0]
-                delete_result = await calendar_manager.delete_event(event['id'])
-            else:
-                msg = "複数の予定が見つかりました。削除したい予定を選んでください:\n" + format_event_list(matched_events)
-                await reply_text(reply_token, msg)
-                return
-        elif 'event_id' in result:
-            delete_result = await calendar_manager.delete_event(result['event_id'])
-        else:
-            await reply_text(reply_token, "削除する予定を特定できませんでした。\n予定の番号またはIDを指定してください。")
-            return
-
-        if delete_result and delete_result.get('success'):
-            day = result.get('start_time', datetime.now()).replace(hour=0, minute=0, second=0, microsecond=0)
-            day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
-            events = await calendar_manager.get_events(start_time=day, end_time=day_end)
-            msg = delete_result.get('message', '予定を削除しました。')
-            # 予定が残っていればそのまま、なければ「予定はありません」もカレンダー風で
-            msg += f"\n\n{format_event_list(events, day, day_end)}"
-            await reply_text(reply_token, msg)
-        else:
-            await reply_text(reply_token, f"予定の削除に失敗しました: {delete_result.get('message', '不明なエラー')}")
-    except Exception as e:
-        logger.error(f"予定の削除中にエラーが発生: {str(e)}")
-        logger.error(traceback.format_exc())
-        await reply_text(reply_token, "予定の削除中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
-
-async def handle_update_event(result, calendar_manager, user_id, reply_token):
-    """予定の更新を処理する"""
-    try:
-        if not all(k in result for k in ['start_time', 'end_time', 'new_start_time', 'new_end_time']):
-            await reply_text(reply_token, "予定の更新に必要な情報が不足しています。\n更新する予定の時間と新しい時間を指定してください。")
-            return
-
-        update_result = await calendar_manager.update_event(
-            start_time=result['start_time'],
-            end_time=result['end_time'],
-            new_start_time=result['new_start_time'],
-            new_end_time=result['new_end_time'],
-            title=result.get('title')
-        )
-
-        if update_result['success']:
-            day = result['new_start_time'].replace(hour=0, minute=0, second=0, microsecond=0)
-            day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
-            events = await calendar_manager.get_events(start_time=day, end_time=day_end)
-            msg = f"予定を更新しました！\n\n" + format_event_list(events, day, day_end)
-            await reply_text(reply_token, msg)
-        else:
-            await reply_text(reply_token, f"予定の更新に失敗しました: {update_result.get('message', '不明なエラー')}")
-    except Exception as e:
-        logger.error(f"予定の更新中にエラーが発生: {str(e)}")
-        logger.error(traceback.format_exc())
-        await reply_text(reply_token, "予定の更新中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
 
 @app.route('/callback', methods=['POST'])
 def callback():
