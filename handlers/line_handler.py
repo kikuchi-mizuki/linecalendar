@@ -2,7 +2,7 @@ from flask import Blueprint, request, abort, session
 import json
 import asyncio
 from linebot.v3.webhooks import MessageEvent, FollowEvent, UnfollowEvent, JoinEvent, LeaveEvent, PostbackEvent
-from utils.logger import db_manager
+from utils.logger import logger
 from services.calendar_service import get_calendar_manager
 from services.line_service import reply_text, get_auth_url, handle_parsed_message, format_event_list, get_user_credentials
 from message_parser import parse_message
@@ -27,31 +27,35 @@ line_bp = Blueprint('line', __name__)
 
 # --- LINEイベントハンドラ ---
 @line_bp.route('/callback', methods=['POST'])
-def line_callback():
-    logger.info("line_callback called")
+def callback():
+    """LINE Messaging APIからのコールバックを処理する"""
     try:
-        body = request.get_data(as_text=True)
         signature = request.headers['X-Line-Signature']
-        events = json.loads(body).get("events", [])
-        for event in events:
-            event_type = event.get("type")
-            if event_type == "message" and event.get("message", {}).get("type") == "text":
-                asyncio.run(handle_message(MessageEvent.from_dict(event)))
-            elif event_type == "follow":
-                asyncio.run(handle_follow(FollowEvent.from_dict(event)))
-            elif event_type == "unfollow":
-                asyncio.run(handle_unfollow(UnfollowEvent.from_dict(event)))
-            elif event_type == "join":
-                asyncio.run(handle_join(JoinEvent.from_dict(event)))
-            elif event_type == "leave":
-                asyncio.run(handle_leave(LeaveEvent.from_dict(event)))
-            elif event_type == "postback":
-                asyncio.run(handle_postback(PostbackEvent.from_dict(event)))
-        return 'OK'
+        body = request.get_data(as_text=True)
+        logger.info(f"Webhook request received: {body}")
+
+        try:
+            events = json.loads(body)["events"]
+            logger.info(f"Parsed events: {events}")
+            for event in events:
+                event_type = event.get("type")
+                if event_type == "message" and event.get("message", {}).get("type") == "text":
+                    asyncio.run(handle_message(MessageEvent.from_dict(event)))
+                else:
+                    logger.info(f"Unhandled event type: {event_type}")
+            logger.info("Webhook request processed successfully")
+            return 'OK'
+        except InvalidSignatureError:
+            logger.error("Invalid signature. Please check your channel access token/channel secret.")
+            abort(400)
+        except Exception as e:
+            logger.error(f"Error in parsing events: {str(e)}")
+            logger.error(traceback.format_exc())
+            abort(500)
     except Exception as e:
-        logger.error(f"Error in line_callback: {str(e)}")
+        logger.error(f"Error in callback: {str(e)}")
         logger.error(traceback.format_exc())
-        return 'Error', 500
+        abort(500)
 
 @line_bp.route('/oauth2callback', methods=['GET'])
 def oauth2callback():
@@ -85,16 +89,21 @@ def oauth2callback():
         return f"Error: {str(e)}", 500
 
 async def handle_message(event):
-    logger.info(f"[debug] handle_message entered for user_id={getattr(event.source, 'user_id', None)}")
-    logger.info(f"[handle_message] start: event={event}")
+    """メッセージイベントを処理する"""
     try:
+        if not isinstance(event, MessageEvent):
+            logger.warning(f"Invalid event type: {type(event)}")
+            return
+
+        if not isinstance(event.message, TextMessageContent):
+            logger.warning(f"Invalid message type: {type(event.message)}")
+            return
+
         user_id = event.source.user_id
-        message = event.message.text.strip()
+        message_text = event.message.text
         reply_token = event.reply_token
 
-        if not reply_token:
-            logger.warning("reply_tokenがありません。返信できません。")
-            return
+        logger.info(f"Received message from {user_id}: {message_text}")
 
         # サブスクリプション確認
         conn = get_db_connection()
@@ -113,7 +122,7 @@ async def handle_message(event):
             return
 
         # メッセージの解析
-        result = parse_message(message)
+        result = parse_message(message_text)
         if not result:
             await reply_text(reply_token, "申し訳ありません。メッセージを理解できませんでした。\n予定の追加、確認、削除、更新のいずれかの操作を指定してください。")
             logger.info(f"[handle_message] メッセージ解析失敗: user_id={user_id}")
@@ -159,6 +168,7 @@ async def handle_message(event):
                 logger.info(f"[handle_message] 例外時Google認証案内送信: user_id={getattr(event.source, 'user_id', None)}")
         except Exception as reply_error:
             logger.error(f"Error sending error message: {str(reply_error)}")
+        return {'type': 'text', 'text': 'エラーが発生しました。'}
 
 async def handle_follow(event):
     try:
