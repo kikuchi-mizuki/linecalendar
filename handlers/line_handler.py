@@ -1,7 +1,7 @@
 from flask import Blueprint, request, abort
 import json
 import asyncio
-from linebot.v3.webhooks import MessageEvent, FollowEvent, UnfollowEvent, JoinEvent, LeaveEvent, PostbackEvent, WebhookParser
+from linebot.v3.webhooks import MessageEvent, FollowEvent, UnfollowEvent, JoinEvent, LeaveEvent, PostbackEvent, WebhookHandler
 from utils.logger import db_manager
 from services.calendar_service import get_calendar_manager
 from services.line_service import reply_text, get_auth_url, handle_parsed_message, format_event_list
@@ -15,11 +15,48 @@ import logging
 logger = logging.getLogger('app')
 
 LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
-parser = WebhookParser(LINE_CHANNEL_SECRET)
+handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
 line_bp = Blueprint('line', __name__)
 
 # --- LINEイベントハンドラ ---
+@handler.add(MessageEvent)
+def on_message(event):
+    asyncio.run(handle_message(event))
+
+@handler.add(FollowEvent)
+def on_follow(event):
+    asyncio.run(handle_follow(event))
+
+@handler.add(UnfollowEvent)
+def on_unfollow(event):
+    asyncio.run(handle_unfollow(event))
+
+@handler.add(JoinEvent)
+def on_join(event):
+    asyncio.run(handle_join(event))
+
+@handler.add(LeaveEvent)
+def on_leave(event):
+    asyncio.run(handle_leave(event))
+
+@handler.add(PostbackEvent)
+def on_postback(event):
+    asyncio.run(handle_postback(event))
+
+# --- /callbackエンドポイント ---
+@line_bp.route('/callback', methods=['POST'])
+def callback():
+    try:
+        signature = request.headers['X-Line-Signature']
+        body = request.get_data(as_text=True)
+        handler.handle(body, signature)
+        return 'OK'
+    except Exception as e:
+        logger.error(f"Error in callback: {str(e)}")
+        logger.error(traceback.format_exc())
+        return 'Error', 500
+
 async def handle_message(event):
     try:
         user_id = event.source.user_id
@@ -122,31 +159,3 @@ async def handle_postback(event):
     except Exception as e:
         logger.error(f"Error in handle_postback: {str(e)}")
         logger.error(traceback.format_exc())
-
-# --- /callbackエンドポイント ---
-@line_bp.route('/callback', methods=['POST'])
-def callback():
-    try:
-        signature = request.headers['X-Line-Signature']
-        body = request.get_data(as_text=True)
-        events = parser.parse(body, signature)
-        
-        for event in events:
-            if isinstance(event, MessageEvent):
-                asyncio.run(handle_message(event))
-            elif isinstance(event, FollowEvent):
-                asyncio.run(handle_follow(event))
-            elif isinstance(event, UnfollowEvent):
-                asyncio.run(handle_unfollow(event))
-            elif isinstance(event, JoinEvent):
-                asyncio.run(handle_join(event))
-            elif isinstance(event, LeaveEvent):
-                asyncio.run(handle_leave(event))
-            elif isinstance(event, PostbackEvent):
-                asyncio.run(handle_postback(event))
-        
-        return 'OK'
-    except Exception as e:
-        logger.error(f"Error in callback: {str(e)}")
-        logger.error(traceback.format_exc())
-        return 'Error', 500
