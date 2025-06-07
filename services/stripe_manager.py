@@ -53,28 +53,54 @@ class StripeManager:
             ''')
             conn.commit()
             conn.close()
-            event = self.stripe.Webhook.construct_event(
-                payload, sig_header, os.getenv('STRIPE_WEBHOOK_SECRET')
-            )
-            current_app.logger.info(f"[Stripe Webhook] event type: {event['type']}")
-            current_app.logger.info(f"[Stripe Webhook] event data: {event['data']}")
+
+            # テスト用: 署名検証バイパス
+            skip_signature = os.getenv('SKIP_STRIPE_SIGNATURE', 'false').lower() == 'true'
+            event = None
+            if skip_signature:
+                current_app.logger.warning("[Stripe Webhook] SKIP_STRIPE_SIGNATURE=true: 署名検証をスキップします（開発用）")
+                try:
+                    import json
+                    event = json.loads(payload)
+                except Exception as e:
+                    current_app.logger.error(f"[Stripe Webhook] JSONパースエラー: {str(e)}")
+                    return False
+            else:
+                try:
+                    event = self.stripe.Webhook.construct_event(
+                        payload, sig_header, os.getenv('STRIPE_WEBHOOK_SECRET')
+                    )
+                except stripe.error.SignatureVerificationError as e:
+                    current_app.logger.error(f"[Stripe Webhook] 署名検証エラー: {str(e)}")
+                    return False
+                except ValueError as e:
+                    current_app.logger.error(f"[Stripe Webhook] ペイロードパースエラー: {str(e)}")
+                    return False
+                except Exception as e:
+                    current_app.logger.error(f"[Stripe Webhook] その他のエラー: {str(e)}")
+                    return False
+
+            current_app.logger.info(f"[Stripe Webhook] event type: {event.get('type')}")
+            current_app.logger.info(f"[Stripe Webhook] event data: {event.get('data')}")
             # イベントタイプに応じた処理
-            if event['type'] == 'checkout.session.completed':
+            if event.get('type') == 'checkout.session.completed':
                 session = event['data']['object']
                 current_app.logger.info(f"[Stripe Webhook] checkout.session.completed: customer={getattr(session, 'customer', None)}, metadata={getattr(session, 'metadata', None)}")
                 self._handle_successful_payment(session, line_bot_api)
-            elif event['type'] == 'customer.subscription.created':
+            elif event.get('type') == 'customer.subscription.created':
                 subscription = event['data']['object']
                 current_app.logger.info(f"[Stripe Webhook] customer.subscription.created: customer={getattr(subscription, 'customer', None)}")
                 self._handle_subscription_created(subscription)
-            elif event['type'] == 'customer.subscription.deleted':
+            elif event.get('type') == 'customer.subscription.deleted':
                 subscription = event['data']['object']
                 current_app.logger.info(f"[Stripe Webhook] customer.subscription.deleted: customer={getattr(subscription, 'customer', None)}")
                 self._handle_subscription_cancelled(subscription)
-            
+            else:
+                current_app.logger.info(f"[Stripe Webhook] 未対応のevent type: {event.get('type')}")
             return True
         except Exception as e:
-            current_app.logger.error(f"Stripe webhook handling failed: {str(e)}")
+            import traceback
+            current_app.logger.error(f"Stripe webhook handling failed: {str(e)}\n{traceback.format_exc()}")
             return False
 
     def _handle_successful_payment(self, session, line_bot_api=None):

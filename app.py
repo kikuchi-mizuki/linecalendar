@@ -784,6 +784,10 @@ def setup_app():
         else:
             logger.info("client_secret.jsonの存在を確認しました。")
         
+        # --- Stripe Webhook署名検証バイパス用（開発時のみtrueに）---
+        if 'SKIP_STRIPE_SIGNATURE' not in os.environ:
+            os.environ['SKIP_STRIPE_SIGNATURE'] = 'false'
+        
         logger.info("Application setup completed successfully")
         
     except Exception as e:
@@ -1390,7 +1394,7 @@ def callback():
 def stripe_webhook():
     logger.info("=== Stripe Webhook受信 ===")
     try:
-        payload = request.get_data()
+        payload = request.get_data(as_text=True)
         logger.info(f"Stripe Webhook payload: {payload}")
         sig_header = request.headers.get('Stripe-Signature')
         logger.info(f"Stripe Webhook sig_header: {sig_header}")
