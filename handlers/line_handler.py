@@ -120,6 +120,14 @@ async def handle_message(event):
         # カレンダーマネージャーを取得
         try:
             calendar_manager = get_calendar_manager(user_id)
+            if not calendar_manager:
+                code = get_auth_url(user_id)
+                login_url = f"{os.getenv('BASE_URL', 'https://linecalendar-production.up.railway.app')}/onetimelogin"
+                msg1 = f"カレンダーを利用するにはGoogle認証が必要です。\nあなたのワンタイムコードは【{code}】です。"
+                msg2 = f"下記URLから認証ページにアクセスし、ワンタイムコードを入力してください：\n{login_url}"
+                await reply_text(reply_token, [msg1, msg2])
+                logger.info(f"[handle_message] Google認証案内送信: user_id={user_id}, code={code}")
+                return
         except ValueError as e:
             if "Google認証情報が見つかりません" in str(e):
                 code = get_auth_url(user_id)
