@@ -1,7 +1,7 @@
 from flask import Blueprint, request, abort
 import json
 import asyncio
-from linebot.v3.webhooks import MessageEvent, FollowEvent, UnfollowEvent, JoinEvent, LeaveEvent, PostbackEvent
+from linebot.v3.webhooks import MessageEvent, FollowEvent, UnfollowEvent, JoinEvent, LeaveEvent, PostbackEvent, WebhookParser
 from utils.logger import db_manager
 from services.calendar_service import get_calendar_manager
 from services.line_service import reply_text, get_auth_url, handle_parsed_message, format_event_list
@@ -13,6 +13,9 @@ from utils.db import get_db_connection
 import logging
 
 logger = logging.getLogger('app')
+
+LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
+parser = WebhookParser(LINE_CHANNEL_SECRET)
 
 line_bp = Blueprint('line', __name__)
 
