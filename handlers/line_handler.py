@@ -1,7 +1,7 @@
 from flask import Blueprint, request, abort
 import json
 import asyncio
-from linebot.v3.webhooks import MessageEvent, FollowEvent, UnfollowEvent, JoinEvent, LeaveEvent, PostbackEvent, WebhookHandler
+from linebot.v3.webhooks import MessageEvent, FollowEvent, UnfollowEvent, JoinEvent, LeaveEvent, PostbackEvent
 from utils.logger import db_manager
 from services.calendar_service import get_calendar_manager
 from services.line_service import reply_text, get_auth_url, handle_parsed_message, format_event_list
@@ -15,42 +15,30 @@ import logging
 logger = logging.getLogger('app')
 
 LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
-handler = WebhookHandler(LINE_CHANNEL_SECRET)
 
 line_bp = Blueprint('line', __name__)
 
 # --- LINEイベントハンドラ ---
-@handler.add(MessageEvent)
-def on_message(event):
-    asyncio.run(handle_message(event))
-
-@handler.add(FollowEvent)
-def on_follow(event):
-    asyncio.run(handle_follow(event))
-
-@handler.add(UnfollowEvent)
-def on_unfollow(event):
-    asyncio.run(handle_unfollow(event))
-
-@handler.add(JoinEvent)
-def on_join(event):
-    asyncio.run(handle_join(event))
-
-@handler.add(LeaveEvent)
-def on_leave(event):
-    asyncio.run(handle_leave(event))
-
-@handler.add(PostbackEvent)
-def on_postback(event):
-    asyncio.run(handle_postback(event))
-
-# --- /callbackエンドポイント ---
 @line_bp.route('/callback', methods=['POST'])
 def callback():
     try:
-        signature = request.headers['X-Line-Signature']
         body = request.get_data(as_text=True)
-        handler.handle(body, signature)
+        signature = request.headers['X-Line-Signature']
+        events = json.loads(body).get("events", [])
+        for event in events:
+            event_type = event.get("type")
+            if event_type == "message" and event.get("message", {}).get("type") == "text":
+                asyncio.run(handle_message(MessageEvent.from_dict(event)))
+            elif event_type == "follow":
+                asyncio.run(handle_follow(FollowEvent.from_dict(event)))
+            elif event_type == "unfollow":
+                asyncio.run(handle_unfollow(UnfollowEvent.from_dict(event)))
+            elif event_type == "join":
+                asyncio.run(handle_join(JoinEvent.from_dict(event)))
+            elif event_type == "leave":
+                asyncio.run(handle_leave(LeaveEvent.from_dict(event)))
+            elif event_type == "postback":
+                asyncio.run(handle_postback(PostbackEvent.from_dict(event)))
         return 'OK'
     except Exception as e:
         logger.error(f"Error in callback: {str(e)}")
