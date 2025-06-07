@@ -88,13 +88,18 @@ class DatabaseManager:
                 )
                 result = cursor.fetchone()
                 if result:
+                    scopes = result['scopes']
+                    try:
+                        scopes = json.loads(scopes)
+                    except Exception:
+                        pass
                     return {
                         'token': result['token'],
                         'refresh_token': result['refresh_token'],
                         'token_uri': result['token_uri'],
                         'client_id': result['client_id'],
                         'client_secret': result['client_secret'],
-                        'scopes': result['scopes'],
+                        'scopes': scopes,
                         'expires_at': result['expires_at']
                     }
                 return None
@@ -107,6 +112,9 @@ class DatabaseManager:
         try:
             with self.get_db_connection() as conn:
                 cursor = conn.cursor()
+                scopes = credentials.get('scopes')
+                if isinstance(scopes, list):
+                    scopes = json.dumps(scopes)
                 cursor.execute(
                     '''
                     INSERT OR REPLACE INTO google_credentials
@@ -120,7 +128,7 @@ class DatabaseManager:
                         credentials.get('token_uri'),
                         credentials.get('client_id'),
                         credentials.get('client_secret'),
-                        credentials.get('scopes'),
+                        scopes,
                         credentials.get('expires_at'),
                         datetime.now()
                     )
