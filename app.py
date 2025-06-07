@@ -322,31 +322,6 @@ if not STRIPE_WEBHOOK_SECRET:
 configuration = Configuration(access_token=LINE_CHANNEL_ACCESS_TOKEN)
 line_bot_api = MessagingApi(ApiClient(configuration))
 
-# CalendarManagerの初期化
-def get_calendar_manager(user_id: str) -> CalendarManager:
-    """
-    ユーザーIDに基づいてカレンダーマネージャーを取得する
-    
-    Args:
-        user_id (str): ユーザーID
-        
-    Returns:
-        CalendarManager: カレンダーマネージャーのインスタンス
-    """
-    try:
-        # ユーザーの認証情報を取得
-        credentials = get_user_credentials(user_id)
-        if not credentials:
-            logger.info(f"ユーザー {user_id} の認証情報が見つかりません。認証が必要です。")
-            raise ValueError("Google認証情報が見つかりません")
-            
-        # カレンダーマネージャーを初期化
-        return CalendarManager(credentials)
-    except Exception as e:
-        logger.error(f"カレンダーマネージャーの初期化に失敗: {str(e)}")
-        logger.error(traceback.format_exc())
-        raise
-
 # タイムアウト設定
 TIMEOUT_SECONDS = 30  # タイムアウトを30秒に延長
 
