@@ -16,6 +16,9 @@ from flask import url_for
 # ↓循環import回避のため直接定義
 CLIENT_SECRETS_FILE = "client_secret.json"
 
+# GoogleカレンダーAPIのスコープ
+SCOPES = ['https://www.googleapis.com/auth/calendar']
+
 logger = logging.getLogger('app')
 
 LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
