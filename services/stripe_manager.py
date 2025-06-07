@@ -37,6 +37,22 @@ class StripeManager:
     def handle_webhook(self, payload, sig_header, line_bot_api=None):
         """StripeのWebhookを処理"""
         try:
+            # usersテーブルがなければ自動作成
+            conn = get_db_connection()
+            cursor = conn.cursor()
+            cursor.execute('''
+                CREATE TABLE IF NOT EXISTS users (
+                    user_id TEXT PRIMARY KEY,
+                    subscription_status TEXT DEFAULT 'inactive',
+                    stripe_customer_id TEXT,
+                    subscription_start_date TIMESTAMP,
+                    subscription_end_date TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            ''')
+            conn.commit()
+            conn.close()
             event = self.stripe.Webhook.construct_event(
                 payload, sig_header, os.getenv('STRIPE_WEBHOOK_SECRET')
             )
