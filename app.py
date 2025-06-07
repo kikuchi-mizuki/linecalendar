@@ -23,7 +23,7 @@ import google.oauth2.credentials
 import google.auth.transport.requests
 from google.auth.exceptions import RefreshError
 from services.stripe_manager import StripeManager
-from handlers.line_handler import line_bp
+from handlers.line_handler import line_bp, handle_message
 from utils.db import get_db_connection
 
 # 環境変数からclient_secret.jsonを書き出す
@@ -1413,7 +1413,7 @@ def callback():
             for event in events:
                 event_type = event.get("type")
                 if event_type == "message" and event.get("message", {}).get("type") == "text":
-                    asyncio.run(handle_line_message(MessageEvent.from_dict(event)))
+                    asyncio.run(handle_message(MessageEvent.from_dict(event)))
                 elif event_type == "follow":
                     asyncio.run(handle_follow(FollowEvent.from_dict(event)))
                 elif event_type == "unfollow":
