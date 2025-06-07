@@ -1031,7 +1031,9 @@ def payment_cancel():
 # LINE Messaging APIの処理を修正
 async def handle_line_message(event):
     try:
-        user_id = event.source.user_id
+        logger.info(f"[LINEイベント] event={event}")
+        user_id = getattr(event.source, 'user_id', None)
+        logger.info(f"[LINEイベント] user_id={user_id}")
         message_text = event.message.text
         reply_token = event.reply_token
         # ユーザーのサブスクリプション状態を確認
