@@ -782,33 +782,27 @@ def setup_app():
     try:
         # 環境変数の検証
         validate_environment()
-        
         # ログ設定
         setup_logging()
-        
         # セッションの初期化
         init_session()
-        
+        # DBカラムの確認
+        ensure_db_columns()
         # タイムゾーンの設定確認
         if not JST:
             logger.error("Failed to set timezone to Asia/Tokyo")
             raise ValueError("Failed to set timezone to Asia/Tokyo")
-        
         if not os.path.exists("client_secret.json"):
             logger.error("client_secret.jsonが存在しません。GOOGLE_CLIENT_SECRETの環境変数を確認してください。")
         else:
             logger.info("client_secret.jsonの存在を確認しました。")
-        
         # --- Stripe Webhook署名検証バイパス用（開発時のみtrueに）---
         if 'SKIP_STRIPE_SIGNATURE' not in os.environ:
             os.environ['SKIP_STRIPE_SIGNATURE'] = 'false'
-        
         logger.info("Application setup completed successfully")
-        
         # REDIS_URLの値を起動時に必ず出力
         print(f"[DEBUG] REDIS_URL={os.getenv('REDIS_URL')}")
         logger.info(f"[DEBUG] REDIS_URL={os.getenv('REDIS_URL')}")
-        
     except Exception as e:
         logger.error(f"Application setup failed: {str(e)}")
         logger.error(traceback.format_exc())
@@ -1437,16 +1431,11 @@ def stripe_webhook():
 
 if __name__ == "__main__":
     try:
-        # アプリケーションの初期設定
-        setup_app()
-        
-        # ポート番号の設定
+        # 開発用ローカル実行（本番ではgunicorn使用）
         port_str = os.getenv("PORT")
         port = int(port_str) if port_str and port_str.isdigit() else 3001
-        
         logger.info(f"Starting server on port {port}")
         app.run(host="0.0.0.0", port=port, use_reloader=False)
-        
     except Exception as e:
         logger.error(f"Failed to start application: {str(e)}")
         logger.error(traceback.format_exc())
