@@ -148,7 +148,7 @@ def format_event_list(events: List[Dict], start_time: datetime = None, end_time:
 
 def get_user_credentials(user_id: str):
     try:
-        credentials_dict = # db_manager.get_user_credentials(user_id)
+        # credentials_dict = db_manager.get_user_credentials(user_id)
         logger.debug(f"[get_user_credentials] credentials_dict: {credentials_dict}")
         if not credentials_dict:
             logger.warning(f"認証情報が見つかりません: user_id={user_id}")
