@@ -115,6 +115,7 @@ from constants import WEEKDAYS
 from stripe_manager import StripeManager
 import sqlite3
 from handlers.line_handler import line_bp
+from utils.logger import logger, db_manager
 
 # 警告の抑制
 warnings.filterwarnings('ignore', category=DeprecationWarning)
@@ -319,8 +320,6 @@ if not STRIPE_WEBHOOK_SECRET:
 # LINE Messaging APIの初期化
 configuration = Configuration(access_token=LINE_CHANNEL_ACCESS_TOKEN)
 line_bot_api = MessagingApi(ApiClient(configuration))
-
-db_manager = DatabaseManager()
 
 # CalendarManagerの初期化
 def get_calendar_manager(user_id: str) -> CalendarManager:

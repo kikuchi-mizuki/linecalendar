@@ -2,7 +2,8 @@ from flask import Blueprint, request, abort
 import json
 import asyncio
 from linebot.v3.webhooks import MessageEvent, FollowEvent, UnfollowEvent, JoinEvent, LeaveEvent, PostbackEvent
-from app import logger, db_manager, get_calendar_manager, reply_text, get_auth_url, parse_message, get_db_connection, handle_parsed_message, format_event_list
+from utils.logger import logger, db_manager
+from app import get_calendar_manager, reply_text, get_auth_url, parse_message, get_db_connection, handle_parsed_message, format_event_list
 import os
 import traceback
 from datetime import datetime
