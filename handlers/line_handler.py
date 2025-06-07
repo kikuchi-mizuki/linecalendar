@@ -136,6 +136,21 @@ async def handle_message(event):
 
         # メッセージの解析
         result = parse_message(message_text)
+        # 空き時間キーワードに反応
+        free_keywords = ['空いている時間', '空き時間', 'あき時間', '空いてる時間', '空いてる', 'free time', 'free slot']
+        if any(kw in message_text for kw in free_keywords):
+            try:
+                calendar_manager = get_calendar_manager(user_id)
+                today = datetime.now().astimezone()
+                free_slots = calendar_manager.get_free_time_slots(today)
+                msg = calendar_manager.format_free_time_slots(free_slots)
+                await reply_text(reply_token, msg)
+                logger.info(f"[handle_message] 空き時間案内送信: user_id={user_id}")
+                return
+            except Exception as e:
+                logger.error(f"[handle_message] 空き時間取得エラー: {str(e)}")
+                await reply_text(reply_token, "空き時間の取得中にエラーが発生しました。管理者にご連絡ください。")
+                return
         if not result:
             await reply_text(reply_token, "申し訳ありません。メッセージを理解できませんでした。\n予定の追加、確認、削除、更新のいずれかの操作を指定してください。")
             logger.info(f"[handle_message] メッセージ解析失敗: user_id={user_id}")
