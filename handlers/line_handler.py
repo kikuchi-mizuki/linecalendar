@@ -78,7 +78,7 @@ def oauth2callback():
     except Exception as e:
         logger.error(f"Error in oauth2callback: {str(e)}")
         logger.error(traceback.format_exc())
-        return 'Error', 500
+        return f"Error: {str(e)}", 500
 
 async def handle_message(event):
     try:
