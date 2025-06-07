@@ -1,11 +1,14 @@
 import os
 import traceback
-from utils.logger import logger, db_manager
+from utils.logger import db_manager
 from datetime import datetime, timedelta
 from flask import session
 from typing import List, Dict, Union
 import time
 import json
+import logging
+
+logger = logging.getLogger('app')
 
 async def reply_text(reply_token, texts: Union[str, list]):
     try:

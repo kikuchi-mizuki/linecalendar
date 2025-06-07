@@ -1,5 +1,6 @@
 import sqlite3
-from utils.logger import logger
+import logging
+logger = logging.getLogger('app')
 
 def get_db_connection():
     """データベース接続を取得する"""
