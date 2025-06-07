@@ -1,6 +1,6 @@
 import os
 import traceback
-from utils.logger import db_manager
+# from utils.db import db_manager
 from datetime import datetime, timedelta
 from flask import session
 from typing import List, Dict, Union
@@ -53,7 +53,7 @@ async def reply_text(reply_token, texts: Union[str, list]):
 
 def get_auth_url(user_id: str) -> str:
     try:
-        db_manager.delete_google_credentials(user_id)
+        # db_manager.delete_google_credentials(user_id)
         session.clear()
         session['line_user_id'] = user_id
         session['auth_start_time'] = time.time()
@@ -148,7 +148,7 @@ def format_event_list(events: List[Dict], start_time: datetime = None, end_time:
 
 def get_user_credentials(user_id: str):
     try:
-        credentials_dict = db_manager.get_user_credentials(user_id)
+        credentials_dict = # db_manager.get_user_credentials(user_id)
         logger.debug(f"[get_user_credentials] credentials_dict: {credentials_dict}")
         if not credentials_dict:
             logger.warning(f"認証情報が見つかりません: user_id={user_id}")
@@ -178,22 +178,22 @@ def get_user_credentials(user_id: str):
             try:
                 if not credentials.refresh_token:
                     logger.error(f"リフレッシュトークンが存在しません: user_id={user_id}")
-                    db_manager.delete_google_credentials(user_id)
+                    # db_manager.delete_google_credentials(user_id)
                     return None
                 credentials.refresh(__import__('google.auth.transport.requests').auth.transport.requests.Request())
-                db_manager.save_google_credentials(user_id, {
-                    'token': credentials.token,
-                    'refresh_token': credentials.refresh_token,
-                    'token_uri': credentials.token_uri,
-                    'client_id': credentials.client_id,
-                    'client_secret': credentials.client_secret,
-                    'scopes': credentials.scopes,
-                    'expires_at': credentials.expiry.timestamp() if credentials.expiry else None
-                })
+                # db_manager.save_google_credentials(user_id, {
+                #     'token': credentials.token,
+                #     'refresh_token': credentials.refresh_token,
+                #     'token_uri': credentials.token_uri,
+                #     'client_id': credentials.client_id,
+                #     'client_secret': credentials.client_secret,
+                #     'scopes': credentials.scopes,
+                #     'expires_at': credentials.expiry.timestamp() if credentials.expiry else None
+                # })
                 logger.info(f"認証トークンをリフレッシュしました: user_id={user_id}")
             except Exception as e:
                 logger.error(f"トークンのリフレッシュに失敗: {str(e)}")
-                db_manager.delete_google_credentials(user_id)
+                # db_manager.delete_google_credentials(user_id)
                 return None
         return credentials
     except Exception as e:
@@ -249,7 +249,7 @@ async def handle_add_event(result, calendar_manager, user_id, reply_token):
                     'recurrence': result.get('recurrence'),
                     'force_add': True
                 }
-                db_manager.save_pending_event(user_id, pending_event)
+                # db_manager.save_pending_event(user_id, pending_event)
             await reply_text(reply_token, f"予定の追加に失敗しました: {add_result.get('message', '不明なエラー')}")
     except Exception as e:
         logger.error(f"予定の追加中にエラーが発生: {str(e)}")
