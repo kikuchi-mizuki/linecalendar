@@ -13,7 +13,7 @@ class DatabaseManager:
     """
     データベース操作を管理するクラス
     """
-    def __init__(self, db_path: str = 'instance/calendar.db'):
+    def __init__(self, db_path: str = 'calendar_bot.db'):
         """
         データベースマネージャーの初期化
         
@@ -511,8 +511,7 @@ class DatabaseManager:
             conn.commit()
 
 def get_db_connection():
-    db_path = 'instance/calendar.db'
-    # DBファイルがなければ自動で初期化
+    db_path = 'calendar_bot.db'
     if not os.path.exists(db_path):
         DatabaseManager(db_path)
     conn = sqlite3.connect(db_path)

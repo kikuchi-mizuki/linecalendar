@@ -8,12 +8,8 @@ logger = logging.getLogger(__name__)
 
 class DatabaseManager:
     def __init__(self):
-        # データベースディレクトリの設定
-        self.db_dir = os.getenv('DATABASE_DIR', 'instance')
-        os.makedirs(self.db_dir, exist_ok=True)
-        
         # データベースファイルのパス設定
-        self.db_path = os.path.join(self.db_dir, 'calendar.db')
+        self.db_path = 'calendar_bot.db'
         logger.info(f"Database path: {self.db_path}")
         
         # データベースの初期化
@@ -177,5 +173,9 @@ class DatabaseManager:
 db_manager = DatabaseManager()
 
 def get_db_connection():
-    """データベース接続を取得する（互換性のために残す）"""
-    return db_manager.get_db_connection() 
+    db_path = 'calendar_bot.db'
+    if not os.path.exists(db_path):
+        DatabaseManager()
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    return conn 
