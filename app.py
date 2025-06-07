@@ -1009,6 +1009,8 @@ def create_checkout_session():
         else:
             user_id = request.args.get('user_id')
             line_user_id = request.args.get('line_user_id', user_id)
+        if not user_id or not line_user_id:
+            return jsonify({'error': f'user_idまたはline_user_idが未指定です: user_id={user_id}, line_user_id={line_user_id}'}), 400
         session = stripe_manager.create_checkout_session(user_id, line_user_id)
         return redirect(session.url)
     except Exception as e:

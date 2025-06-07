@@ -13,6 +13,8 @@ class StripeManager:
     def create_checkout_session(self, user_id, line_user_id):
         """チェックアウトセッションを作成"""
         try:
+            if not user_id or not line_user_id:
+                raise ValueError(f"user_idまたはline_user_idが未指定です: user_id={user_id}, line_user_id={line_user_id}")
             checkout_session = self.stripe.checkout.Session.create(
                 payment_method_types=['card'],
                 line_items=[{
