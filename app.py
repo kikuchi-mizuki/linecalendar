@@ -790,6 +790,10 @@ def setup_app():
         
         logger.info("Application setup completed successfully")
         
+        # REDIS_URLの値を起動時に必ず出力
+        print(f"[DEBUG] REDIS_URL={os.getenv('REDIS_URL')}")
+        logger.info(f"[DEBUG] REDIS_URL={os.getenv('REDIS_URL')}")
+        
     except Exception as e:
         logger.error(f"Application setup failed: {str(e)}")
         logger.error(traceback.format_exc())
