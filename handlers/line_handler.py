@@ -130,7 +130,7 @@ async def handle_message(event):
             logger.info(f"[handle_message] メッセージ解析失敗: user_id={user_id}")
             return
 
-        # カレンダーマネージャーを取得
+        # Google認証チェック
         try:
             creds = get_user_credentials(user_id)
             logger.info(f"[debug] get_user_credentials({user_id}) = {creds}")
