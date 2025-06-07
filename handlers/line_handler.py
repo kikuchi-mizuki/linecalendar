@@ -4,7 +4,7 @@ import asyncio
 from linebot.v3.webhooks import MessageEvent, FollowEvent, UnfollowEvent, JoinEvent, LeaveEvent, PostbackEvent
 from utils.logger import db_manager
 from services.calendar_service import get_calendar_manager
-from services.line_service import reply_text, get_auth_url, handle_parsed_message, format_event_list
+from services.line_service import reply_text, get_auth_url, handle_parsed_message, format_event_list, get_user_credentials
 from message_parser import parse_message
 import os
 import traceback
@@ -28,6 +28,7 @@ line_bp = Blueprint('line', __name__)
 # --- LINEイベントハンドラ ---
 @line_bp.route('/callback', methods=['POST'])
 def line_callback():
+    logger.info("line_callback called")
     try:
         body = request.get_data(as_text=True)
         signature = request.headers['X-Line-Signature']
@@ -84,6 +85,7 @@ def oauth2callback():
         return f"Error: {str(e)}", 500
 
 async def handle_message(event):
+    logger.info(f"[debug] handle_message entered for user_id={getattr(event.source, 'user_id', None)}")
     logger.info(f"[handle_message] start: event={event}")
     try:
         user_id = event.source.user_id
