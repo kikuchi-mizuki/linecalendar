@@ -24,6 +24,7 @@ import google.auth.transport.requests
 from google.auth.exceptions import RefreshError
 from services.stripe_manager import StripeManager
 from handlers.line_handler import line_bp
+from utils.db import get_db_connection
 
 # 環境変数からclient_secret.jsonを書き出す
 client_secret_json = os.getenv("GOOGLE_CLIENT_SECRET")
