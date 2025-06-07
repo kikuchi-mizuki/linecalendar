@@ -35,8 +35,13 @@ class DatabaseManager:
                 cursor.execute("""
                     CREATE TABLE IF NOT EXISTS google_credentials (
                         user_id TEXT PRIMARY KEY,
-                        credentials TEXT,
-                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        token TEXT NOT NULL,
+                        refresh_token TEXT,
+                        token_uri TEXT NOT NULL,
+                        client_id TEXT NOT NULL,
+                        client_secret TEXT NOT NULL,
+                        scopes TEXT NOT NULL,
+                        expires_at TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         FOREIGN KEY (user_id) REFERENCES users(user_id)
                     )
