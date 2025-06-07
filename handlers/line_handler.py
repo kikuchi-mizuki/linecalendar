@@ -84,6 +84,7 @@ def oauth2callback():
         return f"Error: {str(e)}", 500
 
 async def handle_message(event):
+    logger.info(f"[handle_message] start: event={event}")
     try:
         user_id = event.source.user_id
         message = event.message.text.strip()
@@ -106,12 +107,14 @@ async def handle_message(event):
                 f'{os.getenv("BASE_URL", "https://linecalendar-production.up.railway.app")}/payment/checkout?user_id={user_id}'
             )
             await reply_text(reply_token, msg)
+            logger.info(f"[handle_message] サブスク未登録案内送信: user_id={user_id}")
             return
 
         # メッセージの解析
         result = parse_message(message)
         if not result:
             await reply_text(reply_token, "申し訳ありません。メッセージを理解できませんでした。\n予定の追加、確認、削除、更新のいずれかの操作を指定してください。")
+            logger.info(f"[handle_message] メッセージ解析失敗: user_id={user_id}")
             return
 
         # カレンダーマネージャーを取得
@@ -121,15 +124,19 @@ async def handle_message(event):
             if "Google認証情報が見つかりません" in str(e):
                 code = get_auth_url(user_id)
                 login_url = f"{os.getenv('BASE_URL', 'https://linecalendar-production.up.railway.app')}/onetimelogin"
-                msg1 = f"はじめまして！LINEカレンダーをご利用いただきありがとうございます。\nカレンダーを利用するには、Googleアカウントとの連携が必要です。\n\nあなたのワンタイムコードは【{code}】です。"
-                msg2 = f"下記のURLから認証ページにアクセスし、ワンタイムコードを入力してください：\n{login_url}\n\n※認証後は、LINEに戻って予定の確認や追加ができるようになります。"
+                msg1 = f"カレンダーを利用するにはGoogle認証が必要です。\nあなたのワンタイムコードは【{code}】です。"
+                msg2 = f"下記URLから認証ページにアクセスし、ワンタイムコードを入力してください：\n{login_url}"
                 await reply_text(reply_token, [msg1, msg2])
+                logger.info(f"[handle_message] Google認証案内送信: user_id={user_id}, code={code}")
+                return
             else:
                 await reply_text(reply_token, "申し訳ありません。エラーが発生しました。\nしばらく時間をおいて再度お試しください。")
-            return
+                logger.error(f"[handle_message] その他のValueError: {str(e)}")
+                return
 
         # メッセージの種類に応じて処理
         await handle_parsed_message(result, user_id, reply_token)
+        logger.info(f"[handle_message] end: user_id={user_id}")
 
     except Exception as e:
         logger.error(f"Error in handle_message: {str(e)}")
@@ -137,6 +144,7 @@ async def handle_message(event):
         try:
             if event.reply_token:
                 await reply_text(event.reply_token, "Google認証が必要です。LINEで「連携」や「認証」と送信してください。")
+                logger.info(f"[handle_message] 例外時Google認証案内送信: user_id={getattr(event.source, 'user_id', None)}")
         except Exception as reply_error:
             logger.error(f"Error sending error message: {str(reply_error)}")
 
