@@ -25,6 +25,7 @@ from google.auth.exceptions import RefreshError
 from services.stripe_manager import StripeManager
 from handlers.line_handler import line_bp, handle_message
 from utils.db import get_db_connection
+from services.calendar_service import get_calendar_manager
 
 # 環境変数からclient_secret.jsonを書き出す
 client_secret_json = os.getenv("GOOGLE_CLIENT_SECRET")
@@ -760,6 +761,9 @@ def setup_app():
         logger.error(traceback.format_exc())
         raise
 
+setup_app()
+app.register_blueprint(line_bp)
+
 @app.route('/test_redis')
 def test_redis():
     try:
@@ -902,102 +906,8 @@ def onetimelogin():
         else:
             error = 'ワンタイムコードが無効か、期限切れです。LINEで新しいコードを取得してください。'
             logger.debug(f"[one_time_code][invalid] code={code}")
-            return render_template_string(ONETIME_LOGIN_HTML, error=error)
-    return render_template_string(ONETIME_LOGIN_HTML, error=None)
-
-ONETIME_LOGIN_HTML = '''
-<!DOCTYPE html>
-<html lang="ja">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Google認証 - LINEカレンダー</title>
-    <link rel="icon" type="image/x-icon" href="/static/favicon.ico">
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            line-height: 1.6;
-            margin: 0;
-            padding: 20px;
-            background-color: #f5f5f5;
-            color: #333;
-        }
-        .container {
-            max-width: 600px;
-            margin: 40px auto;
-            padding: 20px;
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        h2 {
-            color: #06C755;
-            margin-top: 0;
-            text-align: center;
-        }
-        .error {
-            color: #dc3545;
-            background-color: #f8d7da;
-            border: 1px solid #f5c6cb;
-            padding: 10px;
-            border-radius: 4px;
-            margin-bottom: 20px;
-        }
-        form {
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
-        }
-        label {
-            font-weight: bold;
-        }
-        input[type="text"] {
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-size: 16px;
-        }
-        button {
-            background-color: #06C755;
-            color: white;
-            border: none;
-            padding: 12px 20px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: bold;
-            transition: background-color 0.2s;
-        }
-        button:hover {
-            background-color: #05a548;
-        }
-        .instructions {
-            background-color: #e9f7ef;
-            padding: 15px;
-            border-radius: 4px;
-            margin-bottom: 20px;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h2>Google認証用ワンタイムコード入力</h2>
-        {% if error %}
-        <div class="error">{{ error }}</div>
-        {% endif %}
-        <div class="instructions">
-            <p>LINEで受け取ったワンタイムコードを入力してください。</p>
-            <p>※コードは一度きり使用可能です。期限切れの場合は、LINEで新しいコードを取得してください。</p>
-        </div>
-        <form method="post">
-            <label for="code">ワンタイムコード:</label>
-            <input type="text" id="code" name="code" required placeholder="例: ABC123">
-            <button type="submit">認証を開始</button>
-        </form>
-    </div>
-</body>
-</html>
-'''
+            return render_template('onetimelogin.html', error=error)
+    return render_template('onetimelogin.html', error=None)
 
 stripe_manager = StripeManager()
 
@@ -1060,7 +970,7 @@ async def handle_line_message(event):
             await reply_text(reply_token, msg)
             return
         # 既存のメッセージ処理ロジック
-        pass
+        await handle_message(event)
     except Exception as e:
         logger.error(f"handle_line_message error: {str(e)}")
         return {'type': 'text', 'text': 'エラーが発生しました。'}
@@ -1483,5 +1393,3 @@ def stripe_webhook():
     except Exception as e:
         logger.error(f"Stripe webhook error: {str(e)}")
         return jsonify({'error': str(e)}), 400
-
-app.register_blueprint(line_bp)
