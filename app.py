@@ -6,7 +6,7 @@ import pytz
 JST = pytz.timezone('Asia/Tokyo')
 
 # Flask関連のインポート
-from flask import Flask, request, jsonify, session, redirect, url_for, render_template, render_template_string
+from flask import Flask, request, jsonify, session, redirect, url_for, render_template, render_template_string, current_app
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from flask_session import Session
@@ -1399,55 +1399,44 @@ async def handle_update_event(result, calendar_manager, user_id, reply_token):
         logger.error(traceback.format_exc())
         await reply_text(reply_token, "予定の更新中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
 
-# @app.route('/callback', methods=['POST'])
-# def callback():
-#     """
-#     LINE Messaging APIからのwebhookを受け取るエンドポイント
-#     """
-#     try:
-#         # リクエストヘッダーからX-Line-Signatureを取得
-#         signature = request.headers['X-Line-Signature']
-#         # リクエストボディを取得
-#         body = request.get_data(as_text=True)
-#         logger.info(f"Webhook request received: {body}")
-
-#         try:
-#             # リクエストボディをJSONとしてパース
-#             events = json.loads(body)["events"]
-#             logger.info(f"Parsed events: {events}")
-
-#             # イベントの種類に応じて処理
-#             for event in events:
-#                 event_type = event.get("type")
-#                 if event_type == "message" and event.get("message", {}).get("type") == "text":
-#                     asyncio.run(handle_message(MessageEvent.from_dict(event)))
-#                 elif event_type == "follow":
-#                     asyncio.run(handle_follow(FollowEvent.from_dict(event)))
-#                 elif event_type == "unfollow":
-#                     asyncio.run(handle_unfollow(UnfollowEvent.from_dict(event)))
-#                 elif event_type == "join":
-#                     asyncio.run(handle_join(JoinEvent.from_dict(event)))
-#                 elif event_type == "leave":
-#                     asyncio.run(handle_leave(LeaveEvent.from_dict(event)))
-#                 elif event_type == "postback":
-#                     asyncio.run(handle_postback(PostbackEvent.from_dict(event)))
-#                 else:
-#                     logger.info(f"Unhandled event type: {event_type}")
-
-#             logger.info("Webhook request processed successfully")
-#             return 'OK'
-#         except InvalidSignatureError:
-#             logger.error("Invalid signature. Please check your channel access token/channel secret.")
-#             abort(400)
-#         except Exception as e:
-#             logger.error(f"Error in parsing events: {str(e)}")
-#             logger.error(traceback.format_exc())
-#             abort(500)
-
-#     except Exception as e:
-#         logger.error(f"Error in callback: {str(e)}")
-#         logger.error(traceback.format_exc())
-#         abort(500)
+@app.route('/callback', methods=['POST'])
+def callback():
+    try:
+        signature = request.headers['X-Line-Signature']
+        body = request.get_data(as_text=True)
+        logger.info(f"Webhook request received: {body}")
+        try:
+            events = json.loads(body)["events"]
+            logger.info(f"Parsed events: {events}")
+            for event in events:
+                event_type = event.get("type")
+                if event_type == "message" and event.get("message", {}).get("type") == "text":
+                    asyncio.run(handle_line_message(MessageEvent.from_dict(event)))
+                elif event_type == "follow":
+                    asyncio.run(handle_follow(FollowEvent.from_dict(event)))
+                elif event_type == "unfollow":
+                    asyncio.run(handle_unfollow(UnfollowEvent.from_dict(event)))
+                elif event_type == "join":
+                    asyncio.run(handle_join(JoinEvent.from_dict(event)))
+                elif event_type == "leave":
+                    asyncio.run(handle_leave(LeaveEvent.from_dict(event)))
+                elif event_type == "postback":
+                    asyncio.run(handle_postback(PostbackEvent.from_dict(event)))
+                else:
+                    logger.info(f"Unhandled event type: {event_type}")
+            logger.info("Webhook request processed successfully")
+            return 'OK'
+        except InvalidSignatureError:
+            logger.error("Invalid signature. Please check your channel access token/channel secret.")
+            abort(400)
+        except Exception as e:
+            logger.error(f"Error in parsing events: {str(e)}")
+            logger.error(traceback.format_exc())
+            abort(500)
+    except Exception as e:
+        logger.error(f"Error in callback: {str(e)}")
+        logger.error(traceback.format_exc())
+        abort(500)
 
 if __name__ == "__main__":
     try:
