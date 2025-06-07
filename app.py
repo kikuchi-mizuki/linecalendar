@@ -84,7 +84,7 @@ import asyncio
 import argparse
 from functools import wraps, partial
 from message_parser import parse_message
-from calendar_operations import CalendarManager
+from services.calendar_service import get_calendar_manager
 from database import DatabaseManager
 from typing import List, Dict, Union, Optional
 import warnings
@@ -116,6 +116,7 @@ from stripe_manager import StripeManager
 import sqlite3
 from handlers.line_handler import line_bp
 from utils.logger import logger, db_manager
+from services.line_service import reply_text, get_auth_url, handle_parsed_message, format_event_list
 
 # 警告の抑制
 warnings.filterwarnings('ignore', category=DeprecationWarning)
@@ -1752,68 +1753,6 @@ def oauth2callback():
         logger.error(f"Google認証コールバックでエラー: {str(e)}")
         logger.error(traceback.format_exc())
         return "認証処理中にエラーが発生しました。"
-
-def format_event_list(events: List[Dict], start_time: datetime = None, end_time: datetime = None) -> str:
-    """イベント一覧をカレンダー風テキストでフォーマット（罫線・アイコン・日付・番号付きリストで統一）"""
-    def border():
-        return '━━━━━━━━━━'  # 全角10文字に短縮
-
-    lines = []
-    # 日付リストを作成
-    date_list = []
-    if start_time and end_time:
-        current = start_time
-        while current <= end_time:
-            date_list.append(current)
-            current += timedelta(days=1)
-    elif start_time:
-        date_list.append(start_time)
-    else:
-        # イベントから日付を抽出
-        for event in events:
-            start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date'))
-            if start:
-                date = datetime.fromisoformat(start.replace('Z', '+00:00')).date()
-                if date not in date_list:
-                    date_list.append(date)
-
-    # 日付ごとに出力
-    for date in date_list:
-        if isinstance(date, datetime):
-            date_str = date.strftime('%Y/%m/%d (%a)')
-            date_key = date.strftime('%Y/%m/%d (%a)')
-        else:
-            date_str = date.strftime('%Y/%m/%d (%a)')
-            date_key = date.strftime('%Y/%m/%d (%a)')
-        lines.append(f'📅 {date_str}')
-        lines.append(border())
-        # その日のイベントを抽出
-        day_events = []
-        for event in events:
-            start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date'))
-            if start:
-                event_date = datetime.fromisoformat(start.replace('Z', '+00:00')).strftime('%Y/%m/%d (%a)')
-                if event_date == date_key:
-                    day_events.append(event)
-        if day_events:
-            for i, event in enumerate(day_events, 1):
-                summary = event.get('summary', '（タイトルなし）')
-                start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date'))
-                end = event.get('end', {}).get('dateTime', event.get('end', {}).get('date'))
-                if start and end:
-                    start_dt = datetime.fromisoformat(start.replace('Z', '+00:00')).astimezone(JST)
-                    end_dt = datetime.fromisoformat(end.replace('Z', '+00:00')).astimezone(JST)
-                    lines.append(f"{i}. {summary}")
-                    lines.append(f"⏰ {start_dt.strftime('%H:%M')}～{end_dt.strftime('%H:%M')}")
-                    lines.append("")
-                else:
-                    lines.append(f"{i}. {summary}（終日）")
-                    lines.append("")
-        else:
-            lines.append("予定はありません。")
-            lines.append("")
-        lines.append(border())
-    return "\n".join(lines)
 
 @app.route('/webhook/stripe', methods=['POST'])
 def stripe_webhook():
