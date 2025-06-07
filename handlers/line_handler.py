@@ -119,6 +119,8 @@ async def handle_message(event):
 
         # カレンダーマネージャーを取得
         try:
+            creds = get_user_credentials(user_id)
+            logger.info(f"[debug] get_user_credentials({user_id}) = {creds}")
             calendar_manager = get_calendar_manager(user_id)
             if not calendar_manager:
                 code = get_auth_url(user_id)
