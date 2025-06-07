@@ -61,7 +61,9 @@ def callback():
 def oauth2callback():
     try:
         state = session.get('state')
+        logger.info(f"[oauth2callback] state={state}, session={dict(session)}")
         if not state:
+            logger.error("[oauth2callback] セッション切れ")
             return 'Error: セッションが切れています。もう一度LINEから認証をやり直してください。', 400
         flow = google_auth_oauthlib.flow.Flow.from_client_secrets_file(
             CLIENT_SECRETS_FILE,
@@ -73,17 +75,24 @@ def oauth2callback():
         flow.fetch_token(authorization_response=authorization_response)
         credentials = flow.credentials
         user_id = session.get('line_user_id')
+        logger.info(f"[oauth2callback] user_id={user_id}, credentials={credentials}")
         if not user_id:
+            logger.error("[oauth2callback] user_idがセッションに存在しません")
             return 'Error: No user ID in session', 400
+        scopes = credentials.scopes
+        if isinstance(scopes, list):
+            import json
+            scopes = json.dumps(scopes)
         db_manager.save_google_credentials(user_id, {
             'token': credentials.token,
             'refresh_token': credentials.refresh_token,
             'token_uri': credentials.token_uri,
             'client_id': credentials.client_id,
             'client_secret': credentials.client_secret,
-            'scopes': credentials.scopes,
+            'scopes': scopes,
             'expires_at': credentials.expiry.timestamp() if credentials.expiry else None
         })
+        logger.info(f"[oauth2callback] Google credentials saved for user: {user_id}")
         return '認証が完了しました。LINEに戻って予定の確認や追加ができるようになりました。'
     except Exception as e:
         logger.error(f"Error in oauth2callback: {str(e)}")
