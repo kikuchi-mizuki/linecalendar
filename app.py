@@ -890,7 +890,7 @@ def onetimelogin():
                 CLIENT_SECRETS_FILE,
                 scopes=SCOPES
             )
-            flow.redirect_uri = url_for('line.callback', _external=True)
+            flow.redirect_uri = url_for('line.line_callback', _external=True)
             authorization_url, state = flow.authorization_url(
                 access_type='offline',
                 include_granted_scopes='true',
