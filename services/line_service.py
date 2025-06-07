@@ -149,53 +149,54 @@ def format_event_list(events: List[Dict], start_time: datetime = None, end_time:
 def get_user_credentials(user_id: str):
     try:
         # credentials_dict = db_manager.get_user_credentials(user_id)
-        logger.debug(f"[get_user_credentials] credentials_dict: {credentials_dict}")
-        if not credentials_dict:
+        credentials = db_manager.get_user_credentials(user_id)
+        logger.debug(f"[get_user_credentials] credentials: {credentials}")
+        if not credentials:
             logger.warning(f"認証情報が見つかりません: user_id={user_id}")
             return None
         import google.oauth2.credentials
         from datetime import timezone
         SCOPES = ['https://www.googleapis.com/auth/calendar']
-        credentials = google.oauth2.credentials.Credentials(
-            token=credentials_dict.get('token'),
-            refresh_token=credentials_dict.get('refresh_token'),
-            token_uri=credentials_dict.get('token_uri', 'https://oauth2.googleapis.com/token'),
-            client_id=credentials_dict.get('client_id'),
-            client_secret=credentials_dict.get('client_secret'),
-            scopes=credentials_dict.get('scopes', SCOPES)
+        credentials_obj = google.oauth2.credentials.Credentials(
+            token=credentials.get('token'),
+            refresh_token=credentials.get('refresh_token'),
+            token_uri=credentials.get('token_uri', 'https://oauth2.googleapis.com/token'),
+            client_id=credentials.get('client_id'),
+            client_secret=credentials.get('client_secret'),
+            scopes=credentials.get('scopes', SCOPES)
         )
-        if credentials_dict.get('expires_at'):
-            credentials.expiry = datetime.fromtimestamp(credentials_dict['expires_at'], tz=timezone.utc)
-            logger.info(f"credentials.expiry(set): {credentials.expiry}, type={type(credentials.expiry)}, tzinfo={credentials.expiry.tzinfo}")
-            if credentials.expiry.tzinfo is None:
-                credentials.expiry = credentials.expiry.replace(tzinfo=timezone.utc)
-                logger.info(f"credentials.expiry(replaced): {credentials.expiry}, type={type(credentials.expiry)}, tzinfo={credentials.expiry.tzinfo}")
-            logger.info(f"credentials.expiry={credentials.expiry}, now={datetime.now(timezone.utc)}")
-        expiry = credentials.expiry if hasattr(credentials, 'expiry') else None
+        if credentials.get('expires_at'):
+            credentials_obj.expiry = datetime.fromtimestamp(credentials['expires_at'], tz=timezone.utc)
+            logger.info(f"credentials.expiry(set): {credentials_obj.expiry}, type={type(credentials_obj.expiry)}, tzinfo={credentials_obj.expiry.tzinfo}")
+            if credentials_obj.expiry.tzinfo is None:
+                credentials_obj.expiry = credentials_obj.expiry.replace(tzinfo=timezone.utc)
+                logger.info(f"credentials.expiry(replaced): {credentials_obj.expiry}, type={type(credentials_obj.expiry)}, tzinfo={credentials_obj.expiry.tzinfo}")
+            logger.info(f"credentials.expiry={credentials_obj.expiry}, now={datetime.now(timezone.utc)}")
+        expiry = credentials_obj.expiry if hasattr(credentials_obj, 'expiry') else None
         if expiry and expiry.tzinfo is None:
             expiry = expiry.replace(tzinfo=timezone.utc)
-        if (expiry and (expiry - datetime.now(timezone.utc)).total_seconds() < 3600) or credentials.expired:
+        if (expiry and (expiry - datetime.now(timezone.utc)).total_seconds() < 3600) or credentials_obj.expired:
             try:
-                if not credentials.refresh_token:
+                if not credentials_obj.refresh_token:
                     logger.error(f"リフレッシュトークンが存在しません: user_id={user_id}")
                     # db_manager.delete_google_credentials(user_id)
                     return None
-                credentials.refresh(__import__('google.auth.transport.requests').auth.transport.requests.Request())
+                credentials_obj.refresh(__import__('google.auth.transport.requests').auth.transport.requests.Request())
                 # db_manager.save_google_credentials(user_id, {
-                #     'token': credentials.token,
-                #     'refresh_token': credentials.refresh_token,
-                #     'token_uri': credentials.token_uri,
-                #     'client_id': credentials.client_id,
-                #     'client_secret': credentials.client_secret,
-                #     'scopes': credentials.scopes,
-                #     'expires_at': credentials.expiry.timestamp() if credentials.expiry else None
+                #     'token': credentials_obj.token,
+                #     'refresh_token': credentials_obj.refresh_token,
+                #     'token_uri': credentials_obj.token_uri,
+                #     'client_id': credentials_obj.client_id,
+                #     'client_secret': credentials_obj.client_secret,
+                #     'scopes': credentials_obj.scopes,
+                #     'expires_at': credentials_obj.expiry.timestamp() if credentials_obj.expiry else None
                 # })
                 logger.info(f"認証トークンをリフレッシュしました: user_id={user_id}")
             except Exception as e:
                 logger.error(f"トークンのリフレッシュに失敗: {str(e)}")
                 # db_manager.delete_google_credentials(user_id)
                 return None
-        return credentials
+        return credentials_obj
     except Exception as e:
         logger.error(f"認証情報の取得に失敗: {str(e)}")
         logger.error(traceback.format_exc())
