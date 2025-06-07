@@ -1,9 +1,70 @@
 import os
-import google_auth_oauthlib.flow
-os.makedirs('instance', exist_ok=True)
-
+import sys
+import json
+import time
+import logging
+import traceback
+import asyncio
+import nest_asyncio
+import async_timeout
+import random
+import string
+from datetime import datetime, timedelta, timezone
+from typing import Union, List, Dict, Optional
 import pytz
+from flask import Flask, request, jsonify, session, redirect, url_for, render_template, abort
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_session import Session
+from werkzeug.middleware.proxy_fix import ProxyFix
+import redis
+from dotenv import load_dotenv
+import google_auth_oauthlib.flow
+import google.oauth2.credentials
+import google.auth.transport.requests
+from google.auth.exceptions import RefreshError
+from linebot.v3.webhooks import MessageEvent, TextMessageContent, FollowEvent, UnfollowEvent, JoinEvent, LeaveEvent, PostbackEvent
+from linebot.v3.exceptions import InvalidSignatureError
+from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, ReplyMessageRequest, TextMessage, PushMessageRequest, FlexMessage
+from services.stripe_manager import StripeManager
+from handlers.line_handler import line_bp, handle_message
+from utils.db import get_db_connection, DatabaseManager
+from services.calendar_service import get_calendar_manager
+from utils.formatters import format_event_list
+from utils.message_parser import extract_datetime_from_message
+
+# 定数
 JST = pytz.timezone('Asia/Tokyo')
+MAX_RETRIES = 3
+RETRY_DELAY = 2  # 秒
+TIMEOUT_SECONDS = 30  # タイムアウトを30秒に延長
+ONE_TIME_CODE_TTL = 600  # 10分
+
+# 環境変数からclient_secret.jsonを書き出す
+client_secret_json = os.getenv("GOOGLE_CLIENT_SECRET")
+if client_secret_json:
+    with open("client_secret.json", "w") as f:
+        f.write(client_secret_json)
+
+# 定数の定義
+CLIENT_SECRETS_FILE = "client_secret.json"
+SCOPES = ['https://www.googleapis.com/auth/calendar']
+
+# 環境変数の読み込み
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
+
+# LINE Messaging APIの初期化（1回だけ）
+LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
+LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
+if not LINE_CHANNEL_ACCESS_TOKEN:
+    raise ValueError("LINE_CHANNEL_ACCESS_TOKEN is not set")
+if not LINE_CHANNEL_SECRET:
+    raise ValueError("LINE_CHANNEL_SECRET is not set")
+configuration = Configuration(access_token=LINE_CHANNEL_ACCESS_TOKEN)
+line_bot_api = MessagingApi(ApiClient(configuration))
+
+# データベースマネージャーの初期化
+db_manager = DatabaseManager()
 
 # Flask関連のインポート
 from flask import Flask, request, jsonify, session, redirect, url_for, render_template, render_template_string, current_app
@@ -26,37 +87,6 @@ from services.stripe_manager import StripeManager
 from handlers.line_handler import line_bp, handle_message
 from utils.db import get_db_connection
 from services.calendar_service import get_calendar_manager
-
-# 環境変数からclient_secret.jsonを書き出す
-client_secret_json = os.getenv("GOOGLE_CLIENT_SECRET")
-if client_secret_json:
-    with open("client_secret.json", "w") as f:
-        f.write(client_secret_json)
-
-# 定数の定義
-CLIENT_SECRETS_FILE = "client_secret.json"
-SCOPES = ['https://www.googleapis.com/auth/calendar']
-
-from dotenv import load_dotenv
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '.env'))
-
-# LINE Messaging APIのハンドラーを初期化
-from linebot.v3.webhooks import MessageEvent, TextMessageContent, FollowEvent, UnfollowEvent, JoinEvent, LeaveEvent, PostbackEvent
-from linebot.v3.exceptions import InvalidSignatureError
-LINE_CHANNEL_SECRET = os.getenv('LINE_CHANNEL_SECRET')
-if not LINE_CHANNEL_SECRET:
-    raise ValueError("LINE_CHANNEL_SECRET is not set")
-
-# LINE Messaging APIクライアントの初期化
-from linebot.v3.messaging import Configuration, ApiClient, MessagingApi, ReplyMessageRequest, TextMessage
-LINE_CHANNEL_ACCESS_TOKEN = os.getenv('LINE_CHANNEL_ACCESS_TOKEN')
-if not LINE_CHANNEL_ACCESS_TOKEN:
-    raise ValueError("LINE_CHANNEL_ACCESS_TOKEN is not set")
-configuration = Configuration(access_token=LINE_CHANNEL_ACCESS_TOKEN)
-line_bot_api = MessagingApi(ApiClient(configuration))
-
-import logging
-import sys
 
 # loggerのグローバル定義
 logger = logging.getLogger('app')
@@ -1350,31 +1380,7 @@ def callback():
         logger.error(traceback.format_exc())
         abort(500)
 
-if __name__ == "__main__":
-    try:
-        # アプリケーションの初期設定
-        setup_app()
-        
-        # ポート番号の設定
-        port_str = os.getenv("PORT")
-        port = int(port_str) if port_str and port_str.isdigit() else 3001
-        
-        logger.info(f"Starting server on port {port}")
-        app.run(host="0.0.0.0", port=port, use_reloader=False)
-        
-    except Exception as e:
-        logger.error(f"Failed to start application: {str(e)}")
-        logger.error(traceback.format_exc())
-        sys.exit(1) 
-
-import os
-print('STRIPE_WEBHOOK_SECRET:', os.getenv('STRIPE_WEBHOOK_SECRET'))
-
-REDIS_URL = os.getenv("REDIS_URL")
-print("REDIS_URL at startup:", REDIS_URL)
-if not REDIS_URL or not REDIS_URL.startswith("redis://"):
-    raise ValueError("REDIS_URL is missing or invalid.")
-
+# Stripe webhook routeを他のrouteと一緒に配置
 @app.route('/webhook/stripe', methods=['POST'])
 def stripe_webhook():
     try:
@@ -1393,3 +1399,20 @@ def stripe_webhook():
     except Exception as e:
         logger.error(f"Stripe webhook error: {str(e)}")
         return jsonify({'error': str(e)}), 400
+
+if __name__ == "__main__":
+    try:
+        # アプリケーションの初期設定
+        setup_app()
+        
+        # ポート番号の設定
+        port_str = os.getenv("PORT")
+        port = int(port_str) if port_str and port_str.isdigit() else 3001
+        
+        logger.info(f"Starting server on port {port}")
+        app.run(host="0.0.0.0", port=port, use_reloader=False)
+        
+    except Exception as e:
+        logger.error(f"Failed to start application: {str(e)}")
+        logger.error(traceback.format_exc())
+        sys.exit(1)
