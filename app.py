@@ -129,7 +129,8 @@ def setup_logging():
         logging.basicConfig(
             level=numeric_level,
             format=log_format,
-            handlers=handlers
+            handlers=handlers,
+            stream=sys.stdout
         )
         
         # 特定のライブラリのログレベルを設定
