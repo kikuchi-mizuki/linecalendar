@@ -665,13 +665,20 @@ def get_user_credentials(user_id: str) -> Optional[google.oauth2.credentials.Cre
             return None
             
         # 認証情報をCredentialsオブジェクトに変換
+        scopes = credentials_dict.get('scopes', SCOPES)
+        if isinstance(scopes, str):
+            try:
+                import json
+                scopes = json.loads(scopes)
+            except Exception:
+                scopes = [scopes]
         credentials = google.oauth2.credentials.Credentials(
             token=credentials_dict.get('token'),
             refresh_token=credentials_dict.get('refresh_token'),
             token_uri=credentials_dict.get('token_uri', 'https://oauth2.googleapis.com/token'),
             client_id=credentials_dict.get('client_id'),
             client_secret=credentials_dict.get('client_secret'),
-            scopes=credentials_dict.get('scopes', SCOPES)
+            scopes=scopes
         )
         
         # 有効期限の設定
