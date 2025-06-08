@@ -11,7 +11,9 @@ def get_calendar_manager(user_id: str):
         if not credentials:
             logger.info(f"ユーザー {user_id} の認証情報が見つかりません。認証が必要です。")
             raise ValueError("Google認証情報が見つかりません")
-        return CalendarManager(credentials)
+        calendar_manager = CalendarManager()
+        calendar_manager.set_credentials(credentials)
+        return calendar_manager
     except Exception as e:
         logger.error(f"カレンダーマネージャーの初期化に失敗: {str(e)}")
         import traceback
