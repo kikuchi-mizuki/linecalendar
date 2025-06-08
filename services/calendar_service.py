@@ -66,3 +66,29 @@ class CalendarManager:
             duration_str = f"{hours}時間{minutes}分" if hours > 0 else f"{minutes}分"
             msg += f"⏰ {start.strftime('%H:%M')}〜{end.strftime('%H:%M')}（{duration_str}）\n"
         return msg
+
+    def get_events(self, date):
+        """
+        指定日の予定をGoogleカレンダーから取得する
+        """
+        start_of_day = datetime.combine(date, time(0, 0)).isoformat() + 'Z'
+        end_of_day = datetime.combine(date, time(23, 59, 59)).isoformat() + 'Z'
+        events_result = self.service.events().list(
+            calendarId='primary',
+            timeMin=start_of_day,
+            timeMax=end_of_day,
+            singleEvents=True,
+            orderBy='startTime'
+        ).execute()
+        events = events_result.get('items', [])
+        # 必要に応じてstart/endをdatetime型に変換
+        for event in events:
+            if 'dateTime' in event['start']:
+                event['start'] = datetime.fromisoformat(event['start']['dateTime'].replace('Z', '+00:00'))
+            else:
+                event['start'] = datetime.fromisoformat(event['start']['date'])
+            if 'dateTime' in event['end']:
+                event['end'] = datetime.fromisoformat(event['end']['dateTime'].replace('Z', '+00:00'))
+            else:
+                event['end'] = datetime.fromisoformat(event['end']['date'])
+        return events
