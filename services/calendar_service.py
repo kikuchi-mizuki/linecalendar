@@ -35,22 +35,19 @@ class CalendarManager:
 
     def get_free_time_slots(self, date, min_duration=timedelta(minutes=30)):
         """指定日の空き時間を取得する"""
-        # 当日の予定を取得
         events = self.get_events(date)
-        # 空き時間を計算
         free_slots = []
         start_time = datetime.combine(date, time(9, 0))  # 9:00から開始
         end_time = datetime.combine(date, time(18, 0))   # 18:00で終了
         current_time = start_time
         for event in events:
-            event_start = event['start'].get('dateTime', event['start'].get('date'))
-            event_end = event['end'].get('dateTime', event['end'].get('date'))
+            event_start = event['start']  # すでにdatetime型
+            event_end = event['end']      # すでにdatetime型
             if event_start > current_time:
                 free_slots.append((current_time, event_start))
-            current_time = event_end
+            current_time = max(current_time, event_end)
         if current_time < end_time:
             free_slots.append((current_time, end_time))
-        # 最小時間未満の空き時間を除外
         free_slots = [(start, end) for start, end in free_slots if (end - start) >= min_duration]
         return free_slots
 
