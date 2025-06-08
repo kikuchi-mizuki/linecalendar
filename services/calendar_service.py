@@ -4,6 +4,7 @@ from utils.logger import logger
 from calendar_operations import CalendarManager
 from services.line_service import get_user_credentials
 from datetime import datetime, time, timedelta
+from googleapiclient.discovery import build
 
 def get_calendar_manager(user_id: str):
     try:
@@ -28,6 +29,9 @@ class CalendarManager:
     def set_credentials(self, credentials):
         self.credentials = credentials
         self.service = self._initialize_service()
+
+    def _initialize_service(self):
+        return build('calendar', 'v3', credentials=self.credentials)
 
     def get_free_time_slots(self, date, min_duration=timedelta(minutes=30)):
         """指定日の空き時間を取得する"""
