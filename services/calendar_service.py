@@ -18,6 +18,7 @@ def get_calendar_manager(user_id: str):
         logger.error(traceback.format_exc())
         raise
 
+class CalendarManager:
     def get_free_time_slots(self, date, min_duration=timedelta(minutes=30)):
         """指定日の空き時間を取得する"""
         # 当日の予定を取得
