@@ -19,9 +19,13 @@ def get_calendar_manager(user_id: str):
         raise
 
 class CalendarManager:
-    def __init__(self, credentials):
+    def __init__(self):
+        self.credentials = None
+        self.service = None
+
+    def set_credentials(self, credentials):
         self.credentials = credentials
-        # 他の初期化処理
+        self.service = self._initialize_service()
 
     def get_free_time_slots(self, date, min_duration=timedelta(minutes=30)):
         """指定日の空き時間を取得する"""

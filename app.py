@@ -32,6 +32,7 @@ from utils.db import get_db_connection, DatabaseManager
 from services.calendar_service import get_calendar_manager
 from utils.formatters import format_event_list
 from utils.message_parser import extract_datetime_from_message
+from urllib.parse import urlparse
 
 print("=== APP STARTED ===")
 
@@ -853,6 +854,14 @@ def setup_app():
         # REDIS_URLの値を起動時に必ず出力
         print(f"[DEBUG] REDIS_URL={os.getenv('REDIS_URL')}")
         logger.info(f"[DEBUG] REDIS_URL={os.getenv('REDIS_URL')}")
+
+        base_url = os.getenv('BASE_URL', '')
+        if base_url:
+            parsed_url = urlparse(base_url)
+            domain = parsed_url.hostname
+            if domain:
+                app.config['SESSION_COOKIE_DOMAIN'] = domain if not domain.startswith('.') else domain
+                logger.info(f"[SESSION_COOKIE_DOMAIN] Set to: {app.config['SESSION_COOKIE_DOMAIN']}")
     except Exception as e:
         logger.error(f"Application setup failed: {str(e)}")
         logger.error(traceback.format_exc())
