@@ -84,10 +84,7 @@ async def handle_parsed_message(result, user_id, reply_token):
             # 今日の予定を取得
             today = datetime.now(JST).date()
             events = calendar_manager.get_events(today)
-            if events:
-                msg = format_event_list(events, today, today)
-            else:
-                msg = "今日の予定はありません。"
+            msg = format_event_list(events, today, today)
             await reply_text(reply_token, msg)
         elif operation_type == 'delete_schedule':
             await handle_delete_event(result, calendar_manager, user_id, reply_token)
