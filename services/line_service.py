@@ -7,8 +7,10 @@ from typing import List, Dict, Union
 import time
 import json
 import logging
+import pytz
 
 logger = logging.getLogger('app')
+JST = pytz.timezone('Asia/Tokyo')
 
 async def reply_text(reply_token, texts: Union[str, list]):
     try:
