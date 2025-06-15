@@ -76,7 +76,7 @@ async def handle_parsed_message(result, user_id, reply_token):
     try:
         from services.calendar_service import get_calendar_manager
         calendar_manager = get_calendar_manager(user_id)
-        operation_type = result.get('type')  # typeキーを使用
+        operation_type = result.get('operation_type')
         logger.debug(f"[handle_parsed_message] 操作タイプ: {operation_type}")
         if operation_type == 'add_schedule':
             await handle_add_event(result, calendar_manager, user_id, reply_token)
