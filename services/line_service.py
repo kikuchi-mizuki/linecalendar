@@ -82,13 +82,22 @@ async def handle_parsed_message(result, user_id, reply_token):
             await handle_add_event(result, calendar_manager, user_id, reply_token)
         elif operation_type == 'today_schedule':
             # 今日の予定を取得
-            today = datetime.now(JST)
-            events = calendar_manager.get_events(today, today + timedelta(days=1))
+            today = datetime.now(JST).date()
+            events = calendar_manager.get_events(today)
             if events:
-                msg = format_event_list(events)
+                response_message = "今日の予定は以下の通りです：\n\n"
+                for event in events:
+                    start_time = event['start'].get('dateTime', event['start'].get('date'))
+                    end_time = event['end'].get('dateTime', event['end'].get('date'))
+                    if 'dateTime' in event['start']:
+                        start_time = datetime.fromisoformat(start_time.replace('Z', '+00:00')).astimezone(JST)
+                        end_time = datetime.fromisoformat(end_time.replace('Z', '+00:00')).astimezone(JST)
+                        response_message += f"・{start_time.strftime('%H:%M')}～{end_time.strftime('%H:%M')} {event.get('summary', '予定なし')}\n"
+                    else:
+                        response_message += f"・終日 {event.get('summary', '予定なし')}\n"
             else:
-                msg = "今日の予定はありません。"
-            await reply_text(reply_token, msg)
+                response_message = "今日の予定はありません。"
+            await reply_text(reply_token, response_message)
         elif operation_type == 'delete_schedule':
             await handle_delete_event(result, calendar_manager, user_id, reply_token)
         elif operation_type == 'update_schedule':
