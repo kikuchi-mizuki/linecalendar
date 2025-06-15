@@ -118,6 +118,19 @@ async def handle_message(event):
 
         logger.info(f"Received message from {user_id}: {message_text}")
 
+        # メッセージの解析
+        result = None
+        if "今日の予定" in message_text:
+            result = {"type": "today_schedule"}
+        elif "予定を追加" in message_text or "予定追加" in message_text:
+            result = {"type": "add_schedule"}
+        elif "予定を削除" in message_text or "予定削除" in message_text:
+            result = {"type": "delete_schedule"}
+        elif "予定を更新" in message_text or "予定更新" in message_text:
+            result = {"type": "update_schedule"}
+        elif "連携" in message_text or "認証" in message_text:
+            result = {"type": "auth"}
+
         # サブスクリプション確認
         conn = get_db_connection()
         cursor = conn.cursor()
