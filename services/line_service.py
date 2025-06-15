@@ -74,15 +74,22 @@ async def handle_parsed_message(result, user_id, reply_token):
     try:
         from services.calendar_service import get_calendar_manager
         calendar_manager = get_calendar_manager(user_id)
-        operation_type = result.get('operation_type')
+        operation_type = result.get('type')  # typeキーを使用
         logger.debug(f"[handle_parsed_message] 操作タイプ: {operation_type}")
-        if operation_type == 'add':
+        if operation_type == 'add_schedule':
             await handle_add_event(result, calendar_manager, user_id, reply_token)
-        elif operation_type == 'read':
-            await handle_read_event(result, calendar_manager, user_id, reply_token)
-        elif operation_type == 'delete':
+        elif operation_type == 'today_schedule':
+            # 今日の予定を取得
+            today = datetime.now(JST)
+            events = calendar_manager.get_events(today, today + timedelta(days=1))
+            if events:
+                msg = format_event_list(events)
+            else:
+                msg = "今日の予定はありません。"
+            await reply_text(reply_token, msg)
+        elif operation_type == 'delete_schedule':
             await handle_delete_event(result, calendar_manager, user_id, reply_token)
-        elif operation_type == 'update':
+        elif operation_type == 'update_schedule':
             await handle_update_event(result, calendar_manager, user_id, reply_token)
         else:
             await reply_text(reply_token, "未対応の操作です。\n予定の追加、確認、削除、更新のいずれかを指定してください。")
