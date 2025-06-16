@@ -12,7 +12,7 @@ from message_parser import parse_message
 from linebot import LineBotApi, WebhookHandler
 from linebot.exceptions import InvalidSignatureError, LineBotApiError
 from linebot.models import (
-    MessageEvent, TextMessage, TextSendMessage,
+    MessageEvent as LineEvent, TextMessage, TextSendMessage,
     TemplateSendMessage, ButtonsTemplate, PostbackAction,
     CarouselTemplate, CarouselColumn, URIAction,
     FlexSendMessage, BubbleContainer, BoxComponent,
