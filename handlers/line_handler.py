@@ -4,7 +4,7 @@ import asyncio
 from linebot.v3.webhooks import MessageEvent, FollowEvent, UnfollowEvent, JoinEvent, LeaveEvent, PostbackEvent, TextMessageContent
 from utils.logger import logger
 from services.calendar_service import get_calendar_manager
-from services.line_service import reply_text, get_auth_url, handle_parsed_message, format_event_list, get_user_credentials
+from services.line_service import reply_text, get_auth_url, handle_message, format_event_list, get_user_credentials
 from message_parser import parse_message
 import os
 import traceback
@@ -188,7 +188,7 @@ async def handle_message(event):
                 if code is None:
                     # 既存の認証情報がある場合は、それを再利用
                     logger.info(f"[handle_message] 既存の認証情報を再利用: user_id={user_id}")
-                    await handle_parsed_message(result, user_id, reply_token)
+                    await handle_message(user_id, result, reply_token)
                     return
                     
                 login_url = f"{os.getenv('BASE_URL', 'https://linecalendar-production.up.railway.app')}/onetimelogin"
@@ -204,7 +204,7 @@ async def handle_message(event):
                 if code is None:
                     # 既存の認証情報がある場合は、それを再利用
                     logger.info(f"[handle_message] 既存の認証情報を再利用: user_id={user_id}")
-                    await handle_parsed_message(result, user_id, reply_token)
+                    await handle_message(user_id, result, reply_token)
                     return
                     
                 login_url = f"{os.getenv('BASE_URL', 'https://linecalendar-production.up.railway.app')}/onetimelogin"
@@ -219,7 +219,7 @@ async def handle_message(event):
                 if code is None:
                     # 既存の認証情報がある場合は、それを再利用
                     logger.info(f"[handle_message] 既存の認証情報を再利用: user_id={user_id}")
-                    await handle_parsed_message(result, user_id, reply_token)
+                    await handle_message(user_id, result, reply_token)
                     return
                     
                 login_url = f"{os.getenv('BASE_URL', 'https://linecalendar-production.up.railway.app')}/onetimelogin"
@@ -234,7 +234,7 @@ async def handle_message(event):
                 return
 
         # メッセージの種類に応じて処理
-        await handle_parsed_message(result, user_id, reply_token)
+        await handle_message(user_id, result, reply_token)
         logger.info(f"[handle_message] end: user_id={user_id}")
 
     except Exception as e:
