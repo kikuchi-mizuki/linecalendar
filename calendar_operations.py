@@ -209,7 +209,18 @@ class CalendarManager:
         recurrence: str = None,
         skip_overlap_check: bool = False
     ) -> Dict:
-        """予定を追加する"""
+        """
+        Googleカレンダーに予定を追加
+        - start_time/end_timeがstr型ならdatetime型に変換する（先祖返り防止のため必ずこの仕様を維持すること）
+        """
+        import pytz
+        from datetime import datetime
+        # --- 型ガード ---
+        if isinstance(start_time, str):
+            start_time = datetime.fromisoformat(start_time)
+        if isinstance(end_time, str):
+            end_time = datetime.fromisoformat(end_time)
+        # 以降は既存の処理
         try:
             # デバッグ: 追加前の時刻をJSTで出力
             print(f"[DEBUG][add_event] 追加前: start_time={start_time} end_time={end_time}")
