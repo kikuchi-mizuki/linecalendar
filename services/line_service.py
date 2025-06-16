@@ -9,6 +9,17 @@ import json
 import logging
 import pytz
 from message_parser import parse_message
+from linebot import LineBotApi, WebhookHandler
+from linebot.exceptions import InvalidSignatureError, LineBotApiError
+from linebot.models import (
+    MessageEvent, TextMessage, TextSendMessage,
+    TemplateSendMessage, ButtonsTemplate, PostbackAction,
+    CarouselTemplate, CarouselColumn, URIAction,
+    FlexSendMessage, BubbleContainer, BoxComponent,
+    TextComponent, ButtonComponent, MessageAction
+)
+from message_parser import MessageParser
+from calendar_operations import CalendarOperations
 
 logger = logging.getLogger('app')
 JST = pytz.timezone('Asia/Tokyo')
@@ -370,4 +381,432 @@ async def handle_update_event(result, calendar_manager, user_id, reply_token):
     except Exception as e:
         logger.error(f"予定の更新中にエラーが発生: {str(e)}")
         logger.error(traceback.format_exc())
-        await reply_text(reply_token, "予定の更新中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。") 
+        await reply_text(reply_token, "予定の更新中にエラーが発生しました。\nしばらく時間をおいて再度お試しください。")
+
+class LineService:
+    def __init__(self):
+        self.line_bot_api = LineBotApi(os.getenv('LINE_CHANNEL_ACCESS_TOKEN'))
+        self.handler = WebhookHandler(os.getenv('LINE_CHANNEL_SECRET'))
+        self.message_parser = MessageParser()
+        self.calendar_ops = CalendarOperations()
+
+    def handle_message(self, event: MessageEvent) -> None:
+        """
+        メッセージイベントを処理
+        """
+        try:
+            user_id = event.source.user_id
+            message_text = event.message.text
+            logger.info(f"Received message from {user_id}: {message_text}")
+
+            # メッセージを解析
+            parsed_data = self.message_parser.parse_message(message_text)
+            logger.info(f"Parsed message data: {parsed_data}")
+
+            # 操作タイプに応じて処理
+            operation = parsed_data.get('operation', 'unknown')
+            
+            if operation == 'create':
+                self._handle_create_event(event, parsed_data)
+            elif operation == 'read':
+                self._handle_read_events(event, parsed_data)
+            elif operation == 'update':
+                self._handle_update_event(event, parsed_data)
+            elif operation == 'delete':
+                self._handle_delete_event(event, parsed_data)
+            elif operation == 'list':
+                self._handle_list_events(event, parsed_data)
+            elif operation == 'search':
+                self._handle_search_events(event, parsed_data)
+            elif operation == 'remind':
+                self._handle_remind_events(event, parsed_data)
+            elif operation == 'help':
+                self._handle_help(event)
+            else:
+                self._handle_unknown_operation(event)
+
+        except Exception as e:
+            logger.error(f"Error handling message: {str(e)}", exc_info=True)
+            self._send_error_message(event)
+
+    def _handle_create_event(self, event: MessageEvent, parsed_data: Dict) -> None:
+        """
+        イベント作成を処理
+        """
+        try:
+            title = parsed_data.get('title')
+            if not title:
+                self._send_message(event, "予定のタイトルを教えてください。\n例：「会議」という予定を登録")
+                return
+
+            start_date = parsed_data['date'].get('start_date')
+            end_date = parsed_data['date'].get('end_date')
+            start_time = parsed_data['time'].get('start_time')
+            end_time = parsed_data['time'].get('end_time')
+
+            if not start_date:
+                self._send_message(event, "予定の日付を教えてください。\n例：明日の会議を登録")
+                return
+
+            # 時刻が指定されていない場合は終日イベントとして扱う
+            if not start_time:
+                start_time = datetime.combine(start_date.date(), datetime.min.time())
+                end_time = datetime.combine(end_date.date(), datetime.max.time())
+            else:
+                # 日付と時刻を組み合わせる
+                start_time = datetime.combine(start_date.date(), start_time.time())
+                end_time = datetime.combine(end_date.date(), end_time.time())
+
+            # イベントを作成
+            event_data = self.calendar_ops.create_event(
+                title=title,
+                start_time=start_time,
+                end_time=end_time
+            )
+
+            # 確認メッセージを送信
+            start_str, end_str = self.calendar_ops.format_event_time(event_data)
+            message = f"予定を登録しました！\n\n{start_str}～{end_str}\n{title}"
+            self._send_message(event, message)
+
+        except Exception as e:
+            logger.error(f"Error creating event: {str(e)}", exc_info=True)
+            self._send_error_message(event)
+
+    def _handle_read_events(self, event: MessageEvent, parsed_data: Dict) -> None:
+        """
+        イベント読み取りを処理
+        """
+        try:
+            start_date = parsed_data['date'].get('start_date')
+            end_date = parsed_data['date'].get('end_date')
+
+            if not start_date:
+                start_date = datetime.now()
+                end_date = start_date
+
+            # 時刻が指定されていない場合は終日として扱う
+            start_time = datetime.combine(start_date.date(), datetime.min.time())
+            end_time = datetime.combine(end_date.date(), datetime.max.time())
+
+            # イベントを取得
+            events = self.calendar_ops.get_events(start_time, end_time)
+            
+            # イベントリストを整形
+            message = self.calendar_ops.format_event_list(events)
+            self._send_message(event, message)
+
+        except Exception as e:
+            logger.error(f"Error reading events: {str(e)}", exc_info=True)
+            self._send_error_message(event)
+
+    def _handle_update_event(self, event: MessageEvent, parsed_data: Dict) -> None:
+        """
+        イベント更新を処理
+        """
+        try:
+            title = parsed_data.get('title')
+            if not title:
+                self._send_message(event, "更新する予定のタイトルを教えてください。")
+                return
+
+            # 該当するイベントを検索
+            start_date = parsed_data['date'].get('start_date', datetime.now())
+            end_date = parsed_data['date'].get('end_date', start_date + timedelta(days=1))
+            
+            events = self.calendar_ops.get_events(start_date, end_date)
+            matching_events = [e for e in events if e.get('summary') == title]
+
+            if not matching_events:
+                self._send_message(event, f"「{title}」という予定が見つかりませんでした。")
+                return
+
+            if len(matching_events) > 1:
+                # 複数のイベントが見つかった場合は選択肢を表示
+                self._show_event_selection(event, matching_events, 'update')
+            else:
+                # 単一のイベントが見つかった場合は更新フォームを表示
+                self._show_update_form(event, matching_events[0])
+
+        except Exception as e:
+            logger.error(f"Error updating event: {str(e)}", exc_info=True)
+            self._send_error_message(event)
+
+    def _handle_delete_event(self, event: MessageEvent, parsed_data: Dict) -> None:
+        """
+        イベント削除を処理
+        """
+        try:
+            title = parsed_data.get('title')
+            if not title:
+                self._send_message(event, "削除する予定のタイトルを教えてください。")
+                return
+
+            # 該当するイベントを検索
+            start_date = parsed_data['date'].get('start_date', datetime.now())
+            end_date = parsed_data['date'].get('end_date', start_date + timedelta(days=1))
+            
+            events = self.calendar_ops.get_events(start_date, end_date)
+            matching_events = [e for e in events if e.get('summary') == title]
+
+            if not matching_events:
+                self._send_message(event, f"「{title}」という予定が見つかりませんでした。")
+                return
+
+            if len(matching_events) > 1:
+                # 複数のイベントが見つかった場合は選択肢を表示
+                self._show_event_selection(event, matching_events, 'delete')
+            else:
+                # 単一のイベントが見つかった場合は削除確認を表示
+                self._show_delete_confirmation(event, matching_events[0])
+
+        except Exception as e:
+            logger.error(f"Error deleting event: {str(e)}", exc_info=True)
+            self._send_error_message(event)
+
+    def _handle_list_events(self, event: MessageEvent, parsed_data: Dict) -> None:
+        """
+        イベント一覧を処理
+        """
+        try:
+            start_date = parsed_data['date'].get('start_date', datetime.now())
+            end_date = parsed_data['date'].get('end_date', start_date + timedelta(days=7))
+
+            # イベントを取得
+            events = self.calendar_ops.get_events(start_date, end_date)
+            
+            if not events:
+                self._send_message(event, "指定された期間の予定はありません。")
+                return
+
+            # イベントリストを整形
+            message = self.calendar_ops.format_event_list(events)
+            self._send_message(event, message)
+
+        except Exception as e:
+            logger.error(f"Error listing events: {str(e)}", exc_info=True)
+            self._send_error_message(event)
+
+    def _handle_search_events(self, event: MessageEvent, parsed_data: Dict) -> None:
+        """
+        イベント検索を処理
+        """
+        try:
+            title = parsed_data.get('title')
+            if not title:
+                self._send_message(event, "検索する予定のタイトルを教えてください。")
+                return
+
+            # 過去1ヶ月から未来1ヶ月の期間で検索
+            start_date = datetime.now() - timedelta(days=30)
+            end_date = datetime.now() + timedelta(days=30)
+            
+            events = self.calendar_ops.get_events(start_date, end_date)
+            matching_events = [e for e in events if title in e.get('summary', '')]
+
+            if not matching_events:
+                self._send_message(event, f"「{title}」を含む予定は見つかりませんでした。")
+                return
+
+            # イベントリストを整形
+            message = self.calendar_ops.format_event_list(matching_events)
+            self._send_message(event, message)
+
+        except Exception as e:
+            logger.error(f"Error searching events: {str(e)}", exc_info=True)
+            self._send_error_message(event)
+
+    def _handle_remind_events(self, event: MessageEvent, parsed_data: Dict) -> None:
+        """
+        イベントリマインダーを処理
+        """
+        try:
+            # 現在時刻から24時間以内のイベントを取得
+            start_time = datetime.now()
+            end_time = start_time + timedelta(hours=24)
+            
+            events = self.calendar_ops.get_events(start_time, end_time)
+            
+            if not events:
+                self._send_message(event, "今後24時間以内の予定はありません。")
+                return
+
+            # イベントリストを整形
+            message = "【今後の予定】\n\n" + self.calendar_ops.format_event_list(events)
+            self._send_message(event, message)
+
+        except Exception as e:
+            logger.error(f"Error handling reminders: {str(e)}", exc_info=True)
+            self._send_error_message(event)
+
+    def _handle_help(self, event: MessageEvent) -> None:
+        """
+        ヘルプメッセージを表示
+        """
+        help_message = """【使い方】
+
+1. 予定の登録
+「会議」という予定を明日の14時から登録
+「打ち合わせ」を来週の月曜日に登録
+
+2. 予定の確認
+今日の予定を教えて
+明日の予定を確認
+来週の予定を見せて
+
+3. 予定の変更
+「会議」の時間を変更
+「打ち合わせ」を編集
+
+4. 予定の削除
+「会議」を削除
+「打ち合わせ」を取り消し
+
+5. 予定の検索
+「会議」を探す
+「打ち合わせ」を検索
+
+6. リマインダー
+今後の予定を教えて
+予定を通知して
+
+※日付や時刻は以下のように指定できます：
+・今日、明日、明後日
+・来週、来月
+・○月○日
+・○曜日
+・○時○分
+・午前、午後、夜
+"""
+        self._send_message(event, help_message)
+
+    def _handle_unknown_operation(self, event: MessageEvent) -> None:
+        """
+        不明な操作に対するメッセージを表示
+        """
+        message = "申し訳ありません。メッセージの内容が理解できませんでした。\n「使い方」と送信すると、使い方を確認できます。"
+        self._send_message(event, message)
+
+    def _show_event_selection(self, event: MessageEvent, events: List[Dict], action: str) -> None:
+        """
+        イベント選択用のカルーセルを表示
+        """
+        columns = []
+        for evt in events:
+            start_str, end_str = self.calendar_ops.format_event_time(evt)
+            title = evt.get('summary', 'タイトルなし')
+            
+            column = CarouselColumn(
+                title=title,
+                text=f"{start_str}～{end_str}",
+                actions=[
+                    PostbackAction(
+                        label="選択",
+                        data=f"action={action}&event_id={evt['id']}"
+                    )
+                ]
+            )
+            columns.append(column)
+
+        carousel = CarouselTemplate(columns=columns)
+        template_message = TemplateSendMessage(
+            alt_text="予定を選択してください",
+            template=carousel
+        )
+        self.line_bot_api.reply_message(event.reply_token, template_message)
+
+    def _show_update_form(self, event: MessageEvent, event_data: Dict) -> None:
+        """
+        イベント更新用のフォームを表示
+        """
+        start_str, end_str = self.calendar_ops.format_event_time(event_data)
+        title = event_data.get('summary', 'タイトルなし')
+        
+        bubble = BubbleContainer(
+            body=BoxComponent(
+                layout="vertical",
+                contents=[
+                    TextComponent(text="予定を更新", weight="bold", size="xl"),
+                    TextComponent(text=f"タイトル: {title}", margin="md"),
+                    TextComponent(text=f"開始: {start_str}", margin="sm"),
+                    TextComponent(text=f"終了: {end_str}", margin="sm")
+                ]
+            ),
+            footer=BoxComponent(
+                layout="vertical",
+                contents=[
+                    ButtonComponent(
+                        style="primary",
+                        color="#27AE60",
+                        action=MessageAction(
+                            label="タイトルを変更",
+                            text=f"「{title}」のタイトルを変更"
+                        )
+                    ),
+                    ButtonComponent(
+                        style="primary",
+                        color="#2980B9",
+                        action=MessageAction(
+                            label="日時を変更",
+                            text=f"「{title}」の日時を変更"
+                        )
+                    )
+                ]
+            )
+        )
+        
+        flex_message = FlexSendMessage(
+            alt_text="予定の更新",
+            contents=bubble
+        )
+        self.line_bot_api.reply_message(event.reply_token, flex_message)
+
+    def _show_delete_confirmation(self, event: MessageEvent, event_data: Dict) -> None:
+        """
+        イベント削除の確認メッセージを表示
+        """
+        start_str, end_str = self.calendar_ops.format_event_time(event_data)
+        title = event_data.get('summary', 'タイトルなし')
+        
+        message = f"以下の予定を削除しますか？\n\n{start_str}～{end_str}\n{title}"
+        
+        buttons_template = ButtonsTemplate(
+            title="予定の削除",
+            text=message,
+            actions=[
+                PostbackAction(
+                    label="削除する",
+                    data=f"action=confirm_delete&event_id={event_data['id']}"
+                ),
+                MessageAction(
+                    label="キャンセル",
+                    text="キャンセル"
+                )
+            ]
+        )
+        
+        template_message = TemplateSendMessage(
+            alt_text="予定の削除確認",
+            template=buttons_template
+        )
+        self.line_bot_api.reply_message(event.reply_token, template_message)
+
+    def _send_message(self, event: MessageEvent, message: str) -> None:
+        """
+        テキストメッセージを送信
+        """
+        try:
+            self.line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text=message)
+            )
+        except LineBotApiError as e:
+            logger.error(f"Error sending message: {str(e)}", exc_info=True)
+            raise
+
+    def _send_error_message(self, event: MessageEvent) -> None:
+        """
+        エラーメッセージを送信
+        """
+        error_message = "申し訳ありません。エラーが発生しました。\nしばらく時間をおいて再度お試しください。"
+        self._send_message(event, error_message) 

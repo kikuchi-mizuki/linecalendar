@@ -22,6 +22,7 @@ from google.auth import exceptions
 from google.auth import transport
 from message_parser import normalize_text
 from constants import WEEKDAYS
+from google_auth_oauthlib.flow import InstalledAppFlow
 
 # ログ設定
 logger = logging.getLogger(__name__)
@@ -46,32 +47,35 @@ class CalendarManager:
     """
     Google Calendar APIを使用してカレンダー操作を行うクラス（OAuth認証対応）
     """
-    def __init__(self, credentials):
-        """
-        カレンダーマネージャーの初期化
-        
-        Args:
-            credentials (google.oauth2.credentials.Credentials): Google認証情報
-        """
+    def __init__(self):
+        self.SCOPES = ['https://www.googleapis.com/auth/calendar']
+        self.creds = None
+        self.service = None
+        self.timezone = 'Asia/Tokyo'
+        self.tz = pytz.timezone(self.timezone)
+        self._initialize_service()
+
+    def _initialize_service(self):
+        """Google Calendar APIのサービスを初期化"""
         try:
-            # 認証情報を設定
-            self.credentials = credentials
+            if os.path.exists('token.json'):
+                self.creds = Credentials.from_authorized_user_file('token.json', self.SCOPES)
             
-            # Google Calendar APIサービスの初期化
-            self.service = build(
-                'calendar', 'v3', credentials=self.credentials
-            )
-            logger.info("Google Calendar APIサービスを初期化しました（OAuth認証）")
+            if not self.creds or not self.creds.valid:
+                if self.creds and self.creds.expired and self.creds.refresh_token:
+                    self.creds.refresh(Request())
+                else:
+                    flow = InstalledAppFlow.from_client_secrets_file(
+                        'credentials.json', self.SCOPES)
+                    self.creds = flow.run_local_server(port=0)
+                
+                with open('token.json', 'w') as token:
+                    token.write(self.creds.to_json())
             
-            # カレンダーIDの取得
-            self.calendar_id = self._get_calendar_id()
-            
-            # タイムゾーンの設定
-            self.timezone = pytz.timezone('Asia/Tokyo')
-            
+            self.service = build('calendar', 'v3', credentials=self.creds)
+            logger.info("Calendar service initialized successfully")
         except Exception as e:
-            logger.error(f"カレンダーマネージャーの初期化中にエラーが発生: {str(e)}")
-            logger.error(traceback.format_exc())
+            logger.error(f"Error initializing calendar service: {str(e)}", exc_info=True)
             raise
 
     def _get_calendar_id(self):
