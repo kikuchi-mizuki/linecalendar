@@ -50,7 +50,7 @@ class CalendarManager:
     def __init__(self, credentials):
         self.service = self._initialize_service(credentials)
         self.calendar_id = self._get_calendar_id()
-        self.timezone = 'Asia/Tokyo'
+        self.timezone = pytz.timezone('Asia/Tokyo')
 
     def _initialize_service(self, credentials):
         """Google Calendar APIサービスの初期化"""
@@ -98,11 +98,11 @@ class CalendarManager:
                 'summary': title,
                 'start': {
                     'dateTime': start_time.isoformat(),
-                    'timeZone': self.timezone,
+                    'timeZone': self.timezone.zone,
                 },
                 'end': {
                     'dateTime': end_time.isoformat(),
-                    'timeZone': self.timezone,
+                    'timeZone': self.timezone.zone,
                 }
             }
 
@@ -247,13 +247,13 @@ class CalendarManager:
                 start_time = self._ensure_timezone(start_time)
                 event['start'] = {
                     'dateTime': start_time.isoformat(),
-                    'timeZone': self.timezone,
+                    'timeZone': self.timezone.zone,
                 }
             if end_time:
                 end_time = self._ensure_timezone(end_time)
                 event['end'] = {
                     'dateTime': end_time.isoformat(),
-                    'timeZone': self.timezone,
+                    'timeZone': self.timezone.zone,
                 }
             if description:
                 event['description'] = description
@@ -466,11 +466,11 @@ class CalendarManager:
                 'summary': title,  # タイトルをそのまま使用
                 'start': {
                     'dateTime': start_time.isoformat(),
-                    'timeZone': 'Asia/Tokyo',
+                    'timeZone': self.timezone.zone,
                 },
                 'end': {
                     'dateTime': end_time.isoformat(),
-                    'timeZone': 'Asia/Tokyo',
+                    'timeZone': self.timezone.zone,
                 }
             }
             if location:
@@ -586,11 +586,11 @@ class CalendarManager:
             event = events[0]  # 最初の予定を更新
             event['start'] = {
                 'dateTime': new_start_time.isoformat(),
-                'timeZone': 'Asia/Tokyo'
+                'timeZone': self.timezone.zone,
             }
             event['end'] = {
                 'dateTime': new_end_time.isoformat(),
-                'timeZone': 'Asia/Tokyo'
+                'timeZone': self.timezone.zone,
             }
             
             updated_event = self.service.events().update(
@@ -694,11 +694,11 @@ class CalendarManager:
             try:
                 event['start'] = {
                     'dateTime': new_start_time.isoformat(),
-                    'timeZone': 'Asia/Tokyo'
+                    'timeZone': self.timezone.zone,
                 }
                 event['end'] = {
                     'dateTime': new_end_time.isoformat(),
-                    'timeZone': 'Asia/Tokyo'
+                    'timeZone': self.timezone.zone,
                 }
                 updated_event = self.service.events().update(
                     calendarId=self.calendar_id,
@@ -949,7 +949,7 @@ class CalendarManager:
             start_time_dt = datetime.fromisoformat(start_dt_str.replace('Z', '+00:00')).astimezone(self.timezone)
             end_time_dt = start_time_dt + duration
             event['end']['dateTime'] = end_time_dt.isoformat()
-            event['end']['timeZone'] = 'Asia/Tokyo'
+            event['end']['timeZone'] = self.timezone.zone
             updated_event = self.service.events().update(
                 calendarId=self.calendar_id,
                 eventId=event_id,
@@ -1048,8 +1048,8 @@ class CalendarManager:
                     return {'success': False, 'error': 'duplicate', 'message': '更新後の時間帯に既に予定があります。'}
 
             # 予定を更新
-            event['start'] = {'dateTime': new_start_time.isoformat(), 'timeZone': 'Asia/Tokyo'}
-            event['end'] = {'dateTime': new_end_time.isoformat(), 'timeZone': 'Asia/Tokyo'}
+            event['start'] = {'dateTime': new_start_time.isoformat(), 'timeZone': self.timezone.zone}
+            event['end'] = {'dateTime': new_end_time.isoformat(), 'timeZone': self.timezone.zone}
             logger.debug(f"[update_event_by_id] 更新前のevent: {event}")
 
             updated_event = self.service.events().update(
