@@ -2187,6 +2187,8 @@ class MessageParser:
     def _extract_title(self, message: str) -> Optional[str]:
         """
         メッセージから予定のタイトルを抽出
+        - 複数行メッセージなら2行目以降の最初の有効な行をタイトルとみなす（先祖返り防止のため必ずこの仕様を維持すること）
+        - 1行メッセージは時刻・日付部分を除去した残りをタイトルとする
         """
         # タイトルを抽出するパターン
         title_patterns = [
@@ -2199,10 +2201,32 @@ class MessageParser:
             r'「(.+?)」に',
             r'"(.+?)"に'
         ]
-        
         for pattern in title_patterns:
             match = re.search(pattern, message)
             if match:
                 return match.group(1)
-        
+        # --- 複数行メッセージ対応 ---
+        lines = [line.strip() for line in message.splitlines() if line.strip()]
+        if len(lines) >= 2:
+            for line in lines[1:]:
+                # 日本語・英字が含まれる行をタイトルとみなす
+                if re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z]', line):
+                    return line
+            return None
+        # --- 1行メッセージ対応 ---
+        if len(lines) == 1:
+            line = lines[0]
+            # 日付・時刻部分を除去
+            line = re.sub(r'^(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?[\-〜~～](\d{1,2}):?(\d{2})?', '', line)
+            line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時[\-〜~～](\d{1,2})時', '', line)
+            line = re.sub(r'^(\d{1,2}):?(\d{2})?[\-〜~～](\d{1,2}):?(\d{2})?', '', line)
+            line = re.sub(r'^(\d{1,2})時[\-〜~～](\d{1,2})時', '', line)
+            line = re.sub(r'^(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?', '', line)
+            line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時(\d{1,2})分?', '', line)
+            line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時', '', line)
+            line = re.sub(r'^(\d{1,2})[\/](\d{1,2})[\s　]*(\d{1,2}):?(\d{2})?', '', line)
+            line = re.sub(r'^[\s　:：,、。]+', '', line)
+            if not line or re.fullmatch(r'[\d/:年月日時分\-〜~～\s　]+', line):
+                return None
+            return line
         return None
