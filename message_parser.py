@@ -1829,3 +1829,379 @@ def extract_end_time(message: str) -> Optional[datetime]:
 def is_confirm_pattern(message: str, operation_hint: str = None) -> bool:
     keywords = ["予定教えて", "今日の予定", "明日の予定", "スケジュール見せて", "何時から", "何がある", "空いてる時間", "確認"]
     return any(kw in message for kw in keywords)
+
+class MessageParser:
+    def __init__(self):
+        self.date_patterns = {
+            'today': r'今日|本日|きょう|ほんじつ',
+            'tomorrow': r'明日|あした|あす',
+            'day_after_tomorrow': r'明後日|あさって',
+            'next_week': r'来週|らいしゅう',
+            'next_month': r'来月|らいげつ',
+            'specific_date': r'(\d{1,2})月(\d{1,2})日',
+            'specific_date_with_year': r'(\d{4})年(\d{1,2})月(\d{1,2})日',
+            'relative_date': r'(\d+)日後',
+            'relative_date_ago': r'(\d+)日前',
+            'weekday': r'(月|火|水|木|金|土|日)曜日',
+            'next_weekday': r'来週の(月|火|水|木|金|土|日)曜日',
+            'this_weekday': r'今週の(月|火|水|木|金|土|日)曜日',
+            'last_weekday': r'先週の(月|火|水|木|金|土|日)曜日'
+        }
+        
+        self.time_patterns = {
+            'specific_time': r'(\d{1,2})時(?:(\d{1,2})分)?',
+            'morning': r'午前|朝',
+            'afternoon': r'午後|夕方',
+            'evening': r'夜|夕方',
+            'noon': r'正午|お昼',
+            'midnight': r'深夜|夜中',
+            'relative_time': r'(\d+)時間後',
+            'relative_time_ago': r'(\d+)時間前'
+        }
+        
+        self.weekday_map = {
+            '月': 0, '火': 1, '水': 2, '木': 3,
+            '金': 4, '土': 5, '日': 6
+        }
+        
+        self.operation_patterns = {
+            'create': r'登録|作成|追加|予定を入れる|予定を作る',
+            'read': r'確認|表示|教えて|見せて|見る|見たい',
+            'update': r'変更|修正|更新|編集',
+            'delete': r'削除|消去|取り消し|キャンセル',
+            'list': r'一覧|リスト|全部|全て|すべて',
+            'search': r'検索|探す|調べる',
+            'remind': r'リマインド|通知|知らせ|教えて',
+            'help': r'ヘルプ|使い方|説明|help|使い方教えて'
+        }
+
+    def parse_message(self, message: str) -> Dict:
+        """
+        メッセージを解析して操作タイプとパラメータを返す
+        """
+        try:
+            # メッセージを正規化
+            normalized_message = self._normalize_message(message)
+            logger.info(f"Normalized message: {normalized_message}")
+
+            # 操作タイプを判定
+            operation_type = self._determine_operation_type(normalized_message)
+            logger.info(f"Detected operation type: {operation_type}")
+
+            # 日付と時刻を解析
+            date_info = self._parse_date(normalized_message)
+            time_info = self._parse_time(normalized_message)
+            
+            # タイトルを抽出
+            title = self._extract_title(normalized_message)
+            
+            # 結果を構築
+            result = {
+                'operation': operation_type,
+                'date': date_info,
+                'time': time_info,
+                'title': title
+            }
+            
+            logger.info(f"Parsed result: {result}")
+            return result
+
+        except Exception as e:
+            logger.error(f"Error parsing message: {str(e)}", exc_info=True)
+            return {
+                'operation': 'unknown',
+                'error': str(e)
+            }
+
+    def _normalize_message(self, message: str) -> str:
+        """
+        メッセージを正規化する
+        """
+        # 全角数字を半角に変換
+        message = jaconv.z2h(message, digit=True)
+        # 全角英字を半角に変換
+        message = jaconv.z2h(message, ascii=True)
+        # 全角スペースを半角に変換
+        message = message.replace('　', ' ')
+        # 連続するスペースを1つに
+        message = re.sub(r'\s+', ' ', message)
+        return message.strip()
+
+    def _determine_operation_type(self, message: str) -> str:
+        """
+        メッセージから操作タイプを判定
+        """
+        for op_type, pattern in self.operation_patterns.items():
+            if re.search(pattern, message):
+                return op_type
+        return 'unknown'
+
+    def _parse_date(self, message: str) -> Dict:
+        """
+        メッセージから日付情報を解析
+        """
+        today = datetime.now()
+        result = {
+            'start_date': None,
+            'end_date': None,
+            'is_range': False
+        }
+
+        # 日付範囲のパターン
+        range_patterns = [
+            (r'(\d{1,2})月(\d{1,2})日から(\d{1,2})月(\d{1,2})日まで', self._parse_date_range),
+            (r'(\d{4})年(\d{1,2})月(\d{1,2})日から(\d{4})年(\d{1,2})月(\d{1,2})日まで', self._parse_date_range_with_year),
+            (r'(\d{1,2})月(\d{1,2})日から(\d+)日間', self._parse_date_range_with_days)
+        ]
+
+        for pattern, parser in range_patterns:
+            match = re.search(pattern, message)
+            if match:
+                return parser(match, today)
+
+        # 単一の日付パターン
+        for pattern_name, pattern in self.date_patterns.items():
+            match = re.search(pattern, message)
+            if match:
+                date = self._parse_single_date(match, pattern_name, today)
+                if date:
+                    result['start_date'] = date
+                    result['end_date'] = date
+                    return result
+
+        # デフォルトは今日
+        result['start_date'] = today
+        result['end_date'] = today
+        return result
+
+    def _parse_single_date(self, match: re.Match, pattern_name: str, today: datetime) -> Optional[datetime]:
+        """
+        単一の日付を解析
+        """
+        if pattern_name == 'today':
+            return today
+        elif pattern_name == 'tomorrow':
+            return today + timedelta(days=1)
+        elif pattern_name == 'day_after_tomorrow':
+            return today + timedelta(days=2)
+        elif pattern_name == 'next_week':
+            return today + timedelta(days=7)
+        elif pattern_name == 'next_month':
+            next_month = today.replace(day=1) + timedelta(days=32)
+            return next_month.replace(day=1)
+        elif pattern_name == 'specific_date':
+            month, day = map(int, match.groups())
+            year = today.year
+            if month < today.month:
+                year += 1
+            return datetime(year, month, day)
+        elif pattern_name == 'specific_date_with_year':
+            year, month, day = map(int, match.groups())
+            return datetime(year, month, day)
+        elif pattern_name == 'relative_date':
+            days = int(match.group(1))
+            return today + timedelta(days=days)
+        elif pattern_name == 'relative_date_ago':
+            days = int(match.group(1))
+            return today - timedelta(days=days)
+        elif pattern_name == 'weekday':
+            weekday = self.weekday_map[match.group(1)]
+            days_ahead = weekday - today.weekday()
+            if days_ahead <= 0:
+                days_ahead += 7
+            return today + timedelta(days=days_ahead)
+        elif pattern_name == 'next_weekday':
+            weekday = self.weekday_map[match.group(1)]
+            days_ahead = weekday - today.weekday()
+            if days_ahead <= 0:
+                days_ahead += 14
+            else:
+                days_ahead += 7
+            return today + timedelta(days=days_ahead)
+        elif pattern_name == 'this_weekday':
+            weekday = self.weekday_map[match.group(1)]
+            days_ahead = weekday - today.weekday()
+            if days_ahead < 0:
+                days_ahead += 7
+            return today + timedelta(days=days_ahead)
+        elif pattern_name == 'last_weekday':
+            weekday = self.weekday_map[match.group(1)]
+            days_ahead = weekday - today.weekday()
+            if days_ahead >= 0:
+                days_ahead -= 7
+            return today + timedelta(days=days_ahead)
+        return None
+
+    def _parse_date_range(self, match: re.Match, today: datetime) -> Dict:
+        """
+        日付範囲を解析（月日形式）
+        """
+        start_month, start_day, end_month, end_day = map(int, match.groups())
+        year = today.year
+        
+        start_date = datetime(year, start_month, start_day)
+        end_date = datetime(year, end_month, end_day)
+        
+        if end_date < start_date:
+            end_date = end_date.replace(year=year + 1)
+        
+        return {
+            'start_date': start_date,
+            'end_date': end_date,
+            'is_range': True
+        }
+
+    def _parse_date_range_with_year(self, match: re.Match, today: datetime) -> Dict:
+        """
+        日付範囲を解析（年月日形式）
+        """
+        start_year, start_month, start_day, end_year, end_month, end_day = map(int, match.groups())
+        
+        start_date = datetime(start_year, start_month, start_day)
+        end_date = datetime(end_year, end_month, end_day)
+        
+        return {
+            'start_date': start_date,
+            'end_date': end_date,
+            'is_range': True
+        }
+
+    def _parse_date_range_with_days(self, match: re.Match, today: datetime) -> Dict:
+        """
+        日付範囲を解析（開始日と日数）
+        """
+        start_month, start_day, days = map(int, match.groups())
+        year = today.year
+        
+        start_date = datetime(year, start_month, start_day)
+        end_date = start_date + timedelta(days=days-1)
+        
+        return {
+            'start_date': start_date,
+            'end_date': end_date,
+            'is_range': True
+        }
+
+    def _parse_time(self, message: str) -> Dict:
+        """
+        メッセージから時刻情報を解析
+        """
+        result = {
+            'start_time': None,
+            'end_time': None,
+            'is_range': False
+        }
+
+        # 時刻範囲のパターン
+        range_patterns = [
+            (r'(\d{1,2})時(?:(\d{1,2})分)?から(\d{1,2})時(?:(\d{1,2})分)?まで', self._parse_time_range),
+            (r'(\d{1,2})時(?:(\d{1,2})分)?から(\d+)時間', self._parse_time_range_with_duration)
+        ]
+
+        for pattern, parser in range_patterns:
+            match = re.search(pattern, message)
+            if match:
+                return parser(match)
+
+        # 単一の時刻パターン
+        for pattern_name, pattern in self.time_patterns.items():
+            match = re.search(pattern, message)
+            if match:
+                time = self._parse_single_time(match, pattern_name)
+                if time:
+                    result['start_time'] = time
+                    result['end_time'] = time
+                    return result
+
+        return result
+
+    def _parse_single_time(self, match: re.Match, pattern_name: str) -> Optional[datetime]:
+        """
+        単一の時刻を解析
+        """
+        now = datetime.now()
+        
+        if pattern_name == 'specific_time':
+            hour = int(match.group(1))
+            minute = int(match.group(2)) if match.group(2) else 0
+            return now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+        elif pattern_name == 'morning':
+            return now.replace(hour=9, minute=0, second=0, microsecond=0)
+        elif pattern_name == 'afternoon':
+            return now.replace(hour=14, minute=0, second=0, microsecond=0)
+        elif pattern_name == 'evening':
+            return now.replace(hour=19, minute=0, second=0, microsecond=0)
+        elif pattern_name == 'noon':
+            return now.replace(hour=12, minute=0, second=0, microsecond=0)
+        elif pattern_name == 'midnight':
+            return now.replace(hour=0, minute=0, second=0, microsecond=0)
+        elif pattern_name == 'relative_time':
+            hours = int(match.group(1))
+            return now + timedelta(hours=hours)
+        elif pattern_name == 'relative_time_ago':
+            hours = int(match.group(1))
+            return now - timedelta(hours=hours)
+        return None
+
+    def _parse_time_range(self, match: re.Match) -> Dict:
+        """
+        時刻範囲を解析
+        """
+        start_hour = int(match.group(1))
+        start_minute = int(match.group(2)) if match.group(2) else 0
+        end_hour = int(match.group(3))
+        end_minute = int(match.group(4)) if match.group(4) else 0
+        
+        now = datetime.now()
+        start_time = now.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
+        end_time = now.replace(hour=end_hour, minute=end_minute, second=0, microsecond=0)
+        
+        if end_time < start_time:
+            end_time = end_time + timedelta(days=1)
+        
+        return {
+            'start_time': start_time,
+            'end_time': end_time,
+            'is_range': True
+        }
+
+    def _parse_time_range_with_duration(self, match: re.Match) -> Dict:
+        """
+        開始時刻と継続時間から時刻範囲を解析
+        """
+        start_hour = int(match.group(1))
+        start_minute = int(match.group(2)) if match.group(2) else 0
+        duration = int(match.group(3))
+        
+        now = datetime.now()
+        start_time = now.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
+        end_time = start_time + timedelta(hours=duration)
+        
+        return {
+            'start_time': start_time,
+            'end_time': end_time,
+            'is_range': True
+        }
+
+    def _extract_title(self, message: str) -> Optional[str]:
+        """
+        メッセージから予定のタイトルを抽出
+        """
+        # タイトルを抽出するパターン
+        title_patterns = [
+            r'「(.+?)」',
+            r'"(.+?)"',
+            r'「(.+?)」という予定',
+            r'"(.+?)"という予定',
+            r'「(.+?)」を',
+            r'"(.+?)"を',
+            r'「(.+?)」に',
+            r'"(.+?)"に'
+        ]
+        
+        for pattern in title_patterns:
+            match = re.search(pattern, message)
+            if match:
+                return match.group(1)
+        
+        return None
