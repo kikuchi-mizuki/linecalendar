@@ -234,7 +234,25 @@ async def handle_message(event):
                 return
 
         # メッセージの種類に応じて処理
-        await handle_message(user_id, result, reply_token)
+        if result["type"] == "today_schedule":
+            calendar_manager = get_calendar_manager(user_id)
+            today = datetime.now().astimezone()
+            events = calendar_manager.get_events(today)
+            msg = format_event_list(events, today, today)
+            await reply_text(reply_token, msg)
+        elif result["type"] == "add_schedule":
+            # 予定追加の処理
+            pass
+        elif result["type"] == "delete_schedule":
+            # 予定削除の処理
+            pass
+        elif result["type"] == "update_schedule":
+            # 予定更新の処理
+            pass
+        elif result["type"] == "auth":
+            # 認証処理
+            pass
+
         logger.info(f"[handle_message] end: user_id={user_id}")
 
     except Exception as e:
