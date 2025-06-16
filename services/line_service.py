@@ -93,9 +93,9 @@ async def handle_message(user_id: str, message: str, reply_token: str):
         print(f"[handle_message] after parse_message: result={result}")
         from services.calendar_service import get_calendar_manager
         calendar_manager = get_calendar_manager(user_id)
-        operation = result.get('operation')
+        operation = result.get('operation_type')
         logger.debug(f"[handle_parsed_message] 操作タイプ: {operation}")
-        if operation == 'create':
+        if operation == 'add':
             await handle_add_event(result, calendar_manager, user_id, reply_token)
         elif operation == 'read':
             today = datetime.now(JST).date()
@@ -408,9 +408,9 @@ class LineService:
             logger.info(f"Parsed message data: {parsed_data}")
 
             # 操作タイプに応じて処理
-            operation = parsed_data.get('operation', 'unknown')
+            operation = parsed_data.get('operation_type', 'unknown')
             
-            if operation == 'create':
+            if operation == 'add':
                 await self._handle_create_event(event, parsed_data)
             elif operation == 'read':
                 await self._handle_read_events(event, parsed_data)
