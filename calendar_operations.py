@@ -47,9 +47,9 @@ class CalendarManager:
     """
     Google Calendar APIを使用してカレンダー操作を行うクラス（OAuth認証対応）
     """
-    def __init__(self):
+    def __init__(self, creds=None):
         self.SCOPES = ['https://www.googleapis.com/auth/calendar']
-        self.creds = None
+        self.creds = creds
         self.service = None
         self.timezone = 'Asia/Tokyo'
         self.tz = pytz.timezone(self.timezone)
@@ -58,20 +58,19 @@ class CalendarManager:
     def _initialize_service(self):
         """Google Calendar APIのサービスを初期化"""
         try:
-            if os.path.exists('token.json'):
-                self.creds = Credentials.from_authorized_user_file('token.json', self.SCOPES)
-            
-            if not self.creds or not self.creds.valid:
-                if self.creds and self.creds.expired and self.creds.refresh_token:
-                    self.creds.refresh(Request())
-                else:
-                    flow = InstalledAppFlow.from_client_secrets_file(
-                        'credentials.json', self.SCOPES)
-                    self.creds = flow.run_local_server(port=0)
+            if not self.creds:
+                if os.path.exists('token.json'):
+                    self.creds = Credentials.from_authorized_user_file('token.json', self.SCOPES)
                 
-                with open('token.json', 'w') as token:
-                    token.write(self.creds.to_json())
-            
+                if not self.creds or not self.creds.valid:
+                    if self.creds and self.creds.expired and self.creds.refresh_token:
+                        self.creds.refresh(Request())
+                    else:
+                        flow = InstalledAppFlow.from_client_secrets_file(
+                            'credentials.json', self.SCOPES)
+                        self.creds = flow.run_local_server(port=0)
+                    with open('token.json', 'w') as token:
+                        token.write(self.creds.to_json())
             self.service = build('calendar', 'v3', credentials=self.creds)
             logger.info("Calendar service initialized successfully")
         except Exception as e:
