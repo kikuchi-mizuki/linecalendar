@@ -118,19 +118,6 @@ async def handle_message(event):
 
         logger.info(f"Received message from {user_id}: {message_text}")
 
-        # メッセージの解析
-        result = None
-        if "今日の予定" in message_text:
-            result = {"type": "today_schedule"}
-        elif "予定を追加" in message_text or "予定追加" in message_text:
-            result = {"type": "add_schedule"}
-        elif "予定を削除" in message_text or "予定削除" in message_text:
-            result = {"type": "delete_schedule"}
-        elif "予定を更新" in message_text or "予定更新" in message_text:
-            result = {"type": "update_schedule"}
-        elif "連携" in message_text or "認証" in message_text:
-            result = {"type": "auth"}
-
         # サブスクリプション確認
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -150,7 +137,6 @@ async def handle_message(event):
         # 空き時間キーワードに反応
         free_keywords = ['空いている時間', '空き時間', 'あき時間', '空いてる時間', '空いてる', 'free time', 'free slot']
         if any(kw in message_text for kw in free_keywords):
-            # Google認証チェック
             creds = get_user_credentials(user_id)
             if not creds:
                 code = get_auth_url(user_id)
@@ -160,7 +146,6 @@ async def handle_message(event):
                 await reply_text(reply_token, [msg1, msg2])
                 logger.info(f"[handle_message] Google認証案内送信: user_id={user_id}, code={code}")
                 return
-            # 認証済みなら空き時間取得
             try:
                 calendar_manager = get_calendar_manager(user_id)
                 today = datetime.now().astimezone()
@@ -173,40 +158,22 @@ async def handle_message(event):
                 logger.error(f"[handle_message] 空き時間取得エラー: {str(e)}")
                 await reply_text(reply_token, "空き時間の取得中にエラーが発生しました。管理者にご連絡ください。")
                 return
-        if not result:
-            await reply_text(reply_token, "申し訳ありません。メッセージを理解できませんでした。\n予定の追加、確認、削除、更新のいずれかの操作を指定してください。")
-            logger.info(f"[handle_message] メッセージ解析失敗: user_id={user_id}")
-            return
 
         # Google認証チェック
         try:
             creds = get_user_credentials(user_id)
             logger.info(f"[debug] get_user_credentials({user_id}) = {creds}")
-            
             if not creds:
                 code = get_auth_url(user_id)
-                if code is None:
-                    # 既存の認証情報がある場合は、それを再利用
-                    logger.info(f"[handle_message] 既存の認証情報を再利用: user_id={user_id}")
-                    await handle_message(user_id, result, reply_token)
-                    return
-                    
                 login_url = f"{os.getenv('BASE_URL', 'https://linecalendar-production.up.railway.app')}/onetimelogin"
                 msg1 = f"カレンダーを利用するにはGoogle認証が必要です。\nあなたのワンタイムコードは【{code}】です。"
                 msg2 = f"下記URLから認証ページにアクセスし、ワンタイムコードを入力してください：\n{login_url}"
                 await reply_text(reply_token, [msg1, msg2])
                 logger.info(f"[handle_message] Google認証案内送信: user_id={user_id}, code={code}")
                 return
-                
             calendar_manager = get_calendar_manager(user_id)
             if not calendar_manager:
                 code = get_auth_url(user_id)
-                if code is None:
-                    # 既存の認証情報がある場合は、それを再利用
-                    logger.info(f"[handle_message] 既存の認証情報を再利用: user_id={user_id}")
-                    await handle_message(user_id, result, reply_token)
-                    return
-                    
                 login_url = f"{os.getenv('BASE_URL', 'https://linecalendar-production.up.railway.app')}/onetimelogin"
                 msg1 = f"カレンダーを利用するにはGoogle認証が必要です。\nあなたのワンタイムコードは【{code}】です。"
                 msg2 = f"下記URLから認証ページにアクセスし、ワンタイムコードを入力してください：\n{login_url}"
@@ -216,12 +183,6 @@ async def handle_message(event):
         except ValueError as e:
             if "Google認証情報が見つかりません" in str(e):
                 code = get_auth_url(user_id)
-                if code is None:
-                    # 既存の認証情報がある場合は、それを再利用
-                    logger.info(f"[handle_message] 既存の認証情報を再利用: user_id={user_id}")
-                    await handle_message(user_id, result, reply_token)
-                    return
-                    
                 login_url = f"{os.getenv('BASE_URL', 'https://linecalendar-production.up.railway.app')}/onetimelogin"
                 msg1 = f"カレンダーを利用するにはGoogle認証が必要です。\nあなたのワンタイムコードは【{code}】です。"
                 msg2 = f"下記URLから認証ページにアクセスし、ワンタイムコードを入力してください：\n{login_url}"
@@ -233,26 +194,9 @@ async def handle_message(event):
                 logger.error(f"[handle_message] その他のValueError: {str(e)}")
                 return
 
-        # メッセージの種類に応じて処理
-        if result["type"] == "today_schedule":
-            calendar_manager = get_calendar_manager(user_id)
-            today = datetime.now().astimezone()
-            events = calendar_manager.get_events(today)
-            msg = format_event_list(events, today, today)
-            await reply_text(reply_token, msg)
-        elif result["type"] == "add_schedule":
-            # 予定追加の処理
-            pass
-        elif result["type"] == "delete_schedule":
-            # 予定削除の処理
-            pass
-        elif result["type"] == "update_schedule":
-            # 予定更新の処理
-            pass
-        elif result["type"] == "auth":
-            # 認証処理
-            pass
-
+        # ここでservices.line_service.handle_messageを呼び出す
+        from services.line_service import handle_message as service_handle_message
+        await service_handle_message(user_id, message_text, reply_token)
         logger.info(f"[handle_message] end: user_id={user_id}")
 
     except Exception as e:
