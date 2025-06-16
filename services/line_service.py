@@ -89,6 +89,12 @@ async def handle_parsed_message(result, user_id, reply_token):
             await handle_delete_event(result, calendar_manager, user_id, reply_token)
         elif operation_type == 'update':
             await handle_update_event(result, calendar_manager, user_id, reply_token)
+        elif operation_type == 'confirm':
+            today = datetime.now(JST).date()
+            events = calendar_manager.get_events(today)
+            msg = format_event_list(events, today, today)
+            await reply_text(reply_token, msg)
+            return
         else:
             await reply_text(reply_token, "未対応の操作です。\n予定の追加、確認、削除、更新のいずれかを指定してください。")
     except Exception as e:

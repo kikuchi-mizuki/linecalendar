@@ -1410,6 +1410,22 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 'is_time_range': False
             }
 
+        # --- ここにconfirmパターンを追加 ---
+        if is_confirm_pattern(message, operation_type):
+            parsed_data = {}
+            parsed_data["action"] = "confirm"
+            parsed_data["source"] = "confirm_pattern"
+            if "明日" in message:
+                target_date = now + timedelta(days=1)
+            else:
+                target_date = now
+            parsed_data["start_time"] = target_date.replace(hour=0, minute=0, second=0)
+            parsed_data["end_time"] = target_date.replace(hour=23, minute=59, second=59)
+            return parsed_data
+
+        result = ... # 既存のreturn直前で
+        if result.get("action") == "confirm":
+            result["title"] = None
         return result
 
     except Exception as e:
@@ -1790,3 +1806,7 @@ def extract_end_time(message: str) -> Optional[datetime]:
     """
     result = extract_datetime_from_message(message)
     return result.get('end_time') if result else None
+
+def is_confirm_pattern(message: str, operation_hint: str = None) -> bool:
+    keywords = ["予定教えて", "今日の予定", "明日の予定", "スケジュール見せて", "何時から", "何がある", "空いてる時間", "確認"]
+    return any(kw in message for kw in keywords)
