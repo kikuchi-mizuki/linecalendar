@@ -282,9 +282,7 @@ def normalize_digits(text: str) -> str:
     return text.translate(str.maketrans('０１２３４５６７８９', '0123456789'))
 
 def parse_message(message: str, current_time: datetime = None) -> Dict:
-    """
-    メッセージを解析して操作タイプと必要な情報を抽出する
-    """
+    print(f"[parse_message] called: message={message}")
     try:
         if current_time is None:
             current_time = datetime.now(pytz.timezone('Asia/Tokyo'))
@@ -434,6 +432,7 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
             return {'success': False, 'error': '未対応の操作タイプです。'}
             
     except Exception as e:
+        print(f"[parse_message][EXCEPTION] {e}")
         logger.error(f"メッセージ解析中にエラーが発生: {str(e)}")
         logger.error(traceback.format_exc())
         return {'success': False, 'error': str(e)}
