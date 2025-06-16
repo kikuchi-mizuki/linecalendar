@@ -2030,3 +2030,19 @@ class MessageParser:
             return line
             
         return None
+
+    def _parse_date(self, message: str) -> dict:
+        result = extract_datetime_from_message(message)
+        return {
+            'start_date': result.get('start_time'),
+            'end_date': result.get('end_time'),
+            'is_range': result.get('is_time_range', False)
+        }
+
+    def _parse_time(self, message: str) -> dict:
+        result = extract_datetime_from_message(message)
+        return {
+            'start_time': result.get('start_time'),
+            'end_time': result.get('end_time'),
+            'is_range': result.get('is_time_range', False)
+        }
