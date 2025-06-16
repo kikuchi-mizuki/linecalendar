@@ -341,16 +341,18 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
             else:
                 end_time = datetime_info.get('end_time', datetime_info['start_time'] + timedelta(hours=1))
             
-            return {
-                'success': True,
-                'operation_type': 'add',
-                'title': title,
-                'start_time': datetime_info['start_time'],
-                'end_time': end_time,
-                'location': location,
-                'person': person,
-                'recurrence': recurrence
+            result = {
+                "success": True,
+                "operation_type": operation_type,
+                "title": title,
+                "start_time": datetime_info['start_time'],
+                "end_time": end_time,
+                "location": location,
+                "person": person,
+                "recurrence": recurrence
             }
+            logger.debug(f"[parse_message result] {result}")
+            return result
             
         elif operation_type == 'delete':
             title = extract_title(message)
@@ -1412,6 +1414,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
 
         # --- ここにconfirmパターンを追加 ---
         if is_confirm_pattern(message, operation_type):
+            logger.debug(f"[is_confirm_pattern] message={message}, result=True")
             parsed_data = {}
             parsed_data["action"] = "confirm"
             parsed_data["source"] = "confirm_pattern"
