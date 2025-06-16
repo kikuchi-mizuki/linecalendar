@@ -47,68 +47,249 @@ class CalendarManager:
     """
     Google Calendar APIを使用してカレンダー操作を行うクラス（OAuth認証対応）
     """
-    def __init__(self, creds=None):
-        self.SCOPES = ['https://www.googleapis.com/auth/calendar']
-        self.creds = creds
-        self.service = None
+    def __init__(self, credentials):
+        self.service = self._initialize_service(credentials)
+        self.calendar_id = self._get_calendar_id()
         self.timezone = 'Asia/Tokyo'
-        self.tz = pytz.timezone(self.timezone)
-        self._initialize_service()
 
-    def _initialize_service(self):
-        """Google Calendar APIのサービスを初期化"""
+    def _initialize_service(self, credentials):
+        """Google Calendar APIサービスの初期化"""
         try:
-            if not self.creds:
-                if os.path.exists('token.json'):
-                    self.creds = Credentials.from_authorized_user_file('token.json', self.SCOPES)
-                
-                if not self.creds or not self.creds.valid:
-                    if self.creds and self.creds.expired and self.creds.refresh_token:
-                        self.creds.refresh(Request())
-                    else:
-                        flow = InstalledAppFlow.from_client_secrets_file(
-                            'credentials.json', self.SCOPES)
-                        self.creds = flow.run_local_server(port=0)
-                    with open('token.json', 'w') as token:
-                        token.write(self.creds.to_json())
-            self.service = build('calendar', 'v3', credentials=self.creds)
-            logger.info("Calendar service initialized successfully")
+            service = build('calendar', 'v3', credentials=credentials)
+            return service
         except Exception as e:
-            logger.error(f"Error initializing calendar service: {str(e)}", exc_info=True)
+            logger.error(f"Google Calendar APIサービスの初期化に失敗: {str(e)}")
             raise
 
     def _get_calendar_id(self):
+        """カレンダーIDの取得"""
+        try:
+            calendar_list = self.service.calendarList().list().execute()
+            for calendar in calendar_list.get('items', []):
+                if calendar.get('primary'):
+                    return calendar['id']
+            return 'primary'
+        except Exception as e:
+            logger.error(f"カレンダーIDの取得に失敗: {str(e)}")
+            return 'primary'
+
+    def add_event(self, title: str, start_time: datetime, end_time: datetime, description: str = None) -> Dict:
         """
-        プライマリーカレンダーのIDを取得する
-        
-        Returns:
-            str: カレンダーID
+        イベントを追加
+        - タイムゾーンを考慮した日時処理
+        - 重複チェックの実装
         """
         try:
-            logger.info("カレンダーIDの取得を開始します")
-            calendar_list = self.service.calendarList().list().execute()
-            calendars = calendar_list.get('items', [])
-            
-            logger.info(f"利用可能なカレンダー数: {len(calendars)}")
-            
-            # プライマリーカレンダーを探す
-            for calendar in calendars:
-                logger.info(f"カレンダー詳細: ID={calendar['id']}, タイトル={calendar['summary']}, プライマリー={calendar.get('primary', False)}, アクセス権限={calendar['accessRole']}")
-                if calendar.get('primary', False):
-                    logger.info(f"プライマリーカレンダーを使用: {calendar['id']}")
-                    return calendar['id']
-            
-            # プライマリーカレンダーが見つからない場合は最初のカレンダーを使用
-            if calendars:
-                logger.info(f"プライマリーカレンダーが見つからないため、最初のカレンダーを使用: {calendars[0]['id']}")
-                return calendars[0]['id']
-            
-            raise Exception("利用可能なカレンダーが見つかりません")
-            
+            # タイムゾーンの設定
+            start_time = self._ensure_timezone(start_time)
+            end_time = self._ensure_timezone(end_time)
+
+            # 重複チェック
+            overlapping_events = self._check_overlapping_events(start_time, end_time)
+            if overlapping_events:
+                return {
+                    'success': False,
+                    'error': 'overlap',
+                    'overlapping_events': overlapping_events
+                }
+
+            # イベントの作成
+            event = {
+                'summary': title,
+                'start': {
+                    'dateTime': start_time.isoformat(),
+                    'timeZone': self.timezone,
+                },
+                'end': {
+                    'dateTime': end_time.isoformat(),
+                    'timeZone': self.timezone,
+                }
+            }
+
+            if description:
+                event['description'] = description
+
+            # イベントの追加
+            created_event = self.service.events().insert(
+                calendarId=self.calendar_id,
+                body=event
+            ).execute()
+
+            return {
+                'success': True,
+                'event': created_event
+            }
+
         except Exception as e:
-            logger.error(f"カレンダーIDの取得中にエラーが発生: {str(e)}")
-            logger.error(traceback.format_exc())
-            raise
+            logger.error(f"イベントの追加に失敗: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def _ensure_timezone(self, dt: datetime) -> datetime:
+        """タイムゾーンの設定"""
+        if dt.tzinfo is None:
+            return pytz.timezone(self.timezone).localize(dt)
+        return dt.astimezone(pytz.timezone(self.timezone))
+
+    def _check_overlapping_events(self, start_time: datetime, end_time: datetime) -> List[Dict]:
+        """
+        指定された時間範囲と重複するイベントをチェック
+        - タイムゾーンを考慮した比較
+        """
+        try:
+            # タイムゾーンの設定
+            start_time = self._ensure_timezone(start_time)
+            end_time = self._ensure_timezone(end_time)
+
+            # イベントの取得
+            events_result = self.service.events().list(
+                calendarId=self.calendar_id,
+                timeMin=start_time.isoformat(),
+                timeMax=end_time.isoformat(),
+                singleEvents=True,
+                orderBy='startTime'
+            ).execute()
+
+            overlapping_events = []
+            for event in events_result.get('items', []):
+                event_start = self._parse_event_time(event['start'])
+                event_end = self._parse_event_time(event['end'])
+
+                if (event_start < end_time and event_end > start_time):
+                    overlapping_events.append({
+                        'id': event['id'],
+                        'summary': event.get('summary', '無題'),
+                        'start': event_start,
+                        'end': event_end
+                    })
+
+            return overlapping_events
+
+        except Exception as e:
+            logger.error(f"重複イベントのチェックに失敗: {str(e)}")
+            return []
+
+    def _parse_event_time(self, time_dict: Dict) -> datetime:
+        """イベントの日時をパース"""
+        if 'dateTime' in time_dict:
+            dt = datetime.fromisoformat(time_dict['dateTime'].replace('Z', '+00:00'))
+        else:
+            dt = datetime.fromisoformat(time_dict['date'])
+        return self._ensure_timezone(dt)
+
+    def get_events(self, start_time: datetime, end_time: datetime) -> List[Dict]:
+        """
+        指定された時間範囲のイベントを取得
+        - タイムゾーンを考慮した日時処理
+        """
+        try:
+            # タイムゾーンの設定
+            start_time = self._ensure_timezone(start_time)
+            end_time = self._ensure_timezone(end_time)
+
+            # イベントの取得
+            events_result = self.service.events().list(
+                calendarId=self.calendar_id,
+                timeMin=start_time.isoformat(),
+                timeMax=end_time.isoformat(),
+                singleEvents=True,
+                orderBy='startTime'
+            ).execute()
+
+            events = []
+            for event in events_result.get('items', []):
+                events.append({
+                    'id': event['id'],
+                    'summary': event.get('summary', '無題'),
+                    'start': self._parse_event_time(event['start']),
+                    'end': self._parse_event_time(event['end']),
+                    'description': event.get('description', '')
+                })
+
+            return events
+
+        except Exception as e:
+            logger.error(f"イベントの取得に失敗: {str(e)}")
+            return []
+
+    def delete_event(self, event_id: str) -> bool:
+        """イベントの削除"""
+        try:
+            self.service.events().delete(
+                calendarId=self.calendar_id,
+                eventId=event_id
+            ).execute()
+            return True
+        except Exception as e:
+            logger.error(f"イベントの削除に失敗: {str(e)}")
+            return False
+
+    def update_event(self, event_id: str, title: str = None, start_time: datetime = None,
+                    end_time: datetime = None, description: str = None) -> Dict:
+        """
+        イベントの更新
+        - タイムゾーンを考慮した日時処理
+        - 重複チェックの実装
+        """
+        try:
+            # 既存のイベントを取得
+            event = self.service.events().get(
+                calendarId=self.calendar_id,
+                eventId=event_id
+            ).execute()
+
+            # 更新するフィールドの設定
+            if title:
+                event['summary'] = title
+            if start_time:
+                start_time = self._ensure_timezone(start_time)
+                event['start'] = {
+                    'dateTime': start_time.isoformat(),
+                    'timeZone': self.timezone,
+                }
+            if end_time:
+                end_time = self._ensure_timezone(end_time)
+                event['end'] = {
+                    'dateTime': end_time.isoformat(),
+                    'timeZone': self.timezone,
+                }
+            if description:
+                event['description'] = description
+
+            # 重複チェック
+            if start_time or end_time:
+                new_start = start_time or self._parse_event_time(event['start'])
+                new_end = end_time or self._parse_event_time(event['end'])
+                overlapping_events = self._check_overlapping_events(new_start, new_end)
+                # 自分自身を除外
+                overlapping_events = [e for e in overlapping_events if e['id'] != event_id]
+                if overlapping_events:
+                    return {
+                        'success': False,
+                        'error': 'overlap',
+                        'overlapping_events': overlapping_events
+                    }
+
+            # イベントの更新
+            updated_event = self.service.events().update(
+                calendarId=self.calendar_id,
+                eventId=event_id,
+                body=event
+            ).execute()
+
+            return {
+                'success': True,
+                'event': updated_event
+            }
+
+        except Exception as e:
+            logger.error(f"イベントの更新に失敗: {str(e)}")
+            return {
+                'success': False,
+                'error': str(e)
+            }
 
     @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1))
     async def get_events(
@@ -890,15 +1071,3 @@ class CalendarManager:
                 'success': False,
                 'error': str(e)
             } 
-
-    def _parse_event_time(self, time_dict):
-        """
-        Google Calendar APIのevent['start']やevent['end']のdictからdatetimeを返す
-        """
-        if 'dateTime' in time_dict:
-            return datetime.fromisoformat(time_dict['dateTime'].replace('Z', '+00:00'))
-        elif 'date' in time_dict:
-            # 終日イベント
-            return datetime.fromisoformat(time_dict['date'])
-        else:
-            return None 

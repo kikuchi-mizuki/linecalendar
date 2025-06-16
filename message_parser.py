@@ -1871,28 +1871,43 @@ class MessageParser:
         """
         メッセージを解析して操作タイプと必要な情報を抽出
         - dateとtimeの情報を組み合わせてトップレベルにstart_time/end_timeを追加する（先祖返り防止のため必ずこの仕様を維持すること）
+        - 複数行メッセージの場合は、最初の行から日時を抽出し、2行目以降からタイトルを抽出する
         """
         try:
             # メッセージの正規化
             normalized_message = self._normalize_message(message)
-            # 日付の解析
-            date_info = self._parse_date(normalized_message)
-            # 時刻の解析
-            time_info = self._parse_time(normalized_message)
-            # タイトルの抽出
-            title = self._extract_title(normalized_message)
+            
+            # 複数行メッセージの処理
+            lines = [line.strip() for line in normalized_message.splitlines() if line.strip()]
+            if len(lines) >= 2:
+                # 最初の行から日時情報を抽出
+                date_info = self._parse_date(lines[0])
+                time_info = self._parse_time(lines[0])
+                # 2行目以降からタイトルを抽出
+                title = self._extract_title('\n'.join(lines[1:]))
+            else:
+                # 1行メッセージの処理
+                date_info = self._parse_date(normalized_message)
+                time_info = self._parse_time(normalized_message)
+                title = self._extract_title(normalized_message)
+
             # 操作タイプの判定（キーワード＋内容ベース）
             operation_type = self._determine_operation_type(
                 normalized_message, date_info, time_info, title
             )
+
             # トップレベルのstart_time/end_timeを組み立て
             start_time = None
             end_time = None
             if date_info and time_info:
                 if date_info.get('start_date') and time_info.get('start_time'):
                     start_time = datetime.combine(date_info['start_date'].date(), time_info['start_time'].time())
-                if date_info.get('end_date') and time_info.get('end_time'):
-                    end_time = datetime.combine(date_info['end_date'].date(), time_info['end_time'].time())
+                    # 終了時刻が指定されていない場合は1時間後をデフォルトとする
+                    if time_info.get('end_time'):
+                        end_time = datetime.combine(date_info['end_date'].date(), time_info['end_time'].time())
+                    else:
+                        end_time = start_time + timedelta(hours=1)
+
             # 結果の構築
             result = {
                 'operation_type': operation_type,
@@ -1902,7 +1917,11 @@ class MessageParser:
                 'start_time': start_time,
                 'end_time': end_time
             }
+
+            # デバッグログ
+            logger.debug(f"解析結果: {result}")
             return result
+
         except Exception as e:
             logger.error(f"メッセージ解析中にエラーが発生: {str(e)}")
             logger.error(traceback.format_exc())
@@ -1936,6 +1955,8 @@ class MessageParser:
         - 先祖返り防止のため必ずこのロジックを維持すること
         """
         message = message.lower()
+        
+        # キーワードベースの判定
         if any(keyword in message for keyword in ADD_KEYWORDS):
             return 'add'
         elif any(keyword in message for keyword in DELETE_KEYWORDS):
@@ -1944,247 +1965,17 @@ class MessageParser:
             return 'update'
         elif any(keyword in message for keyword in READ_KEYWORDS):
             return 'read'
-        # --- ここから自然文対応 ---
+            
+        # 自然文の判定
         if date_info and time_info and title:
-            if date_info.get('start_date') and time_info.get('start_time') and title:
+            if date_info.get('start_date') and time_info.get('start_time'):
                 return 'add'
+                
+        # 確認パターンの判定
+        if is_confirm_pattern(message):
+            return 'read'
+            
         return 'unknown'
-
-    def _parse_date(self, message: str) -> Dict:
-        """
-        メッセージから日付情報を解析
-        """
-        today = datetime.now()
-        result = {
-            'start_date': None,
-            'end_date': None,
-            'is_range': False
-        }
-
-        # 日付範囲のパターン
-        range_patterns = [
-            (r'(\d{1,2})月(\d{1,2})日から(\d{1,2})月(\d{1,2})日まで', self._parse_date_range),
-            (r'(\d{4})年(\d{1,2})月(\d{1,2})日から(\d{4})年(\d{1,2})月(\d{1,2})日まで', self._parse_date_range_with_year),
-            (r'(\d{1,2})月(\d{1,2})日から(\d+)日間', self._parse_date_range_with_days)
-        ]
-
-        for pattern, parser in range_patterns:
-            match = re.search(pattern, message)
-            if match:
-                return parser(match, today)
-
-        # 単一の日付パターン
-        for pattern_name, pattern in self.date_patterns.items():
-            match = re.search(pattern, message)
-            if match:
-                date = self._parse_single_date(match, pattern_name, today)
-                if date:
-                    result['start_date'] = date
-                    result['end_date'] = date
-                    return result
-
-        # デフォルトは今日
-        result['start_date'] = today
-        result['end_date'] = today
-        return result
-
-    def _parse_single_date(self, match: re.Match, pattern_name: str, today: datetime) -> Optional[datetime]:
-        """
-        単一の日付を解析
-        """
-        if pattern_name == 'today':
-            return today
-        elif pattern_name == 'tomorrow':
-            return today + timedelta(days=1)
-        elif pattern_name == 'day_after_tomorrow':
-            return today + timedelta(days=2)
-        elif pattern_name == 'next_week':
-            return today + timedelta(days=7)
-        elif pattern_name == 'next_month':
-            next_month = today.replace(day=1) + timedelta(days=32)
-            return next_month.replace(day=1)
-        elif pattern_name == 'specific_date':
-            month, day = map(int, match.groups())
-            year = today.year
-            if month < today.month:
-                year += 1
-            return datetime(year, month, day)
-        elif pattern_name == 'specific_date_with_year':
-            year, month, day = map(int, match.groups())
-            return datetime(year, month, day)
-        elif pattern_name == 'relative_date':
-            days = int(match.group(1))
-            return today + timedelta(days=days)
-        elif pattern_name == 'relative_date_ago':
-            days = int(match.group(1))
-            return today - timedelta(days=days)
-        elif pattern_name == 'weekday':
-            weekday = self.weekday_map[match.group(1)]
-            days_ahead = weekday - today.weekday()
-            if days_ahead <= 0:
-                days_ahead += 7
-            return today + timedelta(days=days_ahead)
-        elif pattern_name == 'next_weekday':
-            weekday = self.weekday_map[match.group(1)]
-            days_ahead = weekday - today.weekday()
-            if days_ahead <= 0:
-                days_ahead += 14
-            else:
-                days_ahead += 7
-            return today + timedelta(days=days_ahead)
-        elif pattern_name == 'this_weekday':
-            weekday = self.weekday_map[match.group(1)]
-            days_ahead = weekday - today.weekday()
-            if days_ahead < 0:
-                days_ahead += 7
-            return today + timedelta(days=days_ahead)
-        elif pattern_name == 'last_weekday':
-            weekday = self.weekday_map[match.group(1)]
-            days_ahead = weekday - today.weekday()
-            if days_ahead >= 0:
-                days_ahead -= 7
-            return today + timedelta(days=days_ahead)
-        return None
-
-    def _parse_date_range(self, match: re.Match, today: datetime) -> Dict:
-        """
-        日付範囲を解析（月日形式）
-        """
-        start_month, start_day, end_month, end_day = map(int, match.groups())
-        year = today.year
-        
-        start_date = datetime(year, start_month, start_day)
-        end_date = datetime(year, end_month, end_day)
-        
-        if end_date < start_date:
-            end_date = end_date.replace(year=year + 1)
-        
-        return {
-            'start_date': start_date,
-            'end_date': end_date,
-            'is_range': True
-        }
-
-    def _parse_date_range_with_year(self, match: re.Match, today: datetime) -> Dict:
-        """
-        日付範囲を解析（年月日形式）
-        """
-        start_year, start_month, start_day, end_year, end_month, end_day = map(int, match.groups())
-        
-        start_date = datetime(start_year, start_month, start_day)
-        end_date = datetime(end_year, end_month, end_day)
-        
-        return {
-            'start_date': start_date,
-            'end_date': end_date,
-            'is_range': True
-        }
-
-    def _parse_date_range_with_days(self, match: re.Match, today: datetime) -> Dict:
-        """
-        日付範囲を解析（開始日と日数）
-        """
-        start_month, start_day, days = map(int, match.groups())
-        year = today.year
-        
-        start_date = datetime(year, start_month, start_day)
-        end_date = start_date + timedelta(days=days-1)
-        
-        return {
-            'start_date': start_date,
-            'end_date': end_date,
-            'is_range': True
-        }
-
-    def _parse_time(self, message: str) -> Dict:
-        """
-        メッセージから時刻情報を解析
-        - 複数行メッセージの全行を対象に時刻範囲や単一時刻を抽出する（先祖返り防止のため必ずこの仕様を維持すること）
-        - 時刻範囲がなければ、開始時刻のみ抽出し、1時間後をend_timeとする
-        """
-        result = {
-            'start_time': None,
-            'end_time': None,
-            'is_range': False
-        }
-        lines = [line.strip() for line in message.splitlines() if line.strip()]
-        # まず時刻範囲を全行で探す
-        range_patterns = [
-            (r'(\d{1,2}):(\d{2})[\-〜~～](\d{1,2}):(\d{2})', self._parse_time_range),
-            (r'(\d{1,2})時(?:(\d{1,2})分)?から(\d{1,2})時(?:(\d{1,2})分)?まで', self._parse_time_range),
-            (r'(\d{1,2})時(?:(\d{1,2})分)?[\-〜~～](\d{1,2})時(?:(\d{1,2})分)?', self._parse_time_range)
-        ]
-        for line in lines:
-            for pattern, parser in range_patterns:
-                match = re.search(pattern, line)
-                if match:
-                    return parser(match)
-        # 単一時刻を全行で探す
-        single_patterns = [
-            (r'(\d{1,2}):(\d{2})', 'specific_time'),
-            (r'(\d{1,2})時(?:(\d{1,2})分)?', 'specific_time')
-        ]
-        for line in lines:
-            for pattern, pattern_name in single_patterns:
-                match = re.search(pattern, line)
-                if match:
-                    time = self._parse_single_time(match, pattern_name)
-                    if time:
-                        result['start_time'] = time
-                        result['end_time'] = time + timedelta(hours=1)  # デフォルト1時間
-                        result['is_range'] = False
-                        return result
-        return result
-
-    def _parse_single_time(self, match: re.Match, pattern_name: str) -> Optional[datetime]:
-        """
-        単一の時刻を解析
-        """
-        now = datetime.now()
-        
-        if pattern_name == 'specific_time':
-            hour = int(match.group(1))
-            minute = int(match.group(2)) if match.group(2) else 0
-            return now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-        elif pattern_name == 'morning':
-            return now.replace(hour=9, minute=0, second=0, microsecond=0)
-        elif pattern_name == 'afternoon':
-            return now.replace(hour=14, minute=0, second=0, microsecond=0)
-        elif pattern_name == 'evening':
-            return now.replace(hour=19, minute=0, second=0, microsecond=0)
-        elif pattern_name == 'noon':
-            return now.replace(hour=12, minute=0, second=0, microsecond=0)
-        elif pattern_name == 'midnight':
-            return now.replace(hour=0, minute=0, second=0, microsecond=0)
-        elif pattern_name == 'relative_time':
-            hours = int(match.group(1))
-            return now + timedelta(hours=hours)
-        elif pattern_name == 'relative_time_ago':
-            hours = int(match.group(1))
-            return now - timedelta(hours=hours)
-        return None
-
-    def _parse_time_range(self, match: re.Match) -> Dict:
-        """
-        時刻範囲を解析
-        """
-        start_hour = int(match.group(1))
-        start_minute = int(match.group(2)) if match.group(2) else 0
-        end_hour = int(match.group(3))
-        end_minute = int(match.group(4)) if match.group(4) else 0
-        
-        now = datetime.now()
-        start_time = now.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
-        end_time = now.replace(hour=end_hour, minute=end_minute, second=0, microsecond=0)
-        
-        if end_time < start_time:
-            end_time = end_time + timedelta(days=1)
-        
-        return {
-            'start_time': start_time,
-            'end_time': end_time,
-            'is_range': True
-        }
 
     def _extract_title(self, message: str) -> Optional[str]:
         """
@@ -2203,11 +1994,14 @@ class MessageParser:
             r'「(.+?)」に',
             r'"(.+?)"に'
         ]
+        
+        # パターンベースの抽出を試みる
         for pattern in title_patterns:
             match = re.search(pattern, message)
             if match:
                 return match.group(1)
-        # --- 複数行メッセージ対応 ---
+                
+        # 複数行メッセージの処理
         lines = [line.strip() for line in message.splitlines() if line.strip()]
         if len(lines) >= 2:
             for line in lines[1:]:
@@ -2215,7 +2009,8 @@ class MessageParser:
                 if re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z]', line):
                     return line
             return None
-        # --- 1行メッセージ対応 ---
+            
+        # 1行メッセージの処理
         if len(lines) == 1:
             line = lines[0]
             # 日付・時刻部分を除去
@@ -2228,7 +2023,10 @@ class MessageParser:
             line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時', '', line)
             line = re.sub(r'^(\d{1,2})[\/](\d{1,2})[\s　]*(\d{1,2}):?(\d{2})?', '', line)
             line = re.sub(r'^[\s　:：,、。]+', '', line)
+            
+            # 日付・時刻のみの行はタイトルなしとみなす
             if not line or re.fullmatch(r'[\d/:年月日時分\-〜~～\s　]+', line):
                 return None
             return line
+            
         return None
