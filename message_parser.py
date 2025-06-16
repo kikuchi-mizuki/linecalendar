@@ -1870,6 +1870,7 @@ class MessageParser:
     def parse_message(self, message: str) -> Dict:
         """
         メッセージを解析して操作タイプと必要な情報を抽出
+        - dateとtimeの情報を組み合わせてトップレベルにstart_time/end_timeを追加する（先祖返り防止のため必ずこの仕様を維持すること）
         """
         try:
             # メッセージの正規化
@@ -1884,12 +1885,22 @@ class MessageParser:
             operation_type = self._determine_operation_type(
                 normalized_message, date_info, time_info, title
             )
+            # トップレベルのstart_time/end_timeを組み立て
+            start_time = None
+            end_time = None
+            if date_info and time_info:
+                if date_info.get('start_date') and time_info.get('start_time'):
+                    start_time = datetime.combine(date_info['start_date'].date(), time_info['start_time'].time())
+                if date_info.get('end_date') and time_info.get('end_time'):
+                    end_time = datetime.combine(date_info['end_date'].date(), time_info['end_time'].time())
             # 結果の構築
             result = {
                 'operation_type': operation_type,
                 'title': title,
                 'date': date_info,
-                'time': time_info
+                'time': time_info,
+                'start_time': start_time,
+                'end_time': end_time
             }
             return result
         except Exception as e:
@@ -1899,7 +1910,9 @@ class MessageParser:
                 'operation_type': 'unknown',
                 'title': None,
                 'date': {},
-                'time': {}
+                'time': {},
+                'start_time': None,
+                'end_time': None
             }
 
     def _normalize_message(self, message: str) -> str:
