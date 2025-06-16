@@ -88,27 +88,27 @@ async def handle_message(user_id: str, message: str, reply_token: str):
     print(f"[handle_message] called: message={message}")
     try:
         print(f"[handle_message] before parse_message: message={message}")
-        result = parse_message(message)
+        parser = MessageParser()
+        result = parser.parse_message(message)
         print(f"[handle_message] after parse_message: result={result}")
         from services.calendar_service import get_calendar_manager
         calendar_manager = get_calendar_manager(user_id)
-        operation_type = result.get('operation_type')
-        action = result.get('action')
-        logger.debug(f"[handle_parsed_message] 操作タイプ: {operation_type}")
-        if operation_type == 'add':
+        operation = result.get('operation')
+        logger.debug(f"[handle_parsed_message] 操作タイプ: {operation}")
+        if operation == 'create':
             await handle_add_event(result, calendar_manager, user_id, reply_token)
-        elif operation_type == 'read':
+        elif operation == 'read':
             today = datetime.now(JST).date()
             start_time = datetime.combine(today, datetime.min.time()).replace(tzinfo=JST)
             end_time = datetime.combine(today, datetime.max.time()).replace(tzinfo=JST)
             events = await calendar_manager.get_events(start_time, end_time)
             msg = format_event_list(events, today, today)
             await reply_text(reply_token, msg)
-        elif operation_type == 'delete':
+        elif operation == 'delete':
             await handle_delete_event(result, calendar_manager, user_id, reply_token)
-        elif operation_type == 'update':
+        elif operation == 'update':
             await handle_update_event(result, calendar_manager, user_id, reply_token)
-        elif (operation_type == 'confirm') or (action == 'confirm'):
+        elif operation == 'confirm':
             today = datetime.now(JST).date()
             start_time = datetime.combine(today, datetime.min.time()).replace(tzinfo=JST)
             end_time = datetime.combine(today, datetime.max.time()).replace(tzinfo=JST)
@@ -394,7 +394,7 @@ class LineService:
         self.message_parser = MessageParser()
         self.calendar_ops = CalendarManager()
 
-    def handle_message(self, event: MessageEvent) -> None:
+    async def handle_message(self, event: MessageEvent) -> None:
         """
         メッセージイベントを処理
         """
@@ -411,19 +411,19 @@ class LineService:
             operation = parsed_data.get('operation', 'unknown')
             
             if operation == 'create':
-                self._handle_create_event(event, parsed_data)
+                await self._handle_create_event(event, parsed_data)
             elif operation == 'read':
-                self._handle_read_events(event, parsed_data)
+                await self._handle_read_events(event, parsed_data)
             elif operation == 'update':
-                self._handle_update_event(event, parsed_data)
+                await self._handle_update_event(event, parsed_data)
             elif operation == 'delete':
-                self._handle_delete_event(event, parsed_data)
+                await self._handle_delete_event(event, parsed_data)
             elif operation == 'list':
-                self._handle_list_events(event, parsed_data)
+                await self._handle_list_events(event, parsed_data)
             elif operation == 'search':
-                self._handle_search_events(event, parsed_data)
+                await self._handle_search_events(event, parsed_data)
             elif operation == 'remind':
-                self._handle_remind_events(event, parsed_data)
+                await self._handle_remind_events(event, parsed_data)
             elif operation == 'help':
                 self._handle_help(event)
             else:
@@ -433,7 +433,7 @@ class LineService:
             logger.error(f"Error handling message: {str(e)}", exc_info=True)
             self._send_error_message(event)
 
-    def _handle_create_event(self, event: MessageEvent, parsed_data: Dict) -> None:
+    async def _handle_create_event(self, event: MessageEvent, parsed_data: Dict) -> None:
         """
         イベント作成を処理
         """
@@ -462,7 +462,7 @@ class LineService:
                 end_time = datetime.combine(end_date.date(), end_time.time())
 
             # イベントを作成
-            event_data = self.calendar_ops.create_event(
+            event_data = await self.calendar_ops.create_event(
                 title=title,
                 start_time=start_time,
                 end_time=end_time
@@ -477,7 +477,7 @@ class LineService:
             logger.error(f"Error creating event: {str(e)}", exc_info=True)
             self._send_error_message(event)
 
-    def _handle_read_events(self, event: MessageEvent, parsed_data: Dict) -> None:
+    async def _handle_read_events(self, event: MessageEvent, parsed_data: Dict) -> None:
         """
         イベント読み取りを処理
         """
@@ -494,7 +494,7 @@ class LineService:
             end_time = datetime.combine(end_date.date(), datetime.max.time())
 
             # イベントを取得
-            events = self.calendar_ops.get_events(start_time, end_time)
+            events = await self.calendar_ops.get_events(start_time, end_time)
             
             # イベントリストを整形
             message = self.calendar_ops.format_event_list(events)
@@ -504,7 +504,7 @@ class LineService:
             logger.error(f"Error reading events: {str(e)}", exc_info=True)
             self._send_error_message(event)
 
-    def _handle_update_event(self, event: MessageEvent, parsed_data: Dict) -> None:
+    async def _handle_update_event(self, event: MessageEvent, parsed_data: Dict) -> None:
         """
         イベント更新を処理
         """
@@ -518,7 +518,7 @@ class LineService:
             start_date = parsed_data['date'].get('start_date', datetime.now())
             end_date = parsed_data['date'].get('end_date', start_date + timedelta(days=1))
             
-            events = self.calendar_ops.get_events(start_date, end_date)
+            events = await self.calendar_ops.get_events(start_date, end_date)
             matching_events = [e for e in events if e.get('summary') == title]
 
             if not matching_events:
@@ -536,7 +536,7 @@ class LineService:
             logger.error(f"Error updating event: {str(e)}", exc_info=True)
             self._send_error_message(event)
 
-    def _handle_delete_event(self, event: MessageEvent, parsed_data: Dict) -> None:
+    async def _handle_delete_event(self, event: MessageEvent, parsed_data: Dict) -> None:
         """
         イベント削除を処理
         """
@@ -550,7 +550,7 @@ class LineService:
             start_date = parsed_data['date'].get('start_date', datetime.now())
             end_date = parsed_data['date'].get('end_date', start_date + timedelta(days=1))
             
-            events = self.calendar_ops.get_events(start_date, end_date)
+            events = await self.calendar_ops.get_events(start_date, end_date)
             matching_events = [e for e in events if e.get('summary') == title]
 
             if not matching_events:
@@ -568,7 +568,7 @@ class LineService:
             logger.error(f"Error deleting event: {str(e)}", exc_info=True)
             self._send_error_message(event)
 
-    def _handle_list_events(self, event: MessageEvent, parsed_data: Dict) -> None:
+    async def _handle_list_events(self, event: MessageEvent, parsed_data: Dict) -> None:
         """
         イベント一覧を処理
         """
@@ -577,7 +577,7 @@ class LineService:
             end_date = parsed_data['date'].get('end_date', start_date + timedelta(days=7))
 
             # イベントを取得
-            events = self.calendar_ops.get_events(start_date, end_date)
+            events = await self.calendar_ops.get_events(start_date, end_date)
             
             if not events:
                 self._send_message(event, "指定された期間の予定はありません。")
@@ -591,7 +591,7 @@ class LineService:
             logger.error(f"Error listing events: {str(e)}", exc_info=True)
             self._send_error_message(event)
 
-    def _handle_search_events(self, event: MessageEvent, parsed_data: Dict) -> None:
+    async def _handle_search_events(self, event: MessageEvent, parsed_data: Dict) -> None:
         """
         イベント検索を処理
         """
@@ -605,7 +605,7 @@ class LineService:
             start_date = datetime.now() - timedelta(days=30)
             end_date = datetime.now() + timedelta(days=30)
             
-            events = self.calendar_ops.get_events(start_date, end_date)
+            events = await self.calendar_ops.get_events(start_date, end_date)
             matching_events = [e for e in events if title in e.get('summary', '')]
 
             if not matching_events:
@@ -620,7 +620,7 @@ class LineService:
             logger.error(f"Error searching events: {str(e)}", exc_info=True)
             self._send_error_message(event)
 
-    def _handle_remind_events(self, event: MessageEvent, parsed_data: Dict) -> None:
+    async def _handle_remind_events(self, event: MessageEvent, parsed_data: Dict) -> None:
         """
         イベントリマインダーを処理
         """
@@ -629,7 +629,7 @@ class LineService:
             start_time = datetime.now()
             end_time = start_time + timedelta(hours=24)
             
-            events = self.calendar_ops.get_events(start_time, end_time)
+            events = await self.calendar_ops.get_events(start_time, end_time)
             
             if not events:
                 self._send_message(event, "今後24時間以内の予定はありません。")
