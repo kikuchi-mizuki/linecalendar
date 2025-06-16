@@ -99,7 +99,9 @@ async def handle_message(user_id: str, message: str, reply_token: str):
             await handle_add_event(result, calendar_manager, user_id, reply_token)
         elif operation_type == 'read':
             today = datetime.now(JST).date()
-            events = await calendar_manager.get_events(today)
+            start_time = datetime.combine(today, datetime.min.time()).replace(tzinfo=JST)
+            end_time = datetime.combine(today, datetime.max.time()).replace(tzinfo=JST)
+            events = await calendar_manager.get_events(start_time, end_time)
             msg = format_event_list(events, today, today)
             await reply_text(reply_token, msg)
         elif operation_type == 'delete':
@@ -108,7 +110,9 @@ async def handle_message(user_id: str, message: str, reply_token: str):
             await handle_update_event(result, calendar_manager, user_id, reply_token)
         elif (operation_type == 'confirm') or (action == 'confirm'):
             today = datetime.now(JST).date()
-            events = await calendar_manager.get_events(today)
+            start_time = datetime.combine(today, datetime.min.time()).replace(tzinfo=JST)
+            end_time = datetime.combine(today, datetime.max.time()).replace(tzinfo=JST)
+            events = await calendar_manager.get_events(start_time, end_time)
             msg = format_event_list(events, today, today)
             await reply_text(reply_token, msg)
             return
