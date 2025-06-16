@@ -1835,6 +1835,37 @@ class MessageParser:
         self.datetime_extractor = DateTimeExtractor()
         self.title_extractor = TitleExtractor()
         self.recurrence_extractor = RecurrenceExtractor()
+        self.date_patterns = {
+            'today': r'今日|本日|きょう|ほんじつ',
+            'tomorrow': r'明日|あした|あす',
+            'day_after_tomorrow': r'明後日|あさって',
+            'next_week': r'来週|らいしゅう',
+            'next_month': r'来月|らいげつ',
+            'specific_date': r'(\d{1,2})月(\d{1,2})日',
+            'specific_date_with_year': r'(\d{4})年(\d{1,2})月(\d{1,2})日',
+            'relative_date': r'(\d+)日後',
+            'relative_date_ago': r'(\d+)日前',
+            'weekday': r'(月|火|水|木|金|土|日)曜日',
+            'next_weekday': r'来週の(月|火|水|木|金|土|日)曜日',
+            'this_weekday': r'今週の(月|火|水|木|金|土|日)曜日',
+            'last_weekday': r'先週の(月|火|水|木|金|土|日)曜日'
+        }
+        
+        self.time_patterns = {
+            'specific_time': r'(\d{1,2})時(?:(\d{1,2})分)?',
+            'morning': r'午前|朝',
+            'afternoon': r'午後|夕方',
+            'evening': r'夜|夕方',
+            'noon': r'正午|お昼',
+            'midnight': r'深夜|夜中',
+            'relative_time': r'(\d+)時間後',
+            'relative_time_ago': r'(\d+)時間前'
+        }
+        
+        self.weekday_map = {
+            '月': 0, '火': 1, '水': 2, '木': 3,
+            '金': 4, '土': 5, '日': 6
+        }
 
     def parse_message(self, message: str) -> Dict:
         """
