@@ -19,7 +19,7 @@ from linebot.models import (
     TextComponent, ButtonComponent, MessageAction
 )
 from message_parser import MessageParser
-from calendar_operations import CalendarOperations
+from calendar_operations import CalendarManager
 
 logger = logging.getLogger('app')
 JST = pytz.timezone('Asia/Tokyo')
@@ -388,7 +388,7 @@ class LineService:
         self.line_bot_api = LineBotApi(os.getenv('LINE_CHANNEL_ACCESS_TOKEN'))
         self.handler = WebhookHandler(os.getenv('LINE_CHANNEL_SECRET'))
         self.message_parser = MessageParser()
-        self.calendar_ops = CalendarOperations()
+        self.calendar_ops = CalendarManager()
 
     def handle_message(self, event: MessageEvent) -> None:
         """
