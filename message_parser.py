@@ -18,7 +18,7 @@ from constants import (
     RELATIVE_DATES, WEEKDAYS, TIME_PATTERNS, DATE_PATTERNS
 )
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger('app')
 
 # DateTimeExtractorのインスタンスを作成
 datetime_extractor = DateTimeExtractor()
@@ -352,6 +352,7 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
                 "recurrence": recurrence
             }
             logger.info(f"[parse_message result] {result}")
+            print(f"[parse_message result] {result}")
             return result
             
         elif operation_type == 'delete':
@@ -1415,6 +1416,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
         # --- ここにconfirmパターンを追加 ---
         if is_confirm_pattern(message, operation_type):
             logger.info(f"[is_confirm_pattern] message={message}, result=True")
+            print(f"[is_confirm_pattern] message={message}, result=True")
             parsed_data = {}
             parsed_data["action"] = "confirm"
             parsed_data["source"] = "confirm_pattern"
