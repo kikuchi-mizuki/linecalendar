@@ -72,8 +72,12 @@ def get_auth_url(user_id: str) -> str:
         logger.error(traceback.format_exc())
         return ""
 
-async def handle_parsed_message(result, user_id, reply_token):
+async def handle_message(user_id: str, message: str, reply_token: str):
+    print(f"[handle_message] called: message={message}")
     try:
+        print(f"[handle_message] before parse_message: message={message}")
+        result = parse_message(message)
+        print(f"[handle_message] after parse_message: result={result}")
         from services.calendar_service import get_calendar_manager
         calendar_manager = get_calendar_manager(user_id)
         operation_type = result.get('operation_type')
@@ -99,9 +103,10 @@ async def handle_parsed_message(result, user_id, reply_token):
         else:
             await reply_text(reply_token, "未対応の操作です。\n予定の追加、確認、削除、更新のいずれかを指定してください。")
     except Exception as e:
+        print(f"[handle_message][EXCEPTION] {e}")
         logger.error(f"メッセージ処理中にエラーが発生: {str(e)}")
         logger.error(traceback.format_exc())
-        await reply_text(reply_token, "申し訳ありません。エラーが発生しました。\nしばらく時間をおいて再度お試しください。")
+        await reply_text(reply_token, "エラーが発生しました。しばらく経ってから再度お試しください。")
 
 def format_event_list(events: List[Dict], start_time: datetime = None, end_time: datetime = None) -> str:
     def border():
