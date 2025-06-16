@@ -1874,19 +1874,16 @@ class MessageParser:
         try:
             # メッセージの正規化
             normalized_message = self._normalize_message(message)
-            
-            # 操作タイプの判定
-            operation_type = self._determine_operation_type(normalized_message)
-            
             # 日付の解析
             date_info = self._parse_date(normalized_message)
-            
             # 時刻の解析
             time_info = self._parse_time(normalized_message)
-            
             # タイトルの抽出
             title = self._extract_title(normalized_message)
-            
+            # 操作タイプの判定（キーワード＋内容ベース）
+            operation_type = self._determine_operation_type(
+                normalized_message, date_info, time_info, title
+            )
             # 結果の構築
             result = {
                 'operation_type': operation_type,
@@ -1894,9 +1891,7 @@ class MessageParser:
                 'date': date_info,
                 'time': time_info
             }
-            
             return result
-            
         except Exception as e:
             logger.error(f"メッセージ解析中にエラーが発生: {str(e)}")
             logger.error(traceback.format_exc())
@@ -1921,12 +1916,13 @@ class MessageParser:
         message = re.sub(r'\s+', ' ', message)
         return message.strip()
 
-    def _determine_operation_type(self, message: str) -> str:
+    def _determine_operation_type(self, message: str, date_info=None, time_info=None, title=None) -> str:
         """
         メッセージから操作タイプを判定
+        - キーワードがなくても日付・時刻・タイトルがすべて抽出できた場合はaddと判定する（自然な予定文対応）
+        - 先祖返り防止のため必ずこのロジックを維持すること
         """
         message = message.lower()
-        
         if any(keyword in message for keyword in ADD_KEYWORDS):
             return 'add'
         elif any(keyword in message for keyword in DELETE_KEYWORDS):
@@ -1935,8 +1931,11 @@ class MessageParser:
             return 'update'
         elif any(keyword in message for keyword in READ_KEYWORDS):
             return 'read'
-        else:
-            return 'unknown'
+        # --- ここから自然文対応 ---
+        if date_info and time_info and title:
+            if date_info.get('start_date') and time_info.get('start_time') and title:
+                return 'add'
+        return 'unknown'
 
     def _parse_date(self, message: str) -> Dict:
         """
