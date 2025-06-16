@@ -953,9 +953,24 @@ def extract_relative_datetime(message: str, now: datetime) -> Optional[Dict]:
     return None
 
 def extract_datetime_from_message(message: str, operation_type: str = None) -> Dict:
-    """
-    メッセージから日時情報を抽出する
-    """
+    print(f"[extract_datetime_from_message] called: message={message}")
+    normalized_message = normalize_text(message)
+    confirm_keywords = [
+        "予定教えて", "今日の予定", "明日の予定", "スケジュール", "スケジュール見せて", "スケジュールを見せて", "空いてる時間", "空き時間", "空いてる", "確認", "予定を教えて", "予定を確認", "予定確認", "スケジュール確認", "スケジュールを教えて"
+    ]
+    if any(kw in normalized_message for kw in confirm_keywords):
+        parsed_data = {}
+        parsed_data["action"] = "confirm"
+        now = datetime.now(JST)
+        if "明日" in normalized_message:
+            date = now + timedelta(days=1)
+        else:
+            date = now
+        parsed_data["start_time"] = date.replace(hour=0, minute=0, second=0, microsecond=0)
+        parsed_data["end_time"] = date.replace(hour=23, minute=59, second=59, microsecond=999999)
+        print(f"[extract_datetime_from_message] confirm判定: action=confirm, start_time={parsed_data['start_time']}, end_time={parsed_data['end_time']}")
+        return parsed_data
+    # --- 既存の処理 ---
     try:
         now = datetime.now(JST)
         logger.debug(f"[now] サーバー現在日時: {now}")
