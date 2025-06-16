@@ -77,6 +77,7 @@ async def handle_parsed_message(result, user_id, reply_token):
         from services.calendar_service import get_calendar_manager
         calendar_manager = get_calendar_manager(user_id)
         operation_type = result.get('operation_type')
+        action = result.get('action')
         logger.debug(f"[handle_parsed_message] 操作タイプ: {operation_type}")
         if operation_type == 'add':
             await handle_add_event(result, calendar_manager, user_id, reply_token)
@@ -89,7 +90,7 @@ async def handle_parsed_message(result, user_id, reply_token):
             await handle_delete_event(result, calendar_manager, user_id, reply_token)
         elif operation_type == 'update':
             await handle_update_event(result, calendar_manager, user_id, reply_token)
-        elif operation_type == 'confirm':
+        elif (operation_type == 'confirm') or (action == 'confirm'):
             today = datetime.now(JST).date()
             events = calendar_manager.get_events(today)
             msg = format_event_list(events, today, today)
