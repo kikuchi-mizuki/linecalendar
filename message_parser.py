@@ -2086,34 +2086,41 @@ class MessageParser:
     def _parse_time(self, message: str) -> Dict:
         """
         メッセージから時刻情報を解析
+        - 複数行メッセージの全行を対象に時刻範囲や単一時刻を抽出する（先祖返り防止のため必ずこの仕様を維持すること）
+        - 時刻範囲がなければ、開始時刻のみ抽出し、1時間後をend_timeとする
         """
         result = {
             'start_time': None,
             'end_time': None,
             'is_range': False
         }
-
-        # 時刻範囲のパターン
+        lines = [line.strip() for line in message.splitlines() if line.strip()]
+        # まず時刻範囲を全行で探す
         range_patterns = [
+            (r'(\d{1,2}):(\d{2})[\-〜~～](\d{1,2}):(\d{2})', self._parse_time_range),
             (r'(\d{1,2})時(?:(\d{1,2})分)?から(\d{1,2})時(?:(\d{1,2})分)?まで', self._parse_time_range),
-            (r'(\d{1,2})時(?:(\d{1,2})分)?から(\d+)時間', self._parse_time_range_with_duration)
+            (r'(\d{1,2})時(?:(\d{1,2})分)?[\-〜~～](\d{1,2})時(?:(\d{1,2})分)?', self._parse_time_range)
         ]
-
-        for pattern, parser in range_patterns:
-            match = re.search(pattern, message)
-            if match:
-                return parser(match)
-
-        # 単一の時刻パターン
-        for pattern_name, pattern in self.time_patterns.items():
-            match = re.search(pattern, message)
-            if match:
-                time = self._parse_single_time(match, pattern_name)
-                if time:
-                    result['start_time'] = time
-                    result['end_time'] = time
-                    return result
-
+        for line in lines:
+            for pattern, parser in range_patterns:
+                match = re.search(pattern, line)
+                if match:
+                    return parser(match)
+        # 単一時刻を全行で探す
+        single_patterns = [
+            (r'(\d{1,2}):(\d{2})', 'specific_time'),
+            (r'(\d{1,2})時(?:(\d{1,2})分)?', 'specific_time')
+        ]
+        for line in lines:
+            for pattern, pattern_name in single_patterns:
+                match = re.search(pattern, line)
+                if match:
+                    time = self._parse_single_time(match, pattern_name)
+                    if time:
+                        result['start_time'] = time
+                        result['end_time'] = time + timedelta(hours=1)  # デフォルト1時間
+                        result['is_range'] = False
+                        return result
         return result
 
     def _parse_single_time(self, match: re.Match, pattern_name: str) -> Optional[datetime]:
@@ -2159,24 +2166,6 @@ class MessageParser:
         
         if end_time < start_time:
             end_time = end_time + timedelta(days=1)
-        
-        return {
-            'start_time': start_time,
-            'end_time': end_time,
-            'is_range': True
-        }
-
-    def _parse_time_range_with_duration(self, match: re.Match) -> Dict:
-        """
-        開始時刻と継続時間から時刻範囲を解析
-        """
-        start_hour = int(match.group(1))
-        start_minute = int(match.group(2)) if match.group(2) else 0
-        duration = int(match.group(3))
-        
-        now = datetime.now()
-        start_time = now.replace(hour=start_hour, minute=start_minute, second=0, microsecond=0)
-        end_time = start_time + timedelta(hours=duration)
         
         return {
             'start_time': start_time,
