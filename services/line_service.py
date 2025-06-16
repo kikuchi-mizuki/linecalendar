@@ -8,6 +8,7 @@ import time
 import json
 import logging
 import pytz
+from message_parser import parse_message
 
 logger = logging.getLogger('app')
 JST = pytz.timezone('Asia/Tokyo')
