@@ -1832,85 +1832,48 @@ def is_confirm_pattern(message: str, operation_hint: str = None) -> bool:
 
 class MessageParser:
     def __init__(self):
-        self.date_patterns = {
-            'today': r'今日|本日|きょう|ほんじつ',
-            'tomorrow': r'明日|あした|あす',
-            'day_after_tomorrow': r'明後日|あさって',
-            'next_week': r'来週|らいしゅう',
-            'next_month': r'来月|らいげつ',
-            'specific_date': r'(\d{1,2})月(\d{1,2})日',
-            'specific_date_with_year': r'(\d{4})年(\d{1,2})月(\d{1,2})日',
-            'relative_date': r'(\d+)日後',
-            'relative_date_ago': r'(\d+)日前',
-            'weekday': r'(月|火|水|木|金|土|日)曜日',
-            'next_weekday': r'来週の(月|火|水|木|金|土|日)曜日',
-            'this_weekday': r'今週の(月|火|水|木|金|土|日)曜日',
-            'last_weekday': r'先週の(月|火|水|木|金|土|日)曜日'
-        }
-        
-        self.time_patterns = {
-            'specific_time': r'(\d{1,2})時(?:(\d{1,2})分)?',
-            'morning': r'午前|朝',
-            'afternoon': r'午後|夕方',
-            'evening': r'夜|夕方',
-            'noon': r'正午|お昼',
-            'midnight': r'深夜|夜中',
-            'relative_time': r'(\d+)時間後',
-            'relative_time_ago': r'(\d+)時間前'
-        }
-        
-        self.weekday_map = {
-            '月': 0, '火': 1, '水': 2, '木': 3,
-            '金': 4, '土': 5, '日': 6
-        }
-        
-        self.operation_patterns = {
-            'create': r'登録|作成|追加|予定を入れる|予定を作る',
-            'read': r'確認|表示|教えて|見せて|見る|見たい',
-            'update': r'変更|修正|更新|編集',
-            'delete': r'削除|消去|取り消し|キャンセル',
-            'list': r'一覧|リスト|全部|全て|すべて',
-            'search': r'検索|探す|調べる',
-            'remind': r'リマインド|通知|知らせ|教えて',
-            'help': r'ヘルプ|使い方|説明|help|使い方教えて'
-        }
+        self.datetime_extractor = DateTimeExtractor()
+        self.title_extractor = TitleExtractor()
+        self.recurrence_extractor = RecurrenceExtractor()
 
     def parse_message(self, message: str) -> Dict:
         """
-        メッセージを解析して操作タイプとパラメータを返す
+        メッセージを解析して操作タイプと必要な情報を抽出
         """
         try:
-            # メッセージを正規化
+            # メッセージの正規化
             normalized_message = self._normalize_message(message)
-            logger.info(f"Normalized message: {normalized_message}")
-
-            # 操作タイプを判定
+            
+            # 操作タイプの判定
             operation_type = self._determine_operation_type(normalized_message)
-            logger.info(f"Detected operation type: {operation_type}")
-
-            # 日付と時刻を解析
+            
+            # 日付の解析
             date_info = self._parse_date(normalized_message)
+            
+            # 時刻の解析
             time_info = self._parse_time(normalized_message)
             
-            # タイトルを抽出
+            # タイトルの抽出
             title = self._extract_title(normalized_message)
             
-            # 結果を構築
+            # 結果の構築
             result = {
-                'operation': operation_type,
+                'operation_type': operation_type,
+                'title': title,
                 'date': date_info,
-                'time': time_info,
-                'title': title
+                'time': time_info
             }
             
-            logger.info(f"Parsed result: {result}")
             return result
-
+            
         except Exception as e:
-            logger.error(f"Error parsing message: {str(e)}", exc_info=True)
+            logger.error(f"メッセージ解析中にエラーが発生: {str(e)}")
+            logger.error(traceback.format_exc())
             return {
-                'operation': 'unknown',
-                'error': str(e)
+                'operation_type': 'unknown',
+                'title': None,
+                'date': {},
+                'time': {}
             }
 
     def _normalize_message(self, message: str) -> str:
@@ -1931,10 +1894,18 @@ class MessageParser:
         """
         メッセージから操作タイプを判定
         """
-        for op_type, pattern in self.operation_patterns.items():
-            if re.search(pattern, message):
-                return op_type
-        return 'unknown'
+        message = message.lower()
+        
+        if any(keyword in message for keyword in ADD_KEYWORDS):
+            return 'add'
+        elif any(keyword in message for keyword in DELETE_KEYWORDS):
+            return 'delete'
+        elif any(keyword in message for keyword in UPDATE_KEYWORDS):
+            return 'update'
+        elif any(keyword in message for keyword in READ_KEYWORDS):
+            return 'read'
+        else:
+            return 'unknown'
 
     def _parse_date(self, message: str) -> Dict:
         """
