@@ -109,13 +109,12 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             start_time = JST.localize(datetime(year, month, day, hour, 0, 0))
             end_time = start_time + timedelta(hours=1)
             return {'start_time': start_time, 'end_time': end_time, 'is_time_range': False}
-        # 「6/19」や「6月19日」
-        m = re.search(r'(\d{1,2})[\/月](\d{1,2})日?', message)
+        # --- 月日指定パターンを最優先で抽出 ---
+        m = re.match(r'\s*(\d{1,2})[\/月](\d{1,2})日?', message)
         if m:
             month = int(m.group(1))
             day = int(m.group(2))
             year = now.year
-            # 今日の日付より前なら来年、今日以降なら今年
             this_year_date = datetime(year, month, day, 0, 0, 0, tzinfo=JST)
             if this_year_date < now.replace(hour=0, minute=0, second=0, microsecond=0):
                 year += 1
