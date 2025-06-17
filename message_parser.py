@@ -775,7 +775,8 @@ def extract_relative_datetime(message: str, now: datetime) -> Optional[Dict]:
     # まず「今日から1週間」「今日から2週間」を最優先で判定
     if '今日から1週間' in message:
         start_time = datetime.combine(now.date(), time(0, 0), tzinfo=JST)
-        end_time = start_time + timedelta(days=6, hours=23, minutes=59, seconds=59, microseconds=999999)
+        end_time = start_time + timedelta(days=6, hours=23, minutes=59, seconds=59)
+        end_time = end_time.replace(microsecond=0)
         return {
             'success': True,
             'start_time': start_time,
@@ -783,7 +784,8 @@ def extract_relative_datetime(message: str, now: datetime) -> Optional[Dict]:
         }
     elif '今日から2週間' in message:
         start_time = datetime.combine(now.date(), time(0, 0), tzinfo=JST)
-        end_time = start_time + timedelta(days=13, hours=23, minutes=59, seconds=59, microseconds=999999)
+        end_time = start_time + timedelta(days=13, hours=23, minutes=59, seconds=59)
+        end_time = end_time.replace(microsecond=0)
         return {
             'success': True,
             'start_time': start_time,
@@ -808,7 +810,7 @@ def extract_relative_datetime(message: str, now: datetime) -> Optional[Dict]:
         target_date = monday.date()
         end_date = (monday + timedelta(days=6)).date()
         start_time = datetime.combine(target_date, time(0, 0), tzinfo=JST)
-        end_time = datetime.combine(end_date, time(23, 59, 59, 999999), tzinfo=JST)
+        end_time = datetime.combine(end_date, time(23, 59, 59), tzinfo=JST)
         return {
             'success': True,
             'start_time': start_time,
@@ -820,7 +822,7 @@ def extract_relative_datetime(message: str, now: datetime) -> Optional[Dict]:
         target_date = monday.date()
         end_date = (monday + timedelta(days=6)).date()
         start_time = datetime.combine(target_date, time(0, 0), tzinfo=JST)
-        end_time = datetime.combine(end_date, time(23, 59, 59, 999999), tzinfo=JST)
+        end_time = datetime.combine(end_date, time(23, 59, 59), tzinfo=JST)
         return {
             'success': True,
             'start_time': start_time,
@@ -832,7 +834,7 @@ def extract_relative_datetime(message: str, now: datetime) -> Optional[Dict]:
         target_date = monday.date()
         end_date = (monday + timedelta(days=6)).date()
         start_time = datetime.combine(target_date, time(0, 0), tzinfo=JST)
-        end_time = datetime.combine(end_date, time(23, 59, 59, 999999), tzinfo=JST)
+        end_time = datetime.combine(end_date, time(23, 59, 59), tzinfo=JST)
         return {
             'success': True,
             'start_time': start_time,
@@ -844,7 +846,7 @@ def extract_relative_datetime(message: str, now: datetime) -> Optional[Dict]:
         target_date = monday.date()
         end_date = (monday + timedelta(days=6)).date()
         start_time = datetime.combine(target_date, time(0, 0), tzinfo=JST)
-        end_time = datetime.combine(end_date, time(23, 59, 59, 999999), tzinfo=JST)
+        end_time = datetime.combine(end_date, time(23, 59, 59), tzinfo=JST)
         return {
             'success': True,
             'start_time': start_time,
@@ -859,7 +861,7 @@ def extract_relative_datetime(message: str, now: datetime) -> Optional[Dict]:
         else:
             end_date = now.replace(month=now.month + 1, day=1).date() - timedelta(days=1)
         start_time = datetime.combine(target_date, time(0, 0), tzinfo=JST)
-        end_time = datetime.combine(end_date, time(23, 59, 59, 999999), tzinfo=JST)
+        end_time = datetime.combine(end_date, time(23, 59, 59), tzinfo=JST)
         return {
             'success': True,
             'start_time': start_time,
@@ -874,7 +876,7 @@ def extract_relative_datetime(message: str, now: datetime) -> Optional[Dict]:
             target_date = now.replace(month=now.month + 1, day=1).date()
             end_date = now.replace(month=now.month + 2, day=1).date() - timedelta(days=1)
         start_time = datetime.combine(target_date, time(0, 0), tzinfo=JST)
-        end_time = datetime.combine(end_date, time(23, 59, 59, 999999), tzinfo=JST)
+        end_time = datetime.combine(end_date, time(23, 59, 59), tzinfo=JST)
         return {
             'success': True,
             'start_time': start_time,
@@ -889,7 +891,7 @@ def extract_relative_datetime(message: str, now: datetime) -> Optional[Dict]:
             target_date = now.replace(month=now.month - 1, day=1).date()
             end_date = now.replace(day=1).date() - timedelta(days=1)
         start_time = datetime.combine(target_date, time(0, 0), tzinfo=JST)
-        end_time = datetime.combine(end_date, time(23, 59, 59, 999999), tzinfo=JST)
+        end_time = datetime.combine(end_date, time(23, 59, 59), tzinfo=JST)
         return {
             'success': True,
             'start_time': start_time,
@@ -900,7 +902,7 @@ def extract_relative_datetime(message: str, now: datetime) -> Optional[Dict]:
         target_date = now.replace(month=1, day=1).date()
         end_date = now.replace(month=12, day=31).date()
         start_time = datetime.combine(target_date, time(0, 0), tzinfo=JST)
-        end_time = datetime.combine(end_date, time(23, 59, 59, 999999), tzinfo=JST)
+        end_time = datetime.combine(end_date, time(23, 59, 59), tzinfo=JST)
         return {
             'success': True,
             'start_time': start_time,
@@ -911,7 +913,7 @@ def extract_relative_datetime(message: str, now: datetime) -> Optional[Dict]:
         target_date = now.replace(year=now.year + 1, month=1, day=1).date()
         end_date = now.replace(year=now.year + 1, month=12, day=31).date()
         start_time = datetime.combine(target_date, time(0, 0), tzinfo=JST)
-        end_time = datetime.combine(end_date, time(23, 59, 59, 999999), tzinfo=JST)
+        end_time = datetime.combine(end_date, time(23, 59, 59), tzinfo=JST)
         return {
             'success': True,
             'start_time': start_time,
@@ -922,7 +924,7 @@ def extract_relative_datetime(message: str, now: datetime) -> Optional[Dict]:
         target_date = now.replace(year=now.year - 1, month=1, day=1).date()
         end_date = now.replace(year=now.year - 1, month=12, day=31).date()
         start_time = datetime.combine(target_date, time(0, 0), tzinfo=JST)
-        end_time = datetime.combine(end_date, time(23, 59, 59, 999999), tzinfo=JST)
+        end_time = datetime.combine(end_date, time(23, 59, 59), tzinfo=JST)
         return {
             'success': True,
             'start_time': start_time,
@@ -933,7 +935,7 @@ def extract_relative_datetime(message: str, now: datetime) -> Optional[Dict]:
         target_date = now.replace(year=now.year - 2, month=1, day=1).date()
         end_date = now.replace(year=now.year - 2, month=12, day=31).date()
         start_time = datetime.combine(target_date, time(0, 0), tzinfo=JST)
-        end_time = datetime.combine(end_date, time(23, 59, 59, 999999), tzinfo=JST)
+        end_time = datetime.combine(end_date, time(23, 59, 59), tzinfo=JST)
         return {
             'success': True,
             'start_time': start_time,
@@ -942,7 +944,7 @@ def extract_relative_datetime(message: str, now: datetime) -> Optional[Dict]:
     
     if target_date:
         start_time = datetime.combine(target_date, time(0, 0), tzinfo=JST)
-        end_time = datetime.combine(target_date, time(23, 59, 59, 999999), tzinfo=JST)
+        end_time = datetime.combine(target_date, time(23, 59, 59), tzinfo=JST)
         return {
             'success': True,
             'start_time': start_time,
