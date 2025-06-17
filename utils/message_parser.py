@@ -110,7 +110,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             end_time = start_time + timedelta(hours=1)
             return {'start_time': start_time, 'end_time': end_time, 'is_time_range': False}
         # --- 月日指定パターンを最優先で抽出 ---
-        m = re.match(r'\s*(\d{1,2})[\/月](\d{1,2})日?', message)
+        m = re.search(r'(\d{1,2})[\/月](\d{1,2})日?', message)
         if m:
             month = int(m.group(1))
             day = int(m.group(2))
