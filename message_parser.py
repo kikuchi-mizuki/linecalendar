@@ -545,9 +545,8 @@ def extract_title(text: str, operation_type: str = None) -> Optional[str]:
                     return line
             # どの行にもタイトルらしきものがなければ「予定」
             return '予定'
+
         # 通常の抽出ロジック
-        # ...（既存のまま）...
-        # 1行メッセージの場合は先頭の時刻（範囲含む）部分を除去し残りをタイトルとする
         lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
         if len(lines) == 1:
             line = lines[0]
@@ -566,7 +565,24 @@ def extract_title(text: str, operation_type: str = None) -> Optional[str]:
             # 日付・時刻のみの行はタイトルなしとみなす
             if not line or re.fullmatch(r'[\d/:年月日時分\-〜~～\s　]+', line):
                 return None
-            return line
+            return line.strip()
+
+        # 複数行の場合
+        for line in lines:
+            # 日付・時刻部分を除去
+            line = re.sub(r'^(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?[\-〜~～](\d{1,2}):?(\d{2})?', '', line)
+            line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時[\-〜~～](\d{1,2})時', '', line)
+            line = re.sub(r'^(\d{1,2}):?(\d{2})?[\-〜~～](\d{1,2}):?(\d{2})?', '', line)
+            line = re.sub(r'^(\d{1,2})時[\-〜~～](\d{1,2})時', '', line)
+            line = re.sub(r'^(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?', '', line)
+            line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時(\d{1,2})分?', '', line)
+            line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時', '', line)
+            line = re.sub(r'^(\d{1,2})[\/](\d{1,2})[\s　]*(\d{1,2}):?(\d{2})?', '', line)
+            line = re.sub(r'^[\s　:：,、。]+', '', line)
+            
+            # 日本語文字列が含まれていればタイトルとみなす
+            if line and re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z]', line):
+                return line.strip()
 
         return None
     except Exception as e:
