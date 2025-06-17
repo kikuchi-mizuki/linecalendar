@@ -14,6 +14,65 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
     try:
         now = datetime.now(JST)
         logger.debug(f"[now] サーバー現在日時: {now}")
+        
+        # 日付＋番号＋変更のパターン（例：6/19 2 変更）
+        update_pattern = r'(\d{1,2})[\/月](\d{1,2})日?\s*(\d+)\s*(番)?\s*(変更|修正|更新|編集)'
+        update_match = re.search(update_pattern, message)
+        if update_match:
+            month = int(update_match.group(1))
+            day = int(update_match.group(2))
+            update_index = int(update_match.group(3))
+            year = now.year
+            if (month < now.month) or (month == now.month and day < now.day):
+                year += 1
+            
+            # 更新対象の日時を設定
+            start_time = JST.localize(datetime(year, month, day, 0, 0, 0))
+            end_time = JST.localize(datetime(year, month, day, 23, 59, 59, 999999))
+            
+            # 次の行から新しい時間を抽出
+            lines = message.splitlines()
+            if len(lines) >= 2:
+                new_time_info = extract_datetime_from_message(lines[1])
+                if new_time_info.get('start_time') and new_time_info.get('end_time'):
+                    return {
+                        'start_time': start_time,
+                        'end_time': end_time,
+                        'new_start_time': new_time_info['start_time'],
+                        'new_end_time': new_time_info['end_time'],
+                        'update_index': update_index,
+                        'is_time_range': True
+                    }
+            
+            return {
+                'start_time': start_time,
+                'end_time': end_time,
+                'update_index': update_index,
+                'is_time_range': True
+            }
+        
+        # 時間範囲のパターン（例：14:00〜15:00）
+        time_range_pattern = r'(\d{1,2}):(\d{2})[〜~～-](\d{1,2}):(\d{2})'
+        time_range_match = re.search(time_range_pattern, message)
+        if time_range_match:
+            start_hour = int(time_range_match.group(1))
+            start_minute = int(time_range_match.group(2))
+            end_hour = int(time_range_match.group(3))
+            end_minute = int(time_range_match.group(4))
+            
+            # 日付の抽出を試みる
+            date_match = re.search(r'(\d{1,2})[\/月](\d{1,2})日?', message)
+            if date_match:
+                month = int(date_match.group(1))
+                day = int(date_match.group(2))
+                year = now.year
+                if (month < now.month) or (month == now.month and day < now.day):
+                    year += 1
+                
+                start_time = JST.localize(datetime(year, month, day, start_hour, start_minute))
+                end_time = JST.localize(datetime(year, month, day, end_hour, end_minute))
+                return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True}
+        
         # 「今日からn週間」
         m = re.search(r'今日から(\d+)週間', message)
         if m:

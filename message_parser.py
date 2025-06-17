@@ -370,25 +370,22 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
             title = extract_title(message)
             lines = normalized_message.splitlines()
             if len(lines) >= 2:
+                # 1行目から更新対象の時間を抽出
                 dt1 = extract_datetime_from_message(lines[0], 'update')
+                # 2行目から新しい時間を抽出
                 dt2 = extract_datetime_from_message(lines[1], 'update')
                 logger.debug(f"[parse_message][update] 1行目: {lines[0]} => {dt1}")
                 logger.debug(f"[parse_message][update] 2行目: {lines[1]} => {dt2}")
                 
-                new_start_time = dt2.get('start_time')
-                new_end_time = dt2.get('end_time')
-                if 'duration' in dt2 and dt2['start_time']:
-                    new_end_time = dt2['start_time'] + dt2['duration']
-                
-                if dt1.get('start_time') and new_start_time:
-                    # 2行目にend_timeがあればそれを優先
-                    if dt2.get('end_time'):
-                        new_end_time = dt2.get('end_time')
-                    elif dt1.get('end_time') and dt1.get('start_time'):
-                        original_duration = dt1.get('end_time') - dt1.get('start_time')
-                        new_end_time = new_start_time + original_duration
-                    else:
+                if dt1.get('start_time') and dt2.get('start_time'):
+                    # 2行目から新しい時間範囲を取得
+                    new_start_time = dt2.get('start_time')
+                    new_end_time = dt2.get('end_time')
+                    
+                    # 2行目にend_timeがなければ、デフォルトで1時間後を設定
+                    if not new_end_time:
                         new_end_time = new_start_time + timedelta(hours=1)
+                    
                     return {
                         'success': True,
                         'operation_type': 'update',
