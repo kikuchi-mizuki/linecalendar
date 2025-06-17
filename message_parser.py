@@ -575,41 +575,49 @@ def extract_title(text: str, operation_type: str = None) -> Optional[str]:
 class MessageParser:
     def _parse_date(self, message: str) -> dict:
         try:
-            # 日付の抽出を試みる
-            date_info = datetime_extractor.extract_date(message)
-            if date_info:
-                return date_info
-            return {'date': None, 'is_range': False}
+            result = extract_datetime_from_message(message)
+            return {
+                'date': result.get('start_time'),
+                'is_range': result.get('is_time_range', False)
+            }
         except Exception as e:
             logger.error(f"日付の解析中にエラーが発生: {str(e)}")
             return {'date': None, 'is_range': False}
 
     def _parse_time(self, message: str) -> dict:
         try:
-            # 時間の抽出を試みる
-            time_info = datetime_extractor.extract_time(message)
-            if time_info:
-                return time_info
-            return {'start_time': None, 'end_time': None, 'is_range': False}
+            result = extract_datetime_from_message(message)
+            return {
+                'start_time': result.get('start_time'),
+                'end_time': result.get('end_time'),
+                'is_range': result.get('is_time_range', False)
+            }
         except Exception as e:
             logger.error(f"時間の解析中にエラーが発生: {str(e)}")
             return {'start_time': None, 'end_time': None, 'is_range': False}
 
     def parse_message(self, message: str, current_time: datetime = None) -> Dict:
-        """
-        メッセージを解析して、操作タイプ、タイトル、日時情報を抽出する
-
-        Args:
-            message (str): 解析するメッセージ
-            current_time (datetime, optional): 現在時刻。指定がない場合は現在時刻を使用
-
-        Returns:
-            Dict: 解析結果を含む辞書
-        """
         try:
             now = current_time or datetime.now(JST)
-
-            # 操作タイプの抽出
+            # 日付＋番号＋削除パターン
+            m = re.search(r'(\d{1,4}[\/年])?(\d{1,2})[\/月](\d{1,2})日?\s*(\d+)\s*(番)?\s*(削除|消す|キャンセル|取り消し|中止)', message)
+            if m:
+                # 年省略時は今年
+                year = int(m.group(1)[:-1]) if m.group(1) else now.year
+                month = int(m.group(2))
+                day = int(m.group(3))
+                delete_index = int(m.group(4))
+                date = JST.localize(datetime(year, month, day, 0, 0, 0))
+                return {
+                    'operation_type': 'delete',
+                    'date': date,
+                    'delete_index': delete_index,
+                    'title': None,
+                    'start_time': None,
+                    'end_time': None,
+                    'is_range': False
+                }
+            # 通常のパース処理
             operation_type = extract_operation_type(message)
             if not operation_type:
                 return {
@@ -620,15 +628,9 @@ class MessageParser:
                     'end_time': None,
                     'is_range': False
                 }
-
-            # タイトルの抽出
             title = extract_title(message, operation_type)
-
-            # 日付と時間の抽出
             date_info = self._parse_date(message)
             time_info = self._parse_time(message)
-
-            # 結果の構築
             result = {
                 'operation_type': operation_type,
                 'title': title,
@@ -637,7 +639,6 @@ class MessageParser:
                 'end_time': time_info.get('end_time'),
                 'is_range': time_info.get('is_range', False)
             }
-
             return result
         except Exception as e:
             logger.error(f"メッセージの解析中にエラーが発生: {str(e)}")
