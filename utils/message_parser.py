@@ -14,6 +14,13 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
     try:
         now = datetime.now(JST)
         logger.debug(f"[now] サーバー現在日時: {now}")
+        # 「今日からn週間」
+        m = re.search(r'今日から(\d+)週間', message)
+        if m:
+            n = int(m.group(1))
+            start_time = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_time = (start_time + timedelta(days=7*n-1)).replace(hour=23, minute=59, second=59, microsecond=999999)
+            return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True}
         # 「今日から1週間」
         if re.search(r'今日から1週間', message):
             start_time = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -31,6 +38,18 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             start_time = start_time.replace(hour=0, minute=0, second=0, microsecond=0)
             end_time = start_time + timedelta(days=6, hours=23, minutes=59, seconds=59, microseconds=999999)
             return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True}
+        # 「6/18 1」や「6月18日1時」
+        m = re.search(r'(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2})時?', message)
+        if m:
+            month = int(m.group(1))
+            day = int(m.group(2))
+            hour = int(m.group(3))
+            year = now.year
+            if (month < now.month) or (month == now.month and day < now.day):
+                year += 1
+            start_time = JST.localize(datetime(year, month, day, hour, 0, 0))
+            end_time = start_time + timedelta(hours=1)
+            return {'start_time': start_time, 'end_time': end_time, 'is_time_range': False}
         # 「6/19」や「6月19日」
         m = re.search(r'(\d{1,2})[\/月](\d{1,2})日?', message)
         if m:
