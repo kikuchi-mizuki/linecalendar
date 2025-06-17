@@ -98,11 +98,20 @@ async def handle_message(user_id: str, message: str, reply_token: str):
         if operation == 'add':
             await handle_add_event(result, calendar_manager, user_id, reply_token)
         elif operation == 'read':
-            today = datetime.now(JST).date()
-            start_time = datetime.combine(today, datetime.min.time()).replace(tzinfo=JST)
-            end_time = datetime.combine(today, datetime.max.time()).replace(tzinfo=JST)
+            # 日付範囲の取得
+            start_time = result.get('start_time')
+            end_time = result.get('end_time')
+            if not start_time:
+                # 日付が指定されていない場合は今日の予定を表示
+                today = datetime.now(JST).date()
+                start_time = datetime.combine(today, datetime.min.time()).replace(tzinfo=JST)
+                end_time = datetime.combine(today, datetime.max.time()).replace(tzinfo=JST)
+            elif not end_time:
+                # 終了日時が指定されていない場合は開始日時と同じ日を終了日時とする
+                end_time = start_time.replace(hour=23, minute=59, second=59, microsecond=999999)
+            
             events = await calendar_manager.get_events(start_time, end_time)
-            msg = format_event_list(events, today, today)
+            msg = format_event_list(events, start_time, end_time)
             await reply_text(reply_token, msg)
         elif operation == 'delete':
             await handle_delete_event(result, calendar_manager, user_id, reply_token)
