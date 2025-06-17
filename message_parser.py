@@ -566,52 +566,7 @@ def extract_title(text: str, operation_type: str = None) -> Optional[str]:
             if not line or re.fullmatch(r'[\d/:年月日時分\-〜~～\s　]+', line):
                 return None
             return line
-            
-        return None
-    except Exception as e:
-        logger.error(f"タイトル抽出エラー: {str(e)}")
-        return None
 
-def extract_title(text: str, operation_type: str = None) -> Optional[str]:
-    """
-    メッセージからタイトルを抽出。delete/update時は抽出できなければ必ず「予定」を返す。
-    """
-    try:
-        normalized_text = normalize_text(text, keep_katakana=True)
-        # 削除・更新操作の場合の特別処理
-        if operation_type in ('delete', 'update'):
-            # 既存の抽出ロジック
-            lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
-            for line in lines:
-                if any(kw in line for kw in DELETE_KEYWORDS + UPDATE_KEYWORDS):
-                    continue
-                if re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z]', line):
-                    return line
-            # どの行にもタイトルらしきものがなければ「予定」
-            return '予定'
-        # 通常の抽出ロジック
-        # ...（既存のまま）...
-        # 1行メッセージの場合は先頭の時刻（範囲含む）部分を除去し残りをタイトルとする
-        lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
-        if len(lines) == 1:
-            line = lines[0]
-            # 日付＋時刻範囲パターン
-            # 日付・時刻部分を除去
-            line = re.sub(r'^(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?[\-〜~～](\d{1,2}):?(\d{2})?', '', line)
-            line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時[\-〜~～](\d{1,2})時', '', line)
-            line = re.sub(r'^(\d{1,2}):?(\d{2})?[\-〜~～](\d{1,2}):?(\d{2})?', '', line)
-            line = re.sub(r'^(\d{1,2})時[\-〜~～](\d{1,2})時', '', line)
-            line = re.sub(r'^(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?', '', line)
-            line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時(\d{1,2})分?', '', line)
-            line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時', '', line)
-            line = re.sub(r'^(\d{1,2})[\/](\d{1,2})[\s　]*(\d{1,2}):?(\d{2})?', '', line)
-            line = re.sub(r'^[\s　:：,、。]+', '', line)
-            
-            # 日付・時刻のみの行はタイトルなしとみなす
-            if not line or re.fullmatch(r'[\d/:年月日時分\-〜~～\s　]+', line):
-                return None
-            return line
-            
         return None
     except Exception as e:
         logger.error(f"タイトル抽出エラー: {str(e)}")
@@ -620,31 +575,76 @@ def extract_title(text: str, operation_type: str = None) -> Optional[str]:
 class MessageParser:
     def _parse_date(self, message: str) -> dict:
         try:
-            result = extract_datetime_from_message(message)
-            return {
-                'start_date': result.get('start_time'),
-                'end_date': result.get('end_time'),
-                'is_range': result.get('is_time_range', False)
-            }
+            # 日付の抽出を試みる
+            date_info = datetime_extractor.extract_date(message)
+            if date_info:
+                return date_info
+            return {'date': None, 'is_range': False}
         except Exception as e:
             logger.error(f"日付の解析中にエラーが発生: {str(e)}")
-            return {
-                'start_date': None,
-                'end_date': None,
-                'is_range': False
-            }
+            return {'date': None, 'is_range': False}
 
     def _parse_time(self, message: str) -> dict:
         try:
-            result = extract_datetime_from_message(message)
-            return {
-                'start_time': result.get('start_time'),
-                'end_time': result.get('end_time'),
-                'is_range': result.get('is_time_range', False)
-            }
+            # 時間の抽出を試みる
+            time_info = datetime_extractor.extract_time(message)
+            if time_info:
+                return time_info
+            return {'start_time': None, 'end_time': None, 'is_range': False}
         except Exception as e:
-            logger.error(f"時刻の解析中にエラーが発生: {str(e)}")
+            logger.error(f"時間の解析中にエラーが発生: {str(e)}")
+            return {'start_time': None, 'end_time': None, 'is_range': False}
+
+    def parse_message(self, message: str, current_time: datetime = None) -> Dict:
+        """
+        メッセージを解析して、操作タイプ、タイトル、日時情報を抽出する
+
+        Args:
+            message (str): 解析するメッセージ
+            current_time (datetime, optional): 現在時刻。指定がない場合は現在時刻を使用
+
+        Returns:
+            Dict: 解析結果を含む辞書
+        """
+        try:
+            now = current_time or datetime.now(JST)
+
+            # 操作タイプの抽出
+            operation_type = extract_operation_type(message)
+            if not operation_type:
+                return {
+                    'operation_type': None,
+                    'title': None,
+                    'date': None,
+                    'start_time': None,
+                    'end_time': None,
+                    'is_range': False
+                }
+
+            # タイトルの抽出
+            title = extract_title(message, operation_type)
+
+            # 日付と時間の抽出
+            date_info = self._parse_date(message)
+            time_info = self._parse_time(message)
+
+            # 結果の構築
+            result = {
+                'operation_type': operation_type,
+                'title': title,
+                'date': date_info.get('date'),
+                'start_time': time_info.get('start_time'),
+                'end_time': time_info.get('end_time'),
+                'is_range': time_info.get('is_range', False)
+            }
+
+            return result
+        except Exception as e:
+            logger.error(f"メッセージの解析中にエラーが発生: {str(e)}")
             return {
+                'operation_type': None,
+                'title': None,
+                'date': None,
                 'start_time': None,
                 'end_time': None,
                 'is_range': False
