@@ -1417,13 +1417,39 @@ class MessageParser:
     def parse_message(self, message: str) -> Dict:
         """
         メッセージを解析して操作タイプと必要な情報を抽出
-        - dateとtimeの情報を組み合わせてトップレベルにstart_time/end_timeを追加する（先祖返り防止のため必ずこの仕様を維持すること）
-        - 複数行メッセージの場合は、最初の行から日時を抽出し、2行目以降からタイトルを抽出する
+        - delete/update時は従来のextract_title・extract_datetime_from_messageを使い、
+          start_time/end_time/new_start_time/new_end_time/titleをトップレベルで返す
+        - addや自然文は今のまま維持
         """
         try:
             # メッセージの正規化
             normalized_message = self._normalize_message(message)
-            
+            # 操作タイプの判定
+            operation_type = extract_operation_type(normalized_message)
+            # delete/updateは従来ロジックで情報抽出
+            if operation_type == 'delete':
+                title = extract_title(message)
+                datetime_info = extract_datetime_from_message(normalized_message, 'delete')
+                return {
+                    'success': True,
+                    'operation_type': 'delete',
+                    'title': title,
+                    'start_time': datetime_info.get('start_time') if datetime_info else None,
+                    'end_time': datetime_info.get('end_time') if datetime_info else None
+                }
+            if operation_type == 'update':
+                title = extract_title(message)
+                datetime_info = extract_datetime_from_message(normalized_message, 'update')
+                return {
+                    'success': True,
+                    'operation_type': 'update',
+                    'title': title,
+                    'start_time': datetime_info.get('start_time'),
+                    'end_time': datetime_info.get('end_time'),
+                    'new_start_time': datetime_info.get('new_start_time'),
+                    'new_end_time': datetime_info.get('new_end_time')
+                }
+            # それ以外は従来の自然文・addロジック
             # 複数行メッセージの処理
             lines = [line.strip() for line in normalized_message.splitlines() if line.strip()]
             if len(lines) >= 2:
@@ -1437,38 +1463,29 @@ class MessageParser:
                 date_info = self._parse_date(normalized_message)
                 time_info = self._parse_time(normalized_message)
                 title = self._extract_title(normalized_message)
-
-            # 操作タイプの判定（キーワード＋内容ベース）
-            operation_type = self._determine_operation_type(
+            operation_type2 = self._determine_operation_type(
                 normalized_message, date_info, time_info, title
             )
-
             # トップレベルのstart_time/end_timeを組み立て
             start_time = None
             end_time = None
             if date_info and time_info:
                 if date_info.get('start_date') and time_info.get('start_time'):
                     start_time = datetime.combine(date_info['start_date'].date(), time_info['start_time'].time())
-                    # 終了時刻が指定されていない場合は1時間後をデフォルトとする
                     if time_info.get('end_time'):
                         end_time = datetime.combine(date_info['end_date'].date(), time_info['end_time'].time())
                     else:
                         end_time = start_time + timedelta(hours=1)
-
-            # 結果の構築
             result = {
-                'operation_type': operation_type,
+                'operation_type': operation_type2,
                 'title': title,
                 'date': date_info,
                 'time': time_info,
                 'start_time': start_time,
                 'end_time': end_time
             }
-
-            # デバッグログ
             logger.debug(f"解析結果: {result}")
             return result
-
         except Exception as e:
             logger.error(f"メッセージ解析中にエラーが発生: {str(e)}")
             logger.error(traceback.format_exc())
