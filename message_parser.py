@@ -957,6 +957,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
     """
     メッセージから日時情報を抽出
     - 複数の日時が含まれる場合は、最初の日時を元の予定、2番目の日時を新しい予定として解釈
+    - 単一時刻（6/18 10:20など）も抽出し、end_timeは1時間後にする
     """
     now = datetime.now(JST)
     result = {
@@ -972,10 +973,12 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
     if not lines:
         return result
 
-    # 日時パターン
+    # 日時範囲パターン
     date_time_pattern = r'(\d{1,2})[/\-月](\d{1,2})[日]?\s+(\d{1,2}):(\d{2})[〜～-](\d{1,2}):(\d{2})'
-    
-    # 最初の行から日時を抽出
+    # 単一時刻パターン
+    single_time_pattern = r'(\d{1,2})[/\-月](\d{1,2})[日]?\s*(\d{1,2}):(\d{2})'
+
+    # 最初の行から範囲パターンを抽出
     first_match = re.search(date_time_pattern, lines[0])
     if first_match:
         month, day, start_hour, start_min, end_hour, end_min = map(int, first_match.groups())
@@ -985,8 +988,21 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
         result['start_time'] = datetime(year, month, day, start_hour, start_min, tzinfo=JST)
         result['end_time'] = datetime(year, month, day, end_hour, end_min, tzinfo=JST)
         result['success'] = True
+    else:
+        # 単一時刻パターン
+        single_match = re.search(single_time_pattern, lines[0])
+        if single_match:
+            month, day, hour, minute = map(int, single_match.groups())
+            year = now.year
+            if month < now.month:
+                year += 1
+            start = datetime(year, month, day, hour, minute, tzinfo=JST)
+            end = start + timedelta(hours=1)
+            result['start_time'] = start
+            result['end_time'] = end
+            result['success'] = True
 
-    # 2番目の行から日時を抽出（存在する場合）
+    # 2番目の行から範囲パターンを抽出（存在する場合）
     if len(lines) > 1:
         second_match = re.search(date_time_pattern, lines[1])
         if second_match:
@@ -996,6 +1012,18 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
                 year += 1
             result['new_start_time'] = datetime(year, month, day, start_hour, start_min, tzinfo=JST)
             result['new_end_time'] = datetime(year, month, day, end_hour, end_min, tzinfo=JST)
+        else:
+            # 単一時刻パターン
+            single_match2 = re.search(single_time_pattern, lines[1])
+            if single_match2:
+                month, day, hour, minute = map(int, single_match2.groups())
+                year = now.year
+                if month < now.month:
+                    year += 1
+                start = datetime(year, month, day, hour, minute, tzinfo=JST)
+                end = start + timedelta(hours=1)
+                result['new_start_time'] = start
+                result['new_end_time'] = end
 
     # 「変更」を含む場合、operation_typeを'update'に設定
     if '変更' in message and result['new_start_time'] and result['new_end_time']:
