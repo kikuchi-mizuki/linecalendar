@@ -14,6 +14,34 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
     try:
         now = datetime.now(JST)
         logger.debug(f"[now] サーバー現在日時: {now}")
+        # 「今日から1週間」
+        if re.search(r'今日から1週間', message):
+            start_time = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_time = (start_time + timedelta(days=6)).replace(hour=23, minute=59, second=59, microsecond=999999)
+            return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True}
+        # 「今週」
+        if re.search(r'今週', message):
+            start_time = now - timedelta(days=now.weekday())
+            start_time = start_time.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_time = start_time + timedelta(days=6, hours=23, minutes=59, seconds=59, microseconds=999999)
+            return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True}
+        # 「来週」
+        if re.search(r'来週', message):
+            start_time = now - timedelta(days=now.weekday()) + timedelta(days=7)
+            start_time = start_time.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_time = start_time + timedelta(days=6, hours=23, minutes=59, seconds=59, microseconds=999999)
+            return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True}
+        # 「6/19」や「6月19日」
+        m = re.search(r'(\d{1,2})[\/月](\d{1,2})日?', message)
+        if m:
+            month = int(m.group(1))
+            day = int(m.group(2))
+            year = now.year
+            if (month < now.month) or (month == now.month and day < now.day):
+                year += 1
+            start_time = JST.localize(datetime(year, month, day, 0, 0, 0))
+            end_time = JST.localize(datetime(year, month, day, 23, 59, 59, 999999))
+            return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True}
         # --- 日本語日付＋時刻範囲パターンを最優先で抽出 ---
         jp_date_time_range_match = re.search(r'(\d{1,2})月(\d{1,2})日[\s　]*(\d{1,2}):?(\d{2})[〜~～-](\d{1,2}):?(\d{2})', message)
         if jp_date_time_range_match:
