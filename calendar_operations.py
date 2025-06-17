@@ -186,8 +186,8 @@ class CalendarManager:
         """
         try:
             # タイムゾーンの設定
-            start_time = self._ensure_timezone(start_time)
-            end_time = self._ensure_timezone(end_time)
+            start_time = self._ensure_timezone(start_time).replace(microsecond=0)
+            end_time = self._ensure_timezone(end_time).replace(microsecond=0)
 
             # イベントの取得
             events_result = self.service.events().list(
