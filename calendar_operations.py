@@ -316,19 +316,23 @@ class CalendarManager:
             logger.error("start_timeまたはend_timeがNoneです")
             return []
 
-        # タイムゾーンの設定
-            if start_time.tzinfo is None:
-                start_time = self.timezone.localize(start_time)
-            else:
-                start_time = start_time.astimezone(self.timezone)
-            if end_time.tzinfo is None:
-                end_time = self.timezone.localize(end_time)
-            else:
-                end_time = end_time.astimezone(self.timezone)
-            
+        # タイムゾーンの設定とマイクロ秒を0に設定
+        if start_time.tzinfo is None:
+            start_time = self.timezone.localize(start_time)
+        else:
+            start_time = start_time.astimezone(self.timezone)
+        if end_time.tzinfo is None:
+            end_time = self.timezone.localize(end_time)
+        else:
+            end_time = end_time.astimezone(self.timezone)
+        
+        # マイクロ秒を0に設定
+        start_time = start_time.replace(microsecond=0)
+        end_time = end_time.replace(microsecond=0)
+        
         # デバッグ: 取得前の時刻をJSTで出力
-            logger.info(f"予定を取得: {start_time.isoformat()} から {end_time.isoformat()}")
-            
+        logger.info(f"予定を取得: {start_time.isoformat()} から {end_time.isoformat()}")
+        
         try:
             # タイトルが指定されている場合は正規化
             norm_title = None
@@ -428,7 +432,7 @@ class CalendarManager:
             if not skip_overlap_check:
                 # その日の全予定を取得
                 day_start = start_time.replace(hour=0, minute=0, second=0, microsecond=0)
-                day_end = start_time.replace(hour=23, minute=59, second=59, microsecond=999999)
+                day_end = start_time.replace(hour=23, minute=59, second=59, microsecond=0)  # マイクロ秒を0に設定
                 all_events = await self.get_events(day_start, day_end)
                 duplicate_details = []
                 for event in all_events:
