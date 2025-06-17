@@ -650,15 +650,15 @@ class MessageParser:
                     'is_range': False
                 }
             title = extract_title(message, operation_type)
-            date_info = self._parse_date(message)
-            time_info = self._parse_time(message)
+            # extract_datetime_from_messageを1回だけ呼ぶ
+            datetime_info = extract_datetime_from_message(message)
             result = {
                 'operation_type': operation_type,
                 'title': title,
-                'date': date_info.get('date'),
-                'start_time': time_info.get('start_time'),
-                'end_time': time_info.get('end_time'),
-                'is_range': time_info.get('is_range', False)
+                'date': datetime_info.get('start_time'),
+                'start_time': datetime_info.get('start_time'),
+                'end_time': datetime_info.get('end_time'),
+                'is_range': datetime_info.get('is_time_range', False)
             }
             return result
         except Exception as e:
