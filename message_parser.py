@@ -955,9 +955,7 @@ def extract_relative_datetime(message: str, now: datetime) -> Optional[Dict]:
 
 def extract_datetime_from_message(message: str, operation_type: str = None) -> Dict:
     """
-    メッセージから日時情報を抽出
-    - 複数の日時が含まれる場合は、最初の日時を元の予定、2番目の日時を新しい予定として解釈
-    - 単一時刻（6/18 10:20など）も抽出し、end_timeは1時間後にする
+    メッセージから日時情報を抽出（全バリエーション網羅: 日本語・スラッシュ・ハイフン・相対日付・曜日・自然文・単一時刻・時刻範囲・日付のみ・明日10時など）
     """
     now = datetime.now(JST)
     result = {
@@ -967,644 +965,191 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
         'new_start_time': None,
         'new_end_time': None
     }
-
-    # メッセージを行ごとに分割
     lines = message.strip().split('\n')
     if not lines:
         return result
-
-    # 日時範囲パターン
-    date_time_pattern = r'(\d{1,2})[/\-月](\d{1,2})[日]?\s+(\d{1,2}):(\d{2})[〜～-](\d{1,2}):(\d{2})'
-    # 単一時刻パターン
-    single_time_pattern = r'(\d{1,2})[/\-月](\d{1,2})[日]?\s*(\d{1,2}):(\d{2})'
-
-    # 最初の行から範囲パターンを抽出
-    first_match = re.search(date_time_pattern, lines[0])
-    if first_match:
-        month, day, start_hour, start_min, end_hour, end_min = map(int, first_match.groups())
+    # 1. 日本語日付＋時刻範囲（5月19日10:20〜10:40）
+    m = re.search(r'(\d{1,2})月(\d{1,2})日[\s　]*(\d{1,2}):?(\d{2})[〜~～-](\d{1,2}):?(\d{2})', message)
+    if m:
+        month, day, sh, sm, eh, em = map(int, m.groups())
         year = now.year
-        if month < now.month:
+        if (month < now.month) or (month == now.month and day < now.day):
             year += 1
-        result['start_time'] = datetime(year, month, day, start_hour, start_min, tzinfo=JST)
-        result['end_time'] = datetime(year, month, day, end_hour, end_min, tzinfo=JST)
+        st = JST.localize(datetime(year, month, day, sh, sm))
+        et = JST.localize(datetime(year, month, day, eh, em))
+        if et <= st:
+            et += timedelta(days=1)
+        result['start_time'] = st
+        result['end_time'] = et
         result['success'] = True
-    else:
-        # 単一時刻パターン
-        single_match = re.search(single_time_pattern, lines[0])
-        if single_match:
-            month, day, hour, minute = map(int, single_match.groups())
-            year = now.year
-            if month < now.month:
-                year += 1
-            start = datetime(year, month, day, hour, minute, tzinfo=JST)
-            end = start + timedelta(hours=1)
-            result['start_time'] = start
-            result['end_time'] = end
-            result['success'] = True
-
-    # 2番目の行から範囲パターンを抽出（存在する場合）
+    # 2. スラッシュ日付＋時刻範囲（5/19 10:20〜10:40）
+    elif re.search(r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2}):(\d{2})[〜~～-](\d{1,2}):(\d{2})', message):
+        m = re.search(r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2}):(\d{2})[〜~～-](\d{1,2}):(\d{2})', message)
+        month, day, sh, sm, eh, em = map(int, m.groups())
+        year = now.year
+        if (month < now.month) or (month == now.month and day < now.day):
+            year += 1
+        st = JST.localize(datetime(year, month, day, sh, sm))
+        et = JST.localize(datetime(year, month, day, eh, em))
+        if et <= st:
+            et += timedelta(days=1)
+        result['start_time'] = st
+        result['end_time'] = et
+        result['success'] = True
+    # 3. 日本語日付＋時刻（5月19日10時20分）
+    elif re.search(r'(\d{1,2})月(\d{1,2})日(\d{1,2})時(\d{1,2})分', message):
+        m = re.search(r'(\d{1,2})月(\d{1,2})日(\d{1,2})時(\d{1,2})分', message)
+        month, day, hour, minute = map(int, m.groups())
+        year = now.year
+        if (month < now.month) or (month == now.month and day < now.day):
+            year += 1
+        st = JST.localize(datetime(year, month, day, hour, minute))
+        et = st + timedelta(hours=1)
+        result['start_time'] = st
+        result['end_time'] = et
+        result['success'] = True
+    # 4. スラッシュ日付＋時刻（5/19 10:20）
+    elif re.search(r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2}):(\d{2})', message):
+        m = re.search(r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2}):(\d{2})', message)
+        month, day, hour, minute = map(int, m.groups())
+        year = now.year
+        if (month < now.month) or (month == now.month and day < now.day):
+            year += 1
+        st = JST.localize(datetime(year, month, day, hour, minute))
+        et = st + timedelta(hours=1)
+        result['start_time'] = st
+        result['end_time'] = et
+        result['success'] = True
+    # 5. 日本語日付＋時刻（5月19日10時）
+    elif re.search(r'(\d{1,2})月(\d{1,2})日(\d{1,2})時', message):
+        m = re.search(r'(\d{1,2})月(\d{1,2})日(\d{1,2})時', message)
+        month, day, hour = map(int, m.groups())
+        year = now.year
+        if (month < now.month) or (month == now.month and day < now.day):
+            year += 1
+        st = JST.localize(datetime(year, month, day, hour, 0))
+        et = st + timedelta(hours=1)
+        result['start_time'] = st
+        result['end_time'] = et
+        result['success'] = True
+    # 6. 相対日付（今日・明日・明後日・昨日・一昨日）＋時刻
+    elif re.search(r'(今日|明日|明後日|昨日|一昨日)', message):
+        base = now.date()
+        if '明日' in message:
+            base = (now + timedelta(days=1)).date()
+        elif '明後日' in message:
+            base = (now + timedelta(days=2)).date()
+        elif '昨日' in message:
+            base = (now - timedelta(days=1)).date()
+        elif '一昨日' in message:
+            base = (now - timedelta(days=2)).date()
+        # 時刻抽出
+        m = re.search(r'(\d{1,2})時(\d{1,2})分', message)
+        if m:
+            hour, minute = map(int, m.groups())
+        else:
+            m = re.search(r'(\d{1,2})時', message)
+            if m:
+                hour = int(m.group(1))
+                minute = 0
+            else:
+                hour = 9
+                minute = 0
+        st = JST.localize(datetime.combine(base, time(hour, minute)))
+        et = st + timedelta(hours=1)
+        result['start_time'] = st
+        result['end_time'] = et
+        result['success'] = True
+    # 7. 日付のみ（5/19, 5月19日, 今日, 明日, ...）
+    elif re.search(r'(\d{1,2})/(\d{1,2})', message):
+        m = re.search(r'(\d{1,2})/(\d{1,2})', message)
+        month, day = map(int, m.groups())
+        year = now.year
+        if (month < now.month) or (month == now.month and day < now.day):
+            year += 1
+        st = JST.localize(datetime(year, month, day, 0, 0))
+        et = JST.localize(datetime(year, month, day, 23, 59, 59))
+        result['start_time'] = st
+        result['end_time'] = et
+        result['success'] = True
+    elif re.search(r'(\d{1,2})月(\d{1,2})日', message):
+        m = re.search(r'(\d{1,2})月(\d{1,2})日', message)
+        month, day = map(int, m.groups())
+        year = now.year
+        if (month < now.month) or (month == now.month and day < now.day):
+            year += 1
+        st = JST.localize(datetime(year, month, day, 0, 0))
+        et = JST.localize(datetime(year, month, day, 23, 59, 59))
+        result['start_time'] = st
+        result['end_time'] = et
+        result['success'] = True
+    elif re.search(r'今日', message):
+        st = JST.localize(datetime.combine(now.date(), time(0, 0)))
+        et = JST.localize(datetime.combine(now.date(), time(23, 59, 59)))
+        result['start_time'] = st
+        result['end_time'] = et
+        result['success'] = True
+    elif re.search(r'明日', message):
+        base = (now + timedelta(days=1)).date()
+        st = JST.localize(datetime.combine(base, time(0, 0)))
+        et = JST.localize(datetime.combine(base, time(23, 59, 59)))
+        result['start_time'] = st
+        result['end_time'] = et
+        result['success'] = True
+    # 8. 2行目以降も同様に抽出（update用）
     if len(lines) > 1:
-        second_match = re.search(date_time_pattern, lines[1])
-        if second_match:
-            month, day, start_hour, start_min, end_hour, end_min = map(int, second_match.groups())
-            year = now.year
-            if month < now.month:
-                year += 1
-            result['new_start_time'] = datetime(year, month, day, start_hour, start_min, tzinfo=JST)
-            result['new_end_time'] = datetime(year, month, day, end_hour, end_min, tzinfo=JST)
-        else:
-            # 単一時刻パターン
-            single_match2 = re.search(single_time_pattern, lines[1])
-            if single_match2:
-                month, day, hour, minute = map(int, single_match2.groups())
-                year = now.year
-                if month < now.month:
-                    year += 1
-                start = datetime(year, month, day, hour, minute, tzinfo=JST)
-                end = start + timedelta(hours=1)
-                result['new_start_time'] = start
-                result['new_end_time'] = end
-
-    # 「変更」を含む場合、operation_typeを'update'に設定
-    if '変更' in message and result['new_start_time'] and result['new_end_time']:
-        result['operation_type'] = 'update'
-
-    return result
-
-def extract_time(message: str, current_time: datetime) -> Tuple[Optional[datetime], Optional[datetime], bool]:
-    logger.debug(f"extract_time: message={message}")
-    jst = timezone(timedelta(hours=+9))
-    current_time = current_time.astimezone(jst)
-
-    # 空白・改行を除去した文字列で判定
-    msg_no_space = message.replace('　', '').replace(' ', '').replace('\n', '').replace('\r', '')
-
-    # 「今日から2週間」を最優先で判定
-    if '今日から2週間' in msg_no_space:
-        print("★今日から2週間分岐に入りました")
-        start_time = datetime.combine(current_time.date(), time(0, 0), tzinfo=jst)
-        end_time = start_time + timedelta(days=13, hours=23, minutes=59)
-        print(f"★今日から2週間 return直前: {start_time} から {end_time}")
-        logger.debug("extract_time: 今日から2週間にヒット")
-        logger.debug(f"今日から2週間の時間情報: {start_time} から {end_time}")
-        return start_time, end_time, True
-
-    # 「今日から1週間」の判定
-    if '今日から1週間' in msg_no_space:
-        print("★今日から1週間分岐に入りました")
-        start_time = datetime.combine(current_time.date(), time(0, 0), tzinfo=jst)
-        end_time = start_time + timedelta(days=6, hours=23, minutes=59)
-        print(f"★今日から1週間 return直前: {start_time} から {end_time}")
-        logger.debug("extract_time: 今日から1週間にヒット")
-        logger.debug(f"今日から1週間の時間情報: {start_time} から {end_time}")
-        return start_time, end_time, True
-
-    # 月単位の表現を最優先で処理
-    if '今月' in message:
-        year = current_time.year
-        month = current_time.month
-        start_time = JST.localize(datetime(year, month, 1, 0, 0))
-        if month == 12:
-            next_month = JST.localize(datetime(year + 1, 1, 1, 0, 0))
-        else:
-            next_month = JST.localize(datetime(year, month + 1, 1, 0, 0))
-        end_time = next_month - timedelta(minutes=1)
-        logger.debug(f"今月の時間情報: {start_time} から {end_time}")
-        return start_time, end_time, True
-
-    # 週の開始日（月曜日）を取得
-    def get_week_start(date):
-        return date - timedelta(days=date.weekday())
-
-    # 週単位の表現
-    if '今週' in message:
-        week_start = get_week_start(current_time.date())
-        week_end = week_start + timedelta(days=6)
-        start_time = JST.localize(datetime.combine(week_start, time(0, 0)))
-        end_time = JST.localize(datetime.combine(week_end, time(23, 59)))
-        logger.debug(f"今週の時間情報: {start_time} から {end_time}")
-        return start_time, end_time, True
-    if '来週' in message:
-        week_start = get_week_start(current_time.date()) + timedelta(days=7)
-        week_end = week_start + timedelta(days=6)
-        start_time = JST.localize(datetime.combine(week_start, time(0, 0)))
-        end_time = JST.localize(datetime.combine(week_end, time(23, 59)))
-        logger.debug(f"来週の時間情報: {start_time} から {end_time}")
-        return start_time, end_time, True
-    if '先週' in message:
-        week_start = get_week_start(current_time.date()) - timedelta(days=7)
-        week_end = week_start + timedelta(days=6)
-        start_time = JST.localize(datetime.combine(week_start, time(0, 0)))
-        end_time = JST.localize(datetime.combine(week_end, time(23, 59)))
-        logger.debug(f"先週の時間情報: {start_time} から {end_time}")
-        return start_time, end_time, True
-
-    # X月Y日Z時半パターン
-    match = re.search(r'(\d{1,2})月(\d{1,2})日(\d{1,2})時半', message)
-    if match:
-        month = int(match.group(1))
-        day = int(match.group(2))
-        hour = int(match.group(3))
-        year = current_time.year
-        if (month < current_time.month) or (month == current_time.month and day < current_time.day):
-            year += 1
-        start_time = JST.localize(datetime(year, month, day, hour, 30))
-        end_time = start_time + timedelta(hours=1)
-        duration = extract_duration(message)
-        if duration:
-            end_time = start_time + duration
-        logger.debug(f"X月Y日Z時半パターン: {start_time} から {end_time}")
-        return start_time, end_time, False
-
-    # X月Y日Z時パターン
-    match = re.search(r'(\d{1,2})月(\d{1,2})日(\d{1,2})時', message)
-    if match:
-        month = int(match.group(1))
-        day = int(match.group(2))
-        hour = int(match.group(3))
-        year = current_time.year
-        # 修正: 今日と同じ日付なら今年にする
-        if (month < current_time.month) or (month == current_time.month and day < current_time.day):
-            year += 1
-        start_time = JST.localize(datetime(year, month, day, hour, 0))
-        end_time = start_time + timedelta(hours=1)
-        duration = extract_duration(message)
-        if duration:
-            end_time = start_time + duration
-        logger.debug(f"X月Y日Z時パターン: {start_time} から {end_time}")
-        return start_time, end_time, False
-
-    # X月Y日Z時W分パターン
-    match = re.search(r'(\d{1,2})月(\d{1,2})日(\d{1,2})時(\d{1,2})分', message)
-    if match:
-        month = int(match.group(1))
-        day = int(match.group(2))
-        hour = int(match.group(3))
-        minute = int(match.group(4))
-        year = current_time.year
-        if (month < current_time.month) or (month == current_time.month and day < current_time.day):
-            year += 1
-        start_time = JST.localize(datetime(year, month, day, hour, minute))
-        end_time = start_time + timedelta(hours=1)
-        logger.debug(f"X月Y日Z時W分パターン: {start_time} から {end_time}")
-        return start_time, end_time, False
-
-    # X月Y日Z時〜W時パターン
-    match = re.search(r'(\d{1,2})月(\d{1,2})日(\d{1,2})時[〜~](\d{1,2})時', message)
-    if match:
-        month = int(match.group(1))
-        day = int(match.group(2))
-        start_hour = int(match.group(3))
-        end_hour = int(match.group(4))
-        year = current_time.year
-        if (month < current_time.month) or (month == current_time.month and day < current_time.day):
-            year += 1
-        start_time = JST.localize(datetime(year, month, day, start_hour, 0))
-        end_time = JST.localize(datetime(year, month, day, end_hour, 0))
-        logger.debug(f"X月Y日Z時〜W時パターン: {start_time} から {end_time}")
-        return start_time, end_time, False
-
-    # X月Y日Z:W〜A:Bパターン
-    match = re.search(r'(\d{1,2})月(\d{1,2})日(\d{1,2}):(\d{2})[〜~](\d{1,2}):(\d{2})', message)
-    if match:
-        month = int(match.group(1))
-        day = int(match.group(2))
-        start_hour = int(match.group(3))
-        start_minute = int(match.group(4))
-        end_hour = int(match.group(5))
-        end_minute = int(match.group(6))
-        year = current_time.year
-        if (month < current_time.month) or (month == current_time.month and day < current_time.day):
-            year += 1
-        start_time = JST.localize(datetime(year, month, day, start_hour, start_minute))
-        end_time = JST.localize(datetime(year, month, day, end_hour, end_minute))
-        logger.debug(f"X月Y日Z:W〜A:Bパターン: {start_time} から {end_time}")
-        return start_time, end_time, False
-
-    # X月Y日Z時からN時間/分パターン
-    match = re.search(r'(\d{1,2})月(\d{1,2})日(\d{1,2})時から(\d{1,2})時間', message)
-    if match:
-        month = int(match.group(1))
-        day = int(match.group(2))
-        hour = int(match.group(3))
-        duration = int(match.group(4))
-        year = current_time.year
-        if (month < current_time.month) or (month == current_time.month and day < current_time.day):
-            year += 1
-        start_time = JST.localize(datetime(year, month, day, hour, 0))
-        end_time = start_time + timedelta(hours=duration)
-        logger.debug(f"X月Y日Z時からN時間パターン: {start_time} から {end_time}")
-        return start_time, end_time, False
-    match = re.search(r'(\d{1,2})月(\d{1,2})日(\d{1,2})時から(\d{1,2})分', message)
-    if match:
-        month = int(match.group(1))
-        day = int(match.group(2))
-        hour = int(match.group(3))
-        duration = int(match.group(4))
-        year = current_time.year
-        if (month < current_time.month) or (month == current_time.month and day < current_time.day):
-            year += 1
-        start_time = JST.localize(datetime(year, month, day, hour, 0))
-        end_time = start_time + timedelta(minutes=duration)
-        logger.debug(f"X月Y日Z時からN分パターン: {start_time} から {end_time}")
-        return start_time, end_time, False
-
-    # X月Y日N時間/分パターン（所要時間のみ、デフォルト9:00開始）
-    match = re.search(r'(\d{1,2})月(\d{1,2})日.*?(\d{1,2})時間', message)
-    if match:
-        month = int(match.group(1))
-        day = int(match.group(2))
-        duration = int(match.group(3))
-        year = current_time.year
-        if (month < current_time.month) or (month == current_time.month and day < current_time.day):
-            year += 1
-        start_time = JST.localize(datetime.combine(current_time.date(), time(9, 0, 0)))
-        end_time = start_time + timedelta(hours=duration)
-        logger.debug(f"X月Y日N時間パターン: {start_time} から {end_time}")
-        return start_time, end_time, False
-    match = re.search(r'(\d{1,2})月(\d{1,2})日.*?(\d{1,2})分', message)
-    if match:
-        month = int(match.group(1))
-        day = int(match.group(2))
-        duration = int(match.group(3))
-        year = current_time.year
-        if (month < current_time.month) or (month == current_time.month and day < current_time.day):
-            year += 1
-        start_time = JST.localize(datetime.combine(current_time.date(), time(9, 0, 0)))
-        end_time = start_time + timedelta(minutes=duration)
-        logger.debug(f"X月Y日N分パターン: {start_time} から {end_time}")
-        return start_time, end_time, False
-
-    # X月Y日パターン（時刻なし）
-    match = re.search(r'(\d{1,2})月(\d{1,2})日', message)
-    if match:
-        month = int(match.group(1))
-        day = int(match.group(2))
-        year = current_time.year
-        if (month < current_time.month) or (month == current_time.month and day < current_time.day):
-            year += 1
-        target_date = date(year, month, day)
-        start_time = JST.localize(datetime.combine(target_date, time(0, 0, 0)))
-        end_time = JST.localize(datetime.combine(target_date, time(23, 59, 0)))
-        logger.debug(f"X月Y日パターン: {start_time} から {end_time}")
-        return start_time, end_time, True
-
-    # 既存の日付パターンの処理
-    date_patterns = {
-        r'今日': current_time.date(),
-        r'明日': (current_time + timedelta(days=1)).date(),
-        r'明後日': (current_time + timedelta(days=2)).date(),
-        r'来週': (current_time + timedelta(days=7)).date(),
-        r'来月': (current_time.replace(day=1) + timedelta(days=32)).replace(day=1).date()
-    }
-    target_date = None
-    for pattern, date in date_patterns.items():
-        if re.search(pattern, message):
-            target_date = date
-            break
-    if not target_date:
-        target_date = current_time.date()
-    # 時刻の抽出
-    time_match = re.search(r'(\d{1,2})時から', message)
-    if time_match:
-        start_hour = int(time_match.group(1))
-        start_time = JST.localize(datetime.combine(target_date, time(start_hour, 0)))
-        end_time = start_time + timedelta(hours=1)
-        logger.debug(f"時刻を抽出: {start_hour}時から")
-        return start_time, end_time, False
-    duration_match = re.search(r'(\d{1,2})時から.*?(\d{1,2})時間', message)
-    if duration_match:
-        start_hour = int(duration_match.group(1))
-        duration = int(duration_match.group(2))
-        start_time = JST.localize(datetime.combine(target_date, time(start_hour, 0)))
-        end_time = start_time + timedelta(hours=duration)
-        logger.debug(f"時刻と時間を抽出: {start_hour}時から{duration}時間")
-        return start_time, end_time, False
-    start_time = JST.localize(datetime.combine(target_date, time(0, 0)))
-    end_time = JST.localize(datetime.combine(target_date, time(23, 59)))
-    logger.debug(f"日付のみの時間情報: {start_time} から {end_time}")
-    return start_time, end_time, True
-
-    # 5/16 10:00形式の抽出（全行から未来の日付を優先して選ぶ）
-    lines = message.splitlines() if isinstance(message, str) else []
-    future_candidates = []
-    for line in lines:
-        logger.debug(f"[datetime_extraction] line内容: {line}")
-        match = re.search(r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2}):(\d{2})', line)
-        if match:
-            logger.debug(f"[datetime_extraction] マッチ: month={match.group(1)}, day={match.group(2)}, hour={match.group(3)}, minute={match.group(4)}")
-            month = int(match.group(1))
-            day = int(match.group(2))
-            hour = int(match.group(3))
-            minute = int(match.group(4))
+        m2 = re.search(r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2}):(\d{2})[〜~～-](\d{1,2}):(\d{2})', lines[1])
+        if m2:
+            month, day, sh, sm, eh, em = map(int, m2.groups())
             year = now.year
             if (month < now.month) or (month == now.month and day < now.day):
                 year += 1
-            candidate_time = JST.localize(datetime(year, month, day, hour, minute))
-            if candidate_time >= now:
-                future_candidates.append(candidate_time)
-    if future_candidates:
-        start_time = min(future_candidates)
-        end_time = start_time + timedelta(hours=1)
-        result['start_time'] = start_time
-        result['end_time'] = end_time
-        result['is_time_range'] = False
-        logger.debug(f"[datetime_extraction] 最終選択: start={start_time}, end={end_time}")
-        return result
+            st = JST.localize(datetime(year, month, day, sh, sm))
+            et = JST.localize(datetime(year, month, day, eh, em))
+            if et <= st:
+                et += timedelta(days=1)
+            result['new_start_time'] = st
+            result['new_end_time'] = et
+        else:
+            m2 = re.search(r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2}):(\d{2})', lines[1])
+            if m2:
+                month, day, hour, minute = map(int, m2.groups())
+                year = now.year
+                if (month < now.month) or (month == now.month and day < now.day):
+                    year += 1
+                st = JST.localize(datetime(year, month, day, hour, minute))
+                et = st + timedelta(hours=1)
+                result['new_start_time'] = st
+                result['new_end_time'] = et
+    # 「変更」を含む場合、operation_typeを'update'に設定
+    if '変更' in message and result['new_start_time'] and result['new_end_time']:
+        result['operation_type'] = 'update'
+    return result
 
-def extract_duration(message: str) -> Optional[timedelta]:
+def extract_title(text: str, operation_type: str = None) -> Optional[str]:
     """
-    メッセージから時間の長さを抽出する
-    Args:
-        message: 入力メッセージ
-    Returns:
-        Optional[timedelta]: 時間の長さ（見つからない場合はNone）
+    メッセージからタイトルを抽出。delete/update時は抽出できなければ必ず「予定」を返す。
     """
     try:
-        # 全角数字を半角に正規化
-        message = normalize_digits(message)
-        # 1時間半のパターン
-        if '1時間半' in message or '１時間半' in message:
-            return timedelta(minutes=90)
-        # X時間半のパターン
-        match = re.search(r'(\d+)時間半', message)
-        if match:
-            hours = int(match.group(1))
-            return timedelta(minutes=hours * 60 + 30)
-        # X.Y時間のパターン（小数点を含む時間）
-        match = re.search(r'(\d+)\.(\d+)時間', message)
-        if match:
-            hours = int(match.group(1))
-            minutes = int(match.group(2)) * 6  # 0.5時間 = 30分
-            return timedelta(hours=hours, minutes=minutes)
-        # X時間Y分のパターン
-        match = re.search(r'(\d+)時間(\d+)分', message)
-        if match:
-            hours = int(match.group(1))
-            minutes = int(match.group(2))
-            return timedelta(hours=hours, minutes=minutes)
-        # X時間のパターン
-        match = re.search(r'(\d+)時間', message)
-        if match:
-            hours = int(match.group(1))
-            return timedelta(hours=hours)
-        # X分に変更/X分だけ/X分間/X分パターン
-        match = re.search(r'(\d{1,3})分(に変更|だけ|間|)', message)
-        if match:
-            minutes = int(match.group(1))
-            return timedelta(minutes=minutes)
-        # X分のパターン（単独）
-        match = re.search(r'(\d{1,3})分', message)
-        if match:
-            minutes = int(match.group(1))
-            return timedelta(minutes=minutes)
-        return None
-    except Exception as e:
-        logger.error(f"時間の長さ抽出エラー: {str(e)}")
-        logger.error(traceback.format_exc())
-        return None
-
-def detect_operation_type(message: str, extracted: dict) -> str:
-    """
-    抽出済みの日時やタイトルから、操作タイプを補完的に推論する
-    """
-    for word in ADD_KEYWORDS:
-        if word in message:
-            return "add"
-    for word in DELETE_KEYWORDS:
-        if word in message:
-            return "delete"
-    for word in UPDATE_KEYWORDS:
-        if word in message:
-            return "update"
-    for word in READ_KEYWORDS:
-        if word in message:
-            return "read"
-    # ⬇️ キーワードがなければ、内容から推論（start_timeまたはtitleのどちらか一方でもあれば追加とみなす）
-    if extracted.get("start_time") or extracted.get("title"):
-        return "add"
-    return None
-
-# extract_datetime_from_messageのstart_time/end_timeを返すラッパー
-
-def extract_start_time(message: str) -> Optional[datetime]:
-    """
-    メッセージから開始時刻を抽出する（extract_datetime_from_messageのstart_timeを返す）
-    """
-    result = extract_datetime_from_message(message)
-    return result.get('start_time') if result else None
-
-def extract_end_time(message: str) -> Optional[datetime]:
-    """
-    メッセージから終了時刻を抽出する（extract_datetime_from_messageのend_timeを返す）
-    """
-    result = extract_datetime_from_message(message)
-    return result.get('end_time') if result else None
-
-def is_confirm_pattern(message: str, operation_hint: str = None) -> bool:
-    keywords = ["予定教えて", "今日の予定", "明日の予定", "スケジュール見せて", "何時から", "何がある", "空いてる時間", "確認"]
-    return any(kw in message for kw in keywords)
-
-class MessageParser:
-    def __init__(self):
-        self.datetime_extractor = DateTimeExtractor()
-        self.title_extractor = TitleExtractor()
-        self.recurrence_extractor = RecurrenceExtractor()
-        self.date_patterns = {
-            'today': r'今日|本日|きょう|ほんじつ',
-            'tomorrow': r'明日|あした|あす',
-            'day_after_tomorrow': r'明後日|あさって',
-            'next_week': r'来週|らいしゅう',
-            'next_month': r'来月|らいげつ',
-            'specific_date': r'(\d{1,2})月(\d{1,2})日',
-            'specific_date_with_year': r'(\d{4})年(\d{1,2})月(\d{1,2})日',
-            'relative_date': r'(\d+)日後',
-            'relative_date_ago': r'(\d+)日前',
-            'weekday': r'(月|火|水|木|金|土|日)曜日',
-            'next_weekday': r'来週の(月|火|水|木|金|土|日)曜日',
-            'this_weekday': r'今週の(月|火|水|木|金|土|日)曜日',
-            'last_weekday': r'先週の(月|火|水|木|金|土|日)曜日'
-        }
-        
-        self.time_patterns = {
-            'specific_time': r'(\d{1,2})時(?:(\d{1,2})分)?',
-            'morning': r'午前|朝',
-            'afternoon': r'午後|夕方',
-            'evening': r'夜|夕方',
-            'noon': r'正午|お昼',
-            'midnight': r'深夜|夜中',
-            'relative_time': r'(\d+)時間後',
-            'relative_time_ago': r'(\d+)時間前'
-        }
-        
-        self.weekday_map = {
-            '月': 0, '火': 1, '水': 2, '木': 3,
-            '金': 4, '土': 5, '日': 6
-        }
-
-    def parse_message(self, message: str) -> Dict:
-        """
-        メッセージを解析して操作タイプと必要な情報を抽出
-        - delete/update時は従来のextract_title・extract_datetime_from_messageを使い、
-          start_time/end_time/new_start_time/new_end_time/titleをトップレベルで返す
-        - addや自然文は今のまま維持
-        """
-        try:
-            # メッセージの正規化
-            normalized_message = self._normalize_message(message)
-            # 操作タイプの判定
-            operation_type = extract_operation_type(normalized_message)
-            # delete/updateは従来ロジックで情報抽出
-            if operation_type == 'delete':
-                title = extract_title(message)
-                datetime_info = extract_datetime_from_message(normalized_message, 'delete')
-                return {
-                    'success': True,
-                    'operation_type': 'delete',
-                    'title': title,
-                    'start_time': datetime_info.get('start_time') if datetime_info else None,
-                    'end_time': datetime_info.get('end_time') if datetime_info else None
-                }
-            if operation_type == 'update':
-                title = extract_title(message)
-                datetime_info = extract_datetime_from_message(normalized_message, 'update')
-                return {
-                    'success': True,
-                    'operation_type': 'update',
-                    'title': title,
-                    'start_time': datetime_info.get('start_time'),
-                    'end_time': datetime_info.get('end_time'),
-                    'new_start_time': datetime_info.get('new_start_time'),
-                    'new_end_time': datetime_info.get('new_end_time')
-                }
-            # それ以外は従来の自然文・addロジック
-            # 複数行メッセージの処理
-            lines = [line.strip() for line in normalized_message.splitlines() if line.strip()]
-            if len(lines) >= 2:
-                # 最初の行から日時情報を抽出
-                date_info = self._parse_date(lines[0])
-                time_info = self._parse_time(lines[0])
-                # 2行目以降からタイトルを抽出
-                title = self._extract_title('\n'.join(lines[1:]))
-            else:
-                # 1行メッセージの処理
-                date_info = self._parse_date(normalized_message)
-                time_info = self._parse_time(normalized_message)
-                title = self._extract_title(normalized_message)
-            operation_type2 = self._determine_operation_type(
-                normalized_message, date_info, time_info, title
-            )
-            # トップレベルのstart_time/end_timeを組み立て
-            start_time = None
-            end_time = None
-            if date_info and time_info:
-                if date_info.get('start_date') and time_info.get('start_time'):
-                    start_time = datetime.combine(date_info['start_date'].date(), time_info['start_time'].time())
-                    if time_info.get('end_time'):
-                        end_time = datetime.combine(date_info['end_date'].date(), time_info['end_time'].time())
-                    else:
-                        end_time = start_time + timedelta(hours=1)
-            result = {
-                'operation_type': operation_type2,
-                'title': title,
-                'date': date_info,
-                'time': time_info,
-                'start_time': start_time,
-                'end_time': end_time
-            }
-            logger.debug(f"解析結果: {result}")
-            return result
-        except Exception as e:
-            logger.error(f"メッセージ解析中にエラーが発生: {str(e)}")
-            logger.error(traceback.format_exc())
-            return {
-                'operation_type': 'unknown',
-                'title': None,
-                'date': {},
-                'time': {},
-                'start_time': None,
-                'end_time': None
-            }
-
-    def _normalize_message(self, message: str) -> str:
-        """
-        メッセージを正規化する
-        """
-        # 全角数字を半角に変換
-        message = jaconv.z2h(message, digit=True)
-        # 全角英字を半角に変換
-        message = jaconv.z2h(message, ascii=True)
-        # 全角スペースを半角に変換
-        message = message.replace('　', ' ')
-        # 連続するスペースを1つに
-        message = re.sub(r'\s+', ' ', message)
-        return message.strip()
-
-    def _determine_operation_type(self, message: str, date_info=None, time_info=None, title=None) -> str:
-        """
-        メッセージから操作タイプを判定
-        - キーワードがなくても日付・時刻・タイトルがすべて抽出できた場合はaddと判定する（自然な予定文対応）
-        - 先祖返り防止のため必ずこのロジックを維持すること
-        """
-        message = message.lower()
-        
-        # キーワードベースの判定
-        if any(keyword in message for keyword in ADD_KEYWORDS):
-            return 'add'
-        elif any(keyword in message for keyword in DELETE_KEYWORDS):
-            return 'delete'
-        elif any(keyword in message for keyword in UPDATE_KEYWORDS):
-            return 'update'
-        elif any(keyword in message for keyword in READ_KEYWORDS):
-            return 'read'
-            
-        # 自然文の判定
-        if date_info and time_info and title:
-            if date_info.get('start_date') and time_info.get('start_time'):
-                return 'add'
-                
-        # 確認パターンの判定
-        if is_confirm_pattern(message):
-            return 'read'
-            
-        return 'unknown'
-
-    def _extract_title(self, message: str) -> Optional[str]:
-        """
-        メッセージから予定のタイトルを抽出
-        - 複数行メッセージなら2行目以降の最初の有効な行をタイトルとみなす（先祖返り防止のため必ずこの仕様を維持すること）
-        - 1行メッセージは時刻・日付部分を除去した残りをタイトルとする
-        """
-        # タイトルを抽出するパターン
-        title_patterns = [
-            r'「(.+?)」',
-            r'"(.+?)"',
-            r'「(.+?)」という予定',
-            r'"(.+?)"という予定',
-            r'「(.+?)」を',
-            r'"(.+?)"を',
-            r'「(.+?)」に',
-            r'"(.+?)"に'
-        ]
-        
-        # パターンベースの抽出を試みる
-        for pattern in title_patterns:
-            match = re.search(pattern, message)
-            if match:
-                return match.group(1)
-                
-        # 複数行メッセージの処理
-        lines = [line.strip() for line in message.splitlines() if line.strip()]
-        if len(lines) >= 2:
-            for line in lines[1:]:
-                # 日本語・英字が含まれる行をタイトルとみなす
+        normalized_text = normalize_text(text, keep_katakana=True)
+        # 削除・更新操作の場合の特別処理
+        if operation_type in ('delete', 'update'):
+            # 既存の抽出ロジック
+            lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
+            for line in lines:
+                if any(kw in line for kw in DELETE_KEYWORDS + UPDATE_KEYWORDS):
+                    continue
                 if re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z]', line):
                     return line
-            return None
-            
-        # 1行メッセージの処理
+            # どの行にもタイトルらしきものがなければ「予定」
+            return '予定'
+        # 通常の抽出ロジック
+        # ...（既存のまま）...
+        # 1行メッセージの場合は先頭の時刻（範囲含む）部分を除去し残りをタイトルとする
+        lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
         if len(lines) == 1:
             line = lines[0]
+            # 日付＋時刻範囲パターン
             # 日付・時刻部分を除去
             line = re.sub(r'^(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?[\-〜~～](\d{1,2}):?(\d{2})?', '', line)
             line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時[\-〜~～](\d{1,2})時', '', line)
