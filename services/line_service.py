@@ -324,6 +324,23 @@ async def handle_read_event(result, calendar_manager, user_id, reply_token):
 
 async def handle_delete_event(result, calendar_manager, user_id, reply_token):
     try:
+        # 日付＋番号指定での削除
+        if 'delete_index' in result and result.get('date'):
+            delete_result = await calendar_manager.delete_event_by_index(
+                index=result['delete_index'],
+                start_time=result['date']
+            )
+            if delete_result.get('success'):
+                # 削除後の予定一覧を表示
+                day = result['date']
+                day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
+                events = await calendar_manager.get_events(start_time=day, end_time=day_end)
+                msg = delete_result.get('message', '予定を削除しました。')
+                msg += f"\n\n{format_event_list(events, day, day_end)}"
+                await reply_text(reply_token, msg)
+            else:
+                await reply_text(reply_token, f"予定の削除に失敗しました: {delete_result.get('message', '不明なエラー')}")
+            return
         delete_result = None
         if 'index' in result:
             delete_result = await calendar_manager.delete_event_by_index(
