@@ -506,6 +506,9 @@ def extract_operation_type(text: str) -> Optional[str]:
     # 「今日の予定」「明日の予定」「今週の予定」などもread判定
     if re.search(r'(今日|明日|明後日|今週|来週|今月|来月|今度)[の ]*予定(を)?(教えて)?', normalized_text):
         return 'read'
+    # 「今日から1週間」「今日から3日間」などの範囲指定もread判定
+    if re.search(r'今日から\d+日間|今日から\d+週間|今日から1週間|今日から1日間|今日から1週間の予定', normalized_text):
+        return 'read'
     # 日付や時刻が含まれていて、かつタイトルっぽい行があれば「add」とみなす
     # 例: 「5/16 10:00 田中さんMTG」や「5月16日10時田中さんMTG」
     # 日付＋時刻＋タイトルのパターン
