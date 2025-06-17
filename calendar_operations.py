@@ -185,19 +185,20 @@ class CalendarManager:
         - タイムゾーンを考慮した日時処理
         """
         try:
-            # タイムゾーンの設定
+            # タイムゾーンの設定とマイクロ秒を0に設定
             start_time = self._ensure_timezone(start_time).replace(microsecond=0)
             end_time = self._ensure_timezone(end_time).replace(microsecond=0)
-
+            
             # イベントの取得
             events_result = self.service.events().list(
                 calendarId=self.calendar_id,
                 timeMin=start_time.isoformat(),
                 timeMax=end_time.isoformat(),
                 singleEvents=True,
-                orderBy='startTime'
+                orderBy='startTime',
+                timeZone='Asia/Tokyo'
             ).execute()
-
+            
             events = []
             for event in events_result.get('items', []):
                 events.append({
@@ -211,7 +212,8 @@ class CalendarManager:
             return events
 
         except Exception as e:
-            logger.error(f"イベントの取得に失敗: {str(e)}")
+            logger.error(f"イベント取得中にエラーが発生: {e}")
+            logger.error(traceback.format_exc())
             return []
 
     def delete_event(self, event_id: str) -> bool:
