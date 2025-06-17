@@ -102,8 +102,8 @@ def setup_logging():
     ログ設定を行う
     """
     try:
-        # 環境に応じてログレベルを設定
-        log_level = os.getenv('LOG_LEVEL', 'INFO')
+        # ログレベルを必ずDEBUGに固定
+        log_level = 'DEBUG'
         numeric_level = getattr(logging, log_level.upper(), None)
         if not isinstance(numeric_level, int):
             raise ValueError(f'Invalid log level: {log_level}')
