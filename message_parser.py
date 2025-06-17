@@ -527,604 +527,50 @@ def extract_operation_type(text: str) -> Optional[str]:
             return 'add'
     return None
 
-def extract_title(text: str) -> Optional[str]:
-    """メッセージからタイトルを抽出する（複数行対応・不要行除外・カタカナ保持）"""
+def extract_title(text: str, operation_type: str = None) -> Optional[str]:
+    """
+    メッセージからタイトルを抽出。delete/update時は抽出できなければ必ず「予定」を返す。
+    """
     try:
-        # 更新操作の場合は「変更」などのキーワードを除外
         normalized_text = normalize_text(text, keep_katakana=True)
-        
-        # 削除操作の場合の特別処理
-        if any(keyword in normalized_text for keyword in DELETE_KEYWORDS):
-            # 削除キーワードを除去
-            for keyword in DELETE_KEYWORDS:
-                normalized_text = normalized_text.replace(keyword, '')
-            # 末尾の「を削除」「を消す」などを除去
-            normalized_text = re.sub(r'を[^\sを]+(削除|消す|キャンセル|中止)(してください)?$', '', normalized_text)
-            normalized_text = re.sub(r'(を)?(削除|消す|キャンセル|中止)(してください)?$', '', normalized_text)
-        
-        # 更新操作の場合は、日時表現と更新キーワードを除去
-        if any(keyword in normalized_text for keyword in UPDATE_KEYWORDS):
-            normalized_text = re.sub(r'を[^\sを]+で(変更|修正|更新|編集)(してください)?$', '', normalized_text)
-            normalized_text = re.sub(r'を[^\sを]+と(変更|修正|更新|編集)(してください)?$', '', normalized_text)
-            normalized_text = re.sub(r'(を)?(変更|修正|更新|編集)?して(ください)?$', '', normalized_text)
-            normalized_text = re.sub(r'(を)?(変更|修正|更新|編集|教えて|表示)(してください)?$', '', normalized_text)
-            normalized_text = re.sub(r'変更|修正|更新|編集', '', normalized_text)
-
-        # 複数行メッセージ対応: 2行目以降のすべての行を順に見て、最初の「日本語・英字が含まれる」かつ「DELETE_KEYWORDS等に該当しない」行をタイトルにする
-        lines = [jaconv.h2z(line.strip(), kana=True) for line in normalized_text.splitlines()]
-        logger.debug(f"[extract_title] lines after split: {lines}")
-        if len(lines) >= 2:
-            for line in lines[1:]:
-                if not line or line in DELETE_KEYWORDS:
+        # 削除・更新操作の場合の特別処理
+        if operation_type in ('delete', 'update'):
+            # 既存の抽出ロジック
+            lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
+            for line in lines:
+                if any(kw in line for kw in DELETE_KEYWORDS + UPDATE_KEYWORDS):
                     continue
                 if re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z]', line):
                     return line
-            return None
+            # どの行にもタイトルらしきものがなければ「予定」
+            return '予定'
+        # 通常の抽出ロジック
+        # ...（既存のまま）...
         # 1行メッセージの場合は先頭の時刻（範囲含む）部分を除去し残りをタイトルとする
+        lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
         if len(lines) == 1:
             line = lines[0]
             # 日付＋時刻範囲パターン
+            # 日付・時刻部分を除去
             line = re.sub(r'^(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?[\-〜~～](\d{1,2}):?(\d{2})?', '', line)
             line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時[\-〜~～](\d{1,2})時', '', line)
-            line = re.sub(r'^(\d{1,2}):?(\d{2})?[\-〜~～](\d{1,2}):?(\d{2})?', '', line)  # 10:00〜12:00, 10:00-12:00
-            line = re.sub(r'^(\d{1,2})時[\-〜~～](\d{1,2})時', '', line)  # 10時〜12時, 10時-12時
-            # 日付＋時刻パターン
+            line = re.sub(r'^(\d{1,2}):?(\d{2})?[\-〜~～](\d{1,2}):?(\d{2})?', '', line)
+            line = re.sub(r'^(\d{1,2})時[\-〜~～](\d{1,2})時', '', line)
             line = re.sub(r'^(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?', '', line)
             line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時(\d{1,2})分?', '', line)
             line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時', '', line)
             line = re.sub(r'^(\d{1,2})[\/](\d{1,2})[\s　]*(\d{1,2}):?(\d{2})?', '', line)
-            # 先頭の空白や記号を除去
             line = re.sub(r'^[\s　:：,、。]+', '', line)
-            if not line or re.fullmatch(r'[\d/:年月日時分\-〜~～\s　]+', line) or line in DELETE_KEYWORDS:
+            
+            # 日付・時刻のみの行はタイトルなしとみなす
+            if not line or re.fullmatch(r'[\d/:年月日時分\-〜~～\s　]+', line):
                 return None
             return line
-
-        # 既存のロジック
-        # 末尾の「を△△で追加してください」「を△△と追加してください」などを除去
-        normalized_text = re.sub(r'を[^\sを]+で(追加|削除|変更|確認|教えて|表示)(してください)?$', '', normalized_text)
-        normalized_text = re.sub(r'を[^\sを]+と(追加|削除|変更|確認|教えて|表示)(してください)?$', '', normalized_text)
-        normalized_text = re.sub(r'(を)?(追加|削除|変更|確認)?して(ください)?$', '', normalized_text)
-        normalized_text = re.sub(r'(を)?(追加|削除|変更|確認|教えて|表示)(してください)?$', '', normalized_text)
-
-        # まず「X月Y日Z時からタイトル」や「X時からタイトル」パターンを優先的に抽出
-        match = re.search(r'(?:\d{1,2}月)?\d{1,2}日\d{1,2}時(?:\d{1,2})分から(.+)', normalized_text)
-        if not match:
-            match = re.search(r'\d{1,2}時(?:\d{1,2})分から(.+)', normalized_text)
-        if match:
-            title_candidate = match.group(1).strip()
-            # 末尾の不要な語句を除去
-            title_candidate = re.sub(r'[。\n].*$', '', title_candidate)
-            if title_candidate in DELETE_KEYWORDS or title_candidate.strip() == '':
-                return None
-            if title_candidate:
-                return title_candidate
-
-        # カタカナはひらがなに変換しない
-        normalized_message = normalize_text(text, keep_katakana=True)
-        lines = [line.strip() for line in normalized_message.splitlines() if line.strip()]
-        exclude_patterns = [
-            r'\d+時間半?', r'\d+時間', r'\d+分', r'オンライン', r'おんらいん'
-        ]
-        location = extract_location(normalized_message)
-
-        # 1行メッセージで日付・時刻＋タイトルの場合、日付・時刻部分を除去
-        if len(lines) == 1:
-            line = lines[0]
-            # 日付＋時刻パターン（5/16 10:00、5月16日10時、5月16日10:00 など）
-            line = re.sub(r'^(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?', '', line)
-            line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時(\d{1,2})分?', '', line)
-            line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時', '', line)
-            line = re.sub(r'^(\d{1,2})[\/](\d{1,2})[\s　]*(\d{1,2}):?(\d{2})?', '', line)
-            # 先頭の空白や記号を除去
-            line = re.sub(r'^[\s　:：,、。]+', '', line)
-            # 日付・時刻だけの場合や操作キーワードのみの場合はNone
-            if not line or re.fullmatch(r'[\d/:年月日時分\s　]+', line) or line in DELETE_KEYWORDS:
-                return None
-            return line
-
-        for i, line in enumerate(lines):
-            if re.search(r'\d+月\d+日', line) or re.search(r'\d+時', line):
-                continue
-            if any(re.search(pat, line) for pat in exclude_patterns):
-                continue
-            if location and location in line:
-                continue
-            if line in DELETE_KEYWORDS or line.strip() == '':
-                continue
-            return line
+            
         return None
     except Exception as e:
         logger.error(f"タイトル抽出エラー: {str(e)}")
-        logger.error(traceback.format_exc())
         return None
-
-def remove_datetime_expressions(text: str) -> str:
-    """日時表現を削除する"""
-    # 年月日
-    text = re.sub(r'\d{1,4}年', '', text)  # 年を削除
-    text = re.sub(r'\d{1,2}月', '', text)  # 月を削除
-    text = re.sub(r'\d{1,2}日', '', text)  # 日を削除
-    
-    # 時刻（分を含む場合と含まない場合の両方に対応）
-    text = re.sub(r'\d{1,2}時(?:\d{1,2})分)?', '', text)  # 分を含む時刻と含まない時刻の両方に対応
-    
-    # 相対日付表現を削除
-    text = re.sub(r'(今日|明日|明後日|昨日|一昨日|今週|来週|再来週|先週|今月|来月|先月|今年|来年|去年|一昨年)', '', text)
-    
-    # 時間関連の表現を削除
-    text = re.sub(r'(?:から|まで|翌日)', '', text)
-    
-    return text
-
-def extract_location(text: str) -> Optional[str]:
-    """メッセージから場所を抽出する（明示的なパターンと「オンライン」対応）"""
-    try:
-        normalized_message = normalize_text(text)
-        
-        # 「オンライン」が含まれていれば場所として返す
-        if 'オンライン' in text or 'おんらいん' in normalized_message:
-            return 'オンライン'
-            
-        # 明示的なパターン
-        location_patterns = [
-            r'場所は(?P<location>[^。\n]+)',
-            r'会場は(?P<location>[^。\n]+)',
-            r'会議室(?P<location>[A-Za-z0-9]+)',  # 会議室A, 会議室B1 などのパターン
-            r'会議室(?P<location>[一二三四五六七八九十]+)',  # 会議室一, 会議室二 などのパターン
-            r'会議室(?P<location>[0-9]+)',  # 会議室1, 会議室2 などのパターン
-            r'会議室(?P<location>[A-Za-z0-9]+)で',  # 会議室Aで, 会議室B1で などのパターン
-            r'会議室(?P<location>[一二三四五六七八九十]+)で',  # 会議室一で, 会議室二で などのパターン
-            r'会議室(?P<location>[0-9]+)で',  # 会議室1で, 会議室2で などのパターン
-            r'(?:^|\n)(?P<location>(?:東京都|大阪府|京都府|北海道|.+?[都道府県])?(?:千代田区|中央区|港区|新宿区|渋谷区|.+?[市区町村])?.+?(?:丁目|番地)?)',  # 住所っぽい表現
-            r'(?:^|\n)(?P<location>(?:京橋|新橋|銀座|渋谷|新宿|品川|東京|大阪|名古屋|福岡|札幌|仙台|広島|神戸)[^。\n]*)'  # 主要な地名
-        ]
-        
-        for pattern in location_patterns:
-            match = re.search(pattern, normalized_message)
-            if match:
-                location = match.group('location').strip()
-                # 数字のみ、または1文字だけの場所は無効とする
-                if location.isdigit() or len(location) == 1:
-                    continue
-                # 会議室の場合、会議室という文字を付加して返す
-                if pattern.startswith('会議室'):
-                    return f'会議室{location}'
-                return location
-                
-        # 場所が見つからない場合はNoneを返す
-        return None
-        
-    except Exception as e:
-        logger.error(f"場所抽出エラー: {str(e)}")
-        logger.error(traceback.format_exc())
-        return None
-
-def extract_person(text: str) -> str:
-    """メッセージから人物情報を抽出する"""
-    # 参加者情報を抽出
-    person_match = re.search(r'参加者(?:は|が)?([^。、]+)', text)
-    if person_match:
-        person = person_match.group(1).strip()
-        # 不要な文字を削除（末尾のみ）
-        patterns_to_remove = [
-            r'[をにでへとがの]?追加して$',
-            r'[をにでへとがの]?追加$',
-            r'[をにでへとがの]?削除して$',
-            r'[をにでへとがの]?削除$',
-            r'[をにでへとがの]?キャンセルして$',
-            r'[をにでへとがの]?キャンセル$',
-            r'[をにでへとがの]?して$'
-        ]
-        
-        for pattern in patterns_to_remove:
-            person = re.sub(pattern, '', person)
-        
-        # 空白を削除
-        person = person.strip()
-        
-        logger.debug(f"抽出された参加者: {person}")
-        return person
-    
-    # 参加者情報が見つからない場合はNoneを返す
-    return None
-
-def extract_recurrence(text: str) -> Optional[str]:
-    """メッセージから繰り返し情報を抽出する"""
-    try:
-        logger.debug(f"繰り返し情報を抽出: {text}")
-        
-        normalized_message = normalize_text(text)
-        
-        # 繰り返しを表すパターン
-        recurrence_patterns = [
-            r'毎週(?P<weekday>月|火|水|木|金|土|日)曜日?',
-            r'毎月(?P<day>\d{1,2})日',
-            r'毎日',
-            r'毎週',
-            r'毎月',
-            r'毎年'
-        ]
-        
-        for pattern in recurrence_patterns:
-            match = re.search(pattern, normalized_message)
-            if match:
-                if 'weekday' in match.groupdict():
-                    weekday = WEEKDAYS[match.group('weekday')]
-                    return f'FREQ=WEEKLY;BYDAY={weekday}'
-                elif 'day' in match.groupdict():
-                    day = match.group('day')
-                    return f'FREQ=MONTHLY;BYMONTHDAY={day}'
-                elif pattern == '毎日':
-                    return 'FREQ=DAILY'
-                elif pattern == '毎週':
-                    return 'FREQ=WEEKLY'
-                elif pattern == '毎月':
-                    return 'FREQ=MONTHLY'
-                elif pattern == '毎年':
-                    return 'FREQ=YEARLY'
-        
-        logger.debug("抽出された繰り返し情報: None")
-        return None
-    except Exception as e:
-        logger.error(f"繰り返し情報抽出エラー: {str(e)}")
-        logger.error(traceback.format_exc())
-        return None
-
-def extract_relative_datetime(message: str, now: datetime) -> Optional[Dict]:
-    """相対日付表現から日時情報を抽出する"""
-    # まず「今日から1週間」「今日から2週間」を最優先で判定
-    if '今日から1週間' in message:
-        start_time = datetime.combine(now.date(), time(0, 0), tzinfo=JST)
-        end_time = start_time + timedelta(days=6, hours=23, minutes=59, seconds=59)
-        end_time = end_time.replace(microsecond=0)
-        return {
-            'success': True,
-            'start_time': start_time,
-            'end_time': end_time
-        }
-    elif '今日から2週間' in message:
-        start_time = datetime.combine(now.date(), time(0, 0), tzinfo=JST)
-        end_time = start_time + timedelta(days=13, hours=23, minutes=59, seconds=59)
-        end_time = end_time.replace(microsecond=0)
-        return {
-            'success': True,
-            'start_time': start_time,
-            'end_time': end_time
-        }
-    
-    # 以下、1日分の相対日付判定
-    target_date = None
-    if re.search(r'今日', message):
-        target_date = now.date()
-    elif re.search(r'明日', message):
-        target_date = (now + timedelta(days=1)).date()
-    elif re.search(r'明後日', message):
-        target_date = (now + timedelta(days=2)).date()
-    elif re.search(r'昨日', message):
-        target_date = (now - timedelta(days=1)).date()
-    elif re.search(r'一昨日', message):
-        target_date = (now - timedelta(days=2)).date()
-    elif re.search(r'今週', message):
-        # 今週の月曜日を取得
-        monday = now - timedelta(days=now.weekday())
-        target_date = monday.date()
-        end_date = (monday + timedelta(days=6)).date()
-        start_time = datetime.combine(target_date, time(0, 0), tzinfo=JST)
-        end_time = datetime.combine(end_date, time(23, 59, 59), tzinfo=JST)
-        return {
-            'success': True,
-            'start_time': start_time,
-            'end_time': end_time
-        }
-    elif re.search(r'来週', message):
-        # 来週の月曜日を取得
-        monday = now - timedelta(days=now.weekday()) + timedelta(days=7)
-        target_date = monday.date()
-        end_date = (monday + timedelta(days=6)).date()
-        start_time = datetime.combine(target_date, time(0, 0), tzinfo=JST)
-        end_time = datetime.combine(end_date, time(23, 59, 59), tzinfo=JST)
-        return {
-            'success': True,
-            'start_time': start_time,
-            'end_time': end_time
-        }
-    elif re.search(r'再来週', message):
-        # 再来週の月曜日を取得
-        monday = now - timedelta(days=now.weekday()) + timedelta(days=14)
-        target_date = monday.date()
-        end_date = (monday + timedelta(days=6)).date()
-        start_time = datetime.combine(target_date, time(0, 0), tzinfo=JST)
-        end_time = datetime.combine(end_date, time(23, 59, 59), tzinfo=JST)
-        return {
-            'success': True,
-            'start_time': start_time,
-            'end_time': end_time
-        }
-    elif re.search(r'先週', message):
-        # 先週の月曜日を取得
-        monday = now - timedelta(days=now.weekday()) - timedelta(days=7)
-        target_date = monday.date()
-        end_date = (monday + timedelta(days=6)).date()
-        start_time = datetime.combine(target_date, time(0, 0), tzinfo=JST)
-        end_time = datetime.combine(end_date, time(23, 59, 59), tzinfo=JST)
-        return {
-            'success': True,
-            'start_time': start_time,
-            'end_time': end_time
-        }
-    elif re.search(r'今月', message):
-        # 今月の1日を取得
-        target_date = now.replace(day=1).date()
-        # 来月の1日を取得して1日引く
-        if now.month == 12:
-            end_date = now.replace(year=now.year + 1, month=1, day=1).date() - timedelta(days=1)
-        else:
-            end_date = now.replace(month=now.month + 1, day=1).date() - timedelta(days=1)
-        start_time = datetime.combine(target_date, time(0, 0), tzinfo=JST)
-        end_time = datetime.combine(end_date, time(23, 59, 59), tzinfo=JST)
-        return {
-            'success': True,
-            'start_time': start_time,
-            'end_time': end_time
-        }
-    elif re.search(r'来月', message):
-        # 来月の1日を取得
-        if now.month == 12:
-            target_date = now.replace(year=now.year + 1, month=1, day=1).date()
-            end_date = now.replace(year=now.year + 1, month=2, day=1).date() - timedelta(days=1)
-        else:
-            target_date = now.replace(month=now.month + 1, day=1).date()
-            end_date = now.replace(month=now.month + 2, day=1).date() - timedelta(days=1)
-        start_time = datetime.combine(target_date, time(0, 0), tzinfo=JST)
-        end_time = datetime.combine(end_date, time(23, 59, 59), tzinfo=JST)
-        return {
-            'success': True,
-            'start_time': start_time,
-            'end_time': end_time
-        }
-    elif re.search(r'先月', message):
-        # 先月の1日を取得
-        if now.month == 1:
-            target_date = now.replace(year=now.year - 1, month=12, day=1).date()
-            end_date = now.replace(day=1).date() - timedelta(days=1)
-        else:
-            target_date = now.replace(month=now.month - 1, day=1).date()
-            end_date = now.replace(day=1).date() - timedelta(days=1)
-        start_time = datetime.combine(target_date, time(0, 0), tzinfo=JST)
-        end_time = datetime.combine(end_date, time(23, 59, 59), tzinfo=JST)
-        return {
-            'success': True,
-            'start_time': start_time,
-            'end_time': end_time
-        }
-    elif re.search(r'今年', message):
-        # 今年の1月1日を取得
-        target_date = now.replace(month=1, day=1).date()
-        end_date = now.replace(month=12, day=31).date()
-        start_time = datetime.combine(target_date, time(0, 0), tzinfo=JST)
-        end_time = datetime.combine(end_date, time(23, 59, 59), tzinfo=JST)
-        return {
-            'success': True,
-            'start_time': start_time,
-            'end_time': end_time
-        }
-    elif re.search(r'来年', message):
-        # 来年の1月1日を取得
-        target_date = now.replace(year=now.year + 1, month=1, day=1).date()
-        end_date = now.replace(year=now.year + 1, month=12, day=31).date()
-        start_time = datetime.combine(target_date, time(0, 0), tzinfo=JST)
-        end_time = datetime.combine(end_date, time(23, 59, 59), tzinfo=JST)
-        return {
-            'success': True,
-            'start_time': start_time,
-            'end_time': end_time
-        }
-    elif re.search(r'去年', message):
-        # 去年の1月1日を取得
-        target_date = now.replace(year=now.year - 1, month=1, day=1).date()
-        end_date = now.replace(year=now.year - 1, month=12, day=31).date()
-        start_time = datetime.combine(target_date, time(0, 0), tzinfo=JST)
-        end_time = datetime.combine(end_date, time(23, 59, 59), tzinfo=JST)
-        return {
-            'success': True,
-            'start_time': start_time,
-            'end_time': end_time
-        }
-    elif re.search(r'一昨年', message):
-        # 一昨年の1月1日を取得
-        target_date = now.replace(year=now.year - 2, month=1, day=1).date()
-        end_date = now.replace(year=now.year - 2, month=12, day=31).date()
-        start_time = datetime.combine(target_date, time(0, 0), tzinfo=JST)
-        end_time = datetime.combine(end_date, time(23, 59, 59), tzinfo=JST)
-        return {
-            'success': True,
-            'start_time': start_time,
-            'end_time': end_time
-        }
-    
-    if target_date:
-        start_time = datetime.combine(target_date, time(0, 0), tzinfo=JST)
-        end_time = datetime.combine(target_date, time(23, 59, 59), tzinfo=JST)
-        return {
-            'success': True,
-            'start_time': start_time,
-            'end_time': end_time
-        }
-    
-    return None
-
-def extract_datetime_from_message(message: str, operation_type: str = None) -> Dict:
-    """
-    メッセージから日時情報を抽出（全バリエーション網羅: 日本語・スラッシュ・ハイフン・相対日付・曜日・自然文・単一時刻・時刻範囲・日付のみ・明日10時など）
-    """
-    now = datetime.now(JST)
-    result = {
-        'success': False,
-        'start_time': None,
-        'end_time': None,
-        'new_start_time': None,
-        'new_end_time': None
-    }
-    lines = message.strip().split('\n')
-    if not lines:
-        return result
-    # 1. 日本語日付＋時刻範囲（5月19日10:20〜10:40）
-    m = re.search(r'(\d{1,2})月(\d{1,2})日[\s　]*(\d{1,2}):?(\d{2})[〜~～-](\d{1,2}):?(\d{2})', message)
-    if m:
-        month, day, sh, sm, eh, em = map(int, m.groups())
-        year = now.year
-        if (month < now.month) or (month == now.month and day < now.day):
-            year += 1
-        st = JST.localize(datetime(year, month, day, sh, sm))
-        et = JST.localize(datetime(year, month, day, eh, em))
-        if et <= st:
-            et += timedelta(days=1)
-        result['start_time'] = st
-        result['end_time'] = et
-        result['success'] = True
-    # 2. スラッシュ日付＋時刻範囲（5/19 10:20〜10:40）
-    elif re.search(r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2}):(\d{2})[〜~～-](\d{1,2}):(\d{2})', message):
-        m = re.search(r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2}):(\d{2})[〜~～-](\d{1,2}):(\d{2})', message)
-        month, day, sh, sm, eh, em = map(int, m.groups())
-        year = now.year
-        if (month < now.month) or (month == now.month and day < now.day):
-            year += 1
-        st = JST.localize(datetime(year, month, day, sh, sm))
-        et = JST.localize(datetime(year, month, day, eh, em))
-        if et <= st:
-            et += timedelta(days=1)
-        result['start_time'] = st
-        result['end_time'] = et
-        result['success'] = True
-    # 3. 日本語日付＋時刻（5月19日10時20分）
-    elif re.search(r'(\d{1,2})月(\d{1,2})日(\d{1,2})時(\d{1,2})分', message):
-        m = re.search(r'(\d{1,2})月(\d{1,2})日(\d{1,2})時(\d{1,2})分', message)
-        month, day, hour, minute = map(int, m.groups())
-        year = now.year
-        if (month < now.month) or (month == now.month and day < now.day):
-            year += 1
-        st = JST.localize(datetime(year, month, day, hour, minute))
-        et = st + timedelta(hours=1)
-        result['start_time'] = st
-        result['end_time'] = et
-        result['success'] = True
-    # 4. スラッシュ日付＋時刻（5/19 10:20）
-    elif re.search(r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2}):(\d{2})', message):
-        m = re.search(r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2}):(\d{2})', message)
-        month, day, hour, minute = map(int, m.groups())
-        year = now.year
-        if (month < now.month) or (month == now.month and day < now.day):
-            year += 1
-        st = JST.localize(datetime(year, month, day, hour, minute))
-        et = st + timedelta(hours=1)
-        result['start_time'] = st
-        result['end_time'] = et
-        result['success'] = True
-    # 5. 日本語日付＋時刻（5月19日10時）
-    elif re.search(r'(\d{1,2})月(\d{1,2})日(\d{1,2})時', message):
-        m = re.search(r'(\d{1,2})月(\d{1,2})日(\d{1,2})時', message)
-        month, day, hour = map(int, m.groups())
-        year = now.year
-        if (month < now.month) or (month == now.month and day < now.day):
-            year += 1
-        st = JST.localize(datetime(year, month, day, hour, 0))
-        et = st + timedelta(hours=1)
-        result['start_time'] = st
-        result['end_time'] = et
-        result['success'] = True
-    # 6. 相対日付（今日・明日・明後日・昨日・一昨日）＋時刻
-    elif re.search(r'(今日|明日|明後日|昨日|一昨日)', message):
-        base = now.date()
-        if '明日' in message:
-            base = (now + timedelta(days=1)).date()
-        elif '明後日' in message:
-            base = (now + timedelta(days=2)).date()
-        elif '昨日' in message:
-            base = (now - timedelta(days=1)).date()
-        elif '一昨日' in message:
-            base = (now - timedelta(days=2)).date()
-        # 時刻抽出
-        m = re.search(r'(\d{1,2})時(\d{1,2})分', message)
-        if m:
-            hour, minute = map(int, m.groups())
-        else:
-            m = re.search(r'(\d{1,2})時', message)
-            if m:
-                hour = int(m.group(1))
-                minute = 0
-            else:
-                hour = 9
-                minute = 0
-        st = JST.localize(datetime.combine(base, time(hour, minute)))
-        et = st + timedelta(hours=1)
-        result['start_time'] = st
-        result['end_time'] = et
-        result['success'] = True
-    # 7. 日付のみ（5/19, 5月19日, 今日, 明日, ...）
-    elif re.search(r'(\d{1,2})/(\d{1,2})', message):
-        m = re.search(r'(\d{1,2})/(\d{1,2})', message)
-        month, day = map(int, m.groups())
-        year = now.year
-        if (month < now.month) or (month == now.month and day < now.day):
-            year += 1
-        st = JST.localize(datetime(year, month, day, 0, 0))
-        et = JST.localize(datetime(year, month, day, 23, 59, 59))
-        result['start_time'] = st
-        result['end_time'] = et
-        result['success'] = True
-    elif re.search(r'(\d{1,2})月(\d{1,2})日', message):
-        m = re.search(r'(\d{1,2})月(\d{1,2})日', message)
-        month, day = map(int, m.groups())
-        year = now.year
-        if (month < now.month) or (month == now.month and day < now.day):
-            year += 1
-        st = JST.localize(datetime(year, month, day, 0, 0))
-        et = JST.localize(datetime(year, month, day, 23, 59, 59))
-        result['start_time'] = st
-        result['end_time'] = et
-        result['success'] = True
-    elif re.search(r'今日', message):
-        st = JST.localize(datetime.combine(now.date(), time(0, 0)))
-        et = JST.localize(datetime.combine(now.date(), time(23, 59, 59)))
-        result['start_time'] = st
-        result['end_time'] = et
-        result['success'] = True
-    elif re.search(r'明日', message):
-        base = (now + timedelta(days=1)).date()
-        st = JST.localize(datetime.combine(base, time(0, 0)))
-        et = JST.localize(datetime.combine(base, time(23, 59, 59)))
-        result['start_time'] = st
-        result['end_time'] = et
-        result['success'] = True
-    # 8. 2行目以降も同様に抽出（update用）
-    if len(lines) > 1:
-        m2 = re.search(r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2}):(\d{2})[〜~～-](\d{1,2}):(\d{2})', lines[1])
-        if m2:
-            month, day, sh, sm, eh, em = map(int, m2.groups())
-            year = now.year
-            if (month < now.month) or (month == now.month and day < now.day):
-                year += 1
-            st = JST.localize(datetime(year, month, day, sh, sm))
-            et = JST.localize(datetime(year, month, day, eh, em))
-            if et <= st:
-                et += timedelta(days=1)
-            result['new_start_time'] = st
-            result['new_end_time'] = et
-        else:
-            m2 = re.search(r'(\d{1,2})/(\d{1,2})[\s　]*(\d{1,2}):(\d{2})', lines[1])
-            if m2:
-                month, day, hour, minute = map(int, m2.groups())
-                year = now.year
-                if (month < now.month) or (month == now.month and day < now.day):
-                    year += 1
-                st = JST.localize(datetime(year, month, day, hour, minute))
-                et = st + timedelta(hours=1)
-                result['new_start_time'] = st
-                result['new_end_time'] = et
-    # 「変更」を含む場合、operation_typeを'update'に設定
-    if '変更' in message and result['new_start_time'] and result['new_end_time']:
-        result['operation_type'] = 'update'
-    return result
 
 def extract_title(text: str, operation_type: str = None) -> Optional[str]:
     """
@@ -1167,19 +613,39 @@ def extract_title(text: str, operation_type: str = None) -> Optional[str]:
             return line
             
         return None
+    except Exception as e:
+        logger.error(f"タイトル抽出エラー: {str(e)}")
+        return None
 
+class MessageParser:
     def _parse_date(self, message: str) -> dict:
-        result = extract_datetime_from_message(message)
-        return {
-            'start_date': result.get('start_time'),
-            'end_date': result.get('end_time'),
-            'is_range': result.get('is_time_range', False)
-        }
+        try:
+            result = extract_datetime_from_message(message)
+            return {
+                'start_date': result.get('start_time'),
+                'end_date': result.get('end_time'),
+                'is_range': result.get('is_time_range', False)
+            }
+        except Exception as e:
+            logger.error(f"日付の解析中にエラーが発生: {str(e)}")
+            return {
+                'start_date': None,
+                'end_date': None,
+                'is_range': False
+            }
 
     def _parse_time(self, message: str) -> dict:
-        result = extract_datetime_from_message(message)
-        return {
-            'start_time': result.get('start_time'),
-            'end_time': result.get('end_time'),
-            'is_range': result.get('is_time_range', False)
-        }
+        try:
+            result = extract_datetime_from_message(message)
+            return {
+                'start_time': result.get('start_time'),
+                'end_time': result.get('end_time'),
+                'is_range': result.get('is_time_range', False)
+            }
+        except Exception as e:
+            logger.error(f"時刻の解析中にエラーが発生: {str(e)}")
+            return {
+                'start_time': None,
+                'end_time': None,
+                'is_range': False
+            }
