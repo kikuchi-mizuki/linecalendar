@@ -660,6 +660,13 @@ class MessageParser:
                 'end_time': datetime_info.get('end_time'),
                 'is_range': datetime_info.get('is_time_range', False)
             }
+            # new_start_time, new_end_timeがあれば追加
+            if 'new_start_time' in datetime_info:
+                result['new_start_time'] = datetime_info['new_start_time']
+            if 'new_end_time' in datetime_info:
+                result['new_end_time'] = datetime_info['new_end_time']
+            if 'update_index' in datetime_info:
+                result['update_index'] = datetime_info['update_index']
             return result
         except Exception as e:
             logger.error(f"メッセージの解析中にエラーが発生: {str(e)}")
