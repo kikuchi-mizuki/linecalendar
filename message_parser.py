@@ -204,13 +204,14 @@ def normalize_text(text: str, keep_katakana: bool = False) -> str:
     """
     テキストを正規化する
     """
-    # 半角カタカナ→全角カタカナ
-    text = jaconv.h2z(text, kana=True)
     if not keep_katakana:
+        # 半角カタカナ→全角カタカナ
+        text = jaconv.h2z(text, kana=True)
         # 全角カタカナ→ひらがな
         text = jaconv.kata2hira(text)
-    # 全角数字・英字を半角に変換
-    text = jaconv.z2h(text, ascii=True, digit=True)
+    else:
+        # カタカナはそのまま、英数字のみ半角化
+        text = jaconv.z2h(text, ascii=True, digit=True)
     # 全角スペースを半角に変換
     text = text.replace('　', ' ')
     # 半角カタカナの「キャンセル」をひらがなに変換（複数のパターンに対応）
