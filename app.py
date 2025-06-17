@@ -154,6 +154,9 @@ def setup_logging():
             app.logger.setLevel(numeric_level)
             app.logger.info("Flask app.logger configured.")
         
+        # すべてのロガーのルートレベルをDEBUGに強制
+        logging.getLogger().setLevel(logging.DEBUG)
+        
     except Exception as e:
         print(f"Error setting up logging: {str(e)}")
         raise
