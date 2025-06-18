@@ -112,7 +112,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
         # --- 月日指定パターンを最優先で抽出 ---
         m = re.search(r'(\d{1,2})[\/月](\d{1,2})(?:日)?(?=\D|$)', message)
         if m:
-            logger.debug(f"[extract_datetime_from_message] 月日パターン matched: {m.groups()} message={message}")
+            logger.debug(f"[DEBUG] 月日パターン message={message} groups={m.groups()}")
             month = int(m.group(1))
             day = int(m.group(2))
             year = now.year
@@ -122,8 +122,10 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             # 今日より前なら来年扱い、今日以降は今年扱い
             if this_year_date_naive < today_naive:
                 year += 1
+            logger.debug(f"[DEBUG] 月日パターン after year check: month={month}, day={day}, year={year}")
             start_time = JST.localize(datetime(year, month, day, 0, 0, 0))
             end_time = JST.localize(datetime(year, month, day, 23, 59, 59, 999999))
+            logger.debug(f"[DEBUG] 月日パターン return: start_time={start_time}, end_time={end_time}")
             return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True}
         # --- 日本語日付＋時刻範囲パターンを最優先で抽出 ---
         jp_date_time_range_match = re.search(r'(\d{1,2})月(\d{1,2})日[\s　]*(\d{1,2}):?(\d{2})[〜~～-](\d{1,2}):?(\d{2})', message)
