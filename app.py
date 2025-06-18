@@ -33,6 +33,7 @@ from services.calendar_service import get_calendar_manager
 from utils.formatters import format_event_list
 from utils.message_parser import extract_datetime_from_message
 from urllib.parse import urlparse
+from utils.logger import setup_logging, SensitiveDataFilter
 
 logging.basicConfig(level=logging.DEBUG)
 
@@ -129,6 +130,11 @@ def setup_logging():
             )
             file_handler.setFormatter(logging.Formatter(log_format))
             handlers.append(file_handler)
+        
+        # 機密情報フィルターの追加
+        sensitive_filter = SensitiveDataFilter()
+        for handler in handlers:
+            handler.addFilter(sensitive_filter)
         
         # ログ設定の適用
         logging.basicConfig(

@@ -1,7 +1,31 @@
 import logging
 import sys
 import os
+import re
 from logging.handlers import RotatingFileHandler
+
+class SensitiveDataFilter(logging.Filter):
+    """機密情報をマスクするフィルター"""
+    def __init__(self):
+        super().__init__()
+        # マスク対象のパターン
+        self.patterns = [
+            (r'(token["\']?\s*[:=]\s*["\']?)([^"\']+)', r'\1[REDACTED]'),
+            (r'(refresh_token["\']?\s*[:=]\s*["\']?)([^"\']+)', r'\1[REDACTED]'),
+            (r'(client_secret["\']?\s*[:=]\s*["\']?)([^"\']+)', r'\1[REDACTED]'),
+            (r'(client_id["\']?\s*[:=]\s*["\']?)([^"\']+)', r'\1[REDACTED]'),
+            (r'(access_token["\']?\s*[:=]\s*["\']?)([^"\']+)', r'\1[REDACTED]'),
+            (r'(Authorization["\']?\s*[:=]\s*["\']?)([^"\']+)', r'\1[REDACTED]'),
+            (r'(password["\']?\s*[:=]\s*["\']?)([^"\']+)', r'\1[REDACTED]'),
+            (r'(secret["\']?\s*[:=]\s*["\']?)([^"\']+)', r'\1[REDACTED]'),
+            (r'(key["\']?\s*[:=]\s*["\']?)([^"\']+)', r'\1[REDACTED]'),
+        ]
+
+    def filter(self, record):
+        if isinstance(record.msg, str):
+            for pattern, replacement in self.patterns:
+                record.msg = re.sub(pattern, replacement, record.msg)
+        return True
 
 # ログ設定
 def setup_logging():
@@ -35,6 +59,11 @@ def setup_logging():
             )
             file_handler.setFormatter(logging.Formatter(log_format))
             handlers.append(file_handler)
+        
+        # 機密情報フィルターの追加
+        sensitive_filter = SensitiveDataFilter()
+        for handler in handlers:
+            handler.addFilter(sensitive_filter)
         
         # ログ設定の適用
         logging.basicConfig(
