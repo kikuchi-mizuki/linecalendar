@@ -1154,7 +1154,7 @@ class CalendarManager:
                 return tz.localize(dt)
             else:
                 return dt.astimezone(tz)
-        current = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        current = to_jst(start_date.replace(hour=0, minute=0, second=0, microsecond=0))
         while current <= end_date:
             day_str = current.strftime('%Y年%m月%d日 (%a)')
             # 8:00〜22:00の範囲で空き時間を取得（JSTで必ず生成）
@@ -1167,7 +1167,7 @@ class CalendarManager:
             logger.info(f"[空き時間デバッグ] {day_str} 取得予定リスト: {[{'title': e.get('summary'), 'start': e.get('start'), 'end': e.get('end')} for e in events]}")
             slots = await self.get_free_time_slots_in_range(day_start, day_end, min_duration)
             result[day_str] = slots
-            current += timedelta(days=1)
+            current = to_jst(current + timedelta(days=1))
         return result
 
     async def get_free_time_slots_in_range(self, range_start: datetime, range_end: datetime, min_duration: int = 30) -> List[Dict]:
