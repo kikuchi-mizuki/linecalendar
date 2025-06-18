@@ -685,10 +685,15 @@ class CalendarManager:
                 logger.info(f"[update_event_by_index] skip_overlap_check is False, doing overlap check")
                 overlapping_events = await self._check_overlapping_events(new_start_time, new_end_time, exclude_event_id=event_id)
                 if overlapping_events:
+                    warning_message = "⚠️ この時間帯に既に予定が存在します：\n"
+                    for detail in overlapping_events:
+                        warning_message += f"- {detail['summary']} ({detail['start']}～{detail['end']})\n"
+                    warning_message += "\nそれでも更新しますか？"
                     return {
                         'success': False,
-                        'error': '更新後の時間帯に重複する予定があります',
-                        'overlapping_events': overlapping_events
+                        'error': 'duplicate',
+                        'message': warning_message,
+                        'duplicate_events': overlapping_events
                     }
             else:
                 logger.info(f"[update_event_by_index] skip_overlap_check is True, skipping overlap check")
