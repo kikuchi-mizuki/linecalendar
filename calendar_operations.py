@@ -1148,12 +1148,13 @@ class CalendarManager:
             Dict[str, List[Dict]]: {日付文字列: 空き時間リスト}
         """
         result = {}
+        tz = pytz.timezone('Asia/Tokyo')
         current = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
         while current <= end_date:
             day_str = current.strftime('%Y年%m月%d日 (%a)')
-            # 8:00〜22:00の範囲で空き時間を取得
-            day_start = current.replace(hour=8, minute=0, second=0, microsecond=0)
-            day_end = current.replace(hour=22, minute=0, second=0, microsecond=0)
+            # 8:00〜22:00の範囲で空き時間を取得（JSTで必ず生成）
+            day_start = tz.localize(current.replace(hour=8, minute=0, second=0, microsecond=0))
+            day_end = tz.localize(current.replace(hour=22, minute=0, second=0, microsecond=0))
             # デバッグ: 予定取得範囲とタイムゾーンを出力
             logger.info(f"[空き時間デバッグ] {day_str} 予定取得範囲: {day_start.isoformat()} 〜 {day_end.isoformat()} (tz={day_start.tzinfo})")
             # 予定リストも出力
