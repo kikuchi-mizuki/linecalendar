@@ -153,16 +153,33 @@ async def handle_message(event):
                 # デフォルトは今日のみ
                 start_date = today.replace(hour=0, minute=0, second=0, microsecond=0)
                 end_date = start_date
-                # 「今日からn週間」などのパターンを判定
                 import re
+                # 「今日からn週間」パターン
                 week_match = re.search(r'今日から(\d+)週間', message_text)
                 if week_match:
                     n_weeks = int(week_match.group(1))
                     end_date = start_date + timedelta(days=7*n_weeks-1)
+                # 「n週間の空き時間」パターン
+                week2_match = re.search(r'(\d+)週間の空き時間', message_text)
+                if week2_match:
+                    n_weeks = int(week2_match.group(1))
+                    end_date = start_date + timedelta(days=7*n_weeks-1)
+                # 「今日から1週間」など
                 elif '今日から1週間' in message_text:
                     end_date = start_date + timedelta(days=6)
                 elif '今日から2週間' in message_text:
                     end_date = start_date + timedelta(days=13)
+                # 「M/Dの空き時間」パターン
+                date_match = re.search(r'(\d{1,2})[\/月](\d{1,2})[日]?(の空き時間)?', message_text)
+                if date_match:
+                    month = int(date_match.group(1))
+                    day = int(date_match.group(2))
+                    year = today.year
+                    # 年をまたぐ場合の考慮
+                    if (month < today.month) or (month == today.month and day < today.day):
+                        year += 1
+                    start_date = today.replace(year=year, month=month, day=day, hour=0, minute=0, second=0, microsecond=0)
+                    end_date = start_date
                 # 空き時間取得
                 free_slots_by_day = await calendar_manager.get_free_time_slots_range(start_date, end_date)
                 msg = format_simple_free_time(free_slots_by_day)
