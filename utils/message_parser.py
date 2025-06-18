@@ -116,8 +116,11 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             month = int(m.group(1))
             day = int(m.group(2))
             year = now.year
-            this_year_date = datetime(year, month, day, 0, 0, 0, tzinfo=JST)
-            if this_year_date < now.replace(hour=0, minute=0, second=0, microsecond=0):
+            # タイムゾーンなしで一旦生成
+            this_year_date_naive = datetime(year, month, day, 0, 0, 0)
+            today_naive = now.replace(hour=0, minute=0, second=0, microsecond=0).replace(tzinfo=None)
+            # 今日より前なら来年扱い、今日以降は今年扱い
+            if this_year_date_naive < today_naive:
                 year += 1
             start_time = JST.localize(datetime(year, month, day, 0, 0, 0))
             end_time = JST.localize(datetime(year, month, day, 23, 59, 59, 999999))
