@@ -178,21 +178,20 @@ class DatabaseManager:
             logger.error(f"Error saving pending event: {str(e)}")
             raise
 
-    def get_pending_event(self, user_id):
-        """保留中のイベントを取得する"""
+    def get_pending_event(self, user_id: str) -> dict:
         try:
-            with self.get_db_connection() as conn:
+            with sqlite3.connect(self.db_path) as conn:
                 cursor = conn.cursor()
-                cursor.execute(
-                    'SELECT event_info FROM pending_events WHERE user_id = ?',
-                    (user_id,)
-                )
+                cursor.execute('SELECT event_info FROM pending_events WHERE user_id = ?', (user_id,))
                 result = cursor.fetchone()
-                if result:
-                    return json.loads(result['event_info'])
-                return None
+                logger.info(f"[get_pending_event] user_id={user_id}, result={result}")
+                if not result:
+                    return None
+                event_info = json.loads(result[0])
+                logger.info(f"[get_pending_event] event_info={event_info}")
+                return event_info
         except Exception as e:
-            logger.error(f"Error getting pending event: {str(e)}")
+            logger.error(f"保留中のイベントの取得に失敗: {str(e)}")
             return None
 
     def clear_pending_event(self, user_id):

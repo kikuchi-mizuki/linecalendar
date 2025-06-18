@@ -602,6 +602,7 @@ async def handle_yes_response(calendar_id: str) -> str:
     try:
         # 保留中のイベントを取得
         pending_event = get_pending_event(calendar_id)
+        logger.info(f"[handle_yes_response] pending_event={pending_event}")
         if not pending_event:
             return "確認中の予定がありません。"
 
