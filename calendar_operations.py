@@ -1200,6 +1200,7 @@ class CalendarManager:
                 dt_str = event_time.get('dateTime', event_time.get('date'))
                 return datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
             return event_time
+
         try:
             events = await self.get_events(range_start, range_end)
             sorted_events = sorted(events, key=lambda x: parse_event_time(x['start']))
@@ -1207,6 +1208,12 @@ class CalendarManager:
             current_time = range_start
             for event in sorted_events:
                 event_start_dt = parse_event_time(event['start'])
+                event_end_dt = parse_event_time(event['end'])
+                # 終日予定の場合、その日の範囲（例: 8:00～22:00）をすべて埋まっている扱いにする
+                if 'date' in event['start'] and 'date' in event['end']:
+                    # 終日予定の日付が範囲内なら、その日は空き時間なし
+                    if event_start_dt.date() <= range_end.date() and event_end_dt.date() >= range_start.date():
+                        continue
                 duration_min = (event_start_dt - current_time).total_seconds() / 60
                 if duration_min >= 30:  # min_duration=30固定
                     free_slots.append({
@@ -1214,7 +1221,6 @@ class CalendarManager:
                         'end': event_start_dt
                     })
                     logger.info(f"[空き時間デバッグ] 候補: {current_time.strftime('%H:%M')}〜{event_start_dt.strftime('%H:%M')}（{duration_min}分）")
-                event_end_dt = parse_event_time(event['end'])
                 current_time = event_end_dt
             duration_min = (range_end - current_time).total_seconds() / 60
             if duration_min >= 30:
