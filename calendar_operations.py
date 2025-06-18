@@ -1139,4 +1139,65 @@ class CalendarManager:
             end_time = slot['end'].strftime('%H:%M')
             duration = slot['duration']
             message += f"⏰ {start_time}〜{end_time}（{duration}分）\n"
-        return message 
+        return message
+
+    async def get_free_time_slots_range(self, start_date: datetime, end_date: datetime, min_duration: int = 30) -> Dict[str, List[Dict]]:
+        """
+        指定した日付範囲の空き時間（8:00〜22:00）を日ごとに返す
+        Args:
+            start_date (datetime): 開始日
+            end_date (datetime): 終了日
+            min_duration (int): 最小空き時間（分）
+        Returns:
+            Dict[str, List[Dict]]: {日付文字列: 空き時間リスト}
+        """
+        result = {}
+        current = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
+        while current <= end_date:
+            day_str = current.strftime('%Y年%m月%d日 (%a)')
+            # 8:00〜22:00の範囲で空き時間を取得
+            day_start = current.replace(hour=8, minute=0, second=0, microsecond=0)
+            day_end = current.replace(hour=22, minute=0, second=0, microsecond=0)
+            slots = await self.get_free_time_slots_in_range(day_start, day_end, min_duration)
+            result[day_str] = slots
+            current += timedelta(days=1)
+        return result
+
+    async def get_free_time_slots_in_range(self, range_start: datetime, range_end: datetime, min_duration: int = 30) -> List[Dict]:
+        """
+        指定した時間範囲（例: 8:00〜22:00）の空き時間を返す
+        Args:
+            range_start (datetime): 範囲開始
+            range_end (datetime): 範囲終了
+            min_duration (int): 最小空き時間（分）
+        Returns:
+            List[Dict]: 空き時間リスト
+        """
+        try:
+            events = await self.get_events(range_start, range_end)
+            sorted_events = sorted(events, key=lambda x: x['start'].get('dateTime', x['start'].get('date')))
+            free_slots = []
+            current_time = range_start
+            for event in sorted_events:
+                event_start = event['start'].get('dateTime', event['start'].get('date'))
+                event_end = event['end'].get('dateTime', event['end'].get('date'))
+                event_start_dt = datetime.fromisoformat(event_start.replace('Z', '+00:00'))
+                event_start_dt = event_start_dt.astimezone(self.timezone)
+                if (event_start_dt - current_time).total_seconds() / 60 >= min_duration:
+                    free_slots.append({
+                        'start': current_time,
+                        'end': event_start_dt
+                    })
+                event_end_dt = datetime.fromisoformat(event_end.replace('Z', '+00:00'))
+                event_end_dt = event_end_dt.astimezone(self.timezone)
+                current_time = event_end_dt
+            if (range_end - current_time).total_seconds() / 60 >= min_duration:
+                free_slots.append({
+                    'start': current_time,
+                    'end': range_end
+                })
+            return free_slots
+        except Exception as e:
+            logger.error(f"空き時間の取得中にエラーが発生: {str(e)}")
+            logger.error(traceback.format_exc())
+            return [] 
