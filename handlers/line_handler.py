@@ -8,12 +8,13 @@ from services.line_service import reply_text, get_auth_url, handle_message, form
 from message_parser import parse_message
 import os
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from utils.db import get_db_connection, db_manager
 import logging
 import google_auth_oauthlib
 from flask import url_for
 from utils.formatters import format_free_time_calendar, format_simple_free_time
+import pytz
 # ↓循環import回避のため直接定義
 CLIENT_SECRETS_FILE = "client_secret.json"
 
@@ -151,7 +152,9 @@ async def handle_message(event):
                 return
             try:
                 calendar_manager = get_calendar_manager(user_id)
-                today = datetime.now().astimezone()
+                # 現在の日付をJSTで取得
+                JST = pytz.timezone('Asia/Tokyo')
+                today = datetime.now(JST)
                 # デフォルトは今日のみ
                 start_date = today.replace(hour=0, minute=0, second=0, microsecond=0)
                 end_date = start_date
