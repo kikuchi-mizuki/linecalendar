@@ -661,7 +661,7 @@ class CalendarManager:
                     start_time = start_time.astimezone(self.timezone)
             end_time = start_time.replace(hour=23, minute=59, second=59, microsecond=999999)
             
-            # 予定を取得
+            # 予定を取得（フィルタせずそのまま使う）
             events = await self.get_events(start_time, end_time)
             logger.debug(f"[update_event_by_index] 取得イベント一覧:")
             for idx, ev in enumerate(events):
