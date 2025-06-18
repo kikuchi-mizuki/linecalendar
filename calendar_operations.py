@@ -1154,6 +1154,11 @@ class CalendarManager:
             # 8:00〜22:00の範囲で空き時間を取得
             day_start = current.replace(hour=8, minute=0, second=0, microsecond=0)
             day_end = current.replace(hour=22, minute=0, second=0, microsecond=0)
+            # デバッグ: 予定取得範囲とタイムゾーンを出力
+            logger.info(f"[空き時間デバッグ] {day_str} 予定取得範囲: {day_start.isoformat()} 〜 {day_end.isoformat()} (tz={day_start.tzinfo})")
+            # 予定リストも出力
+            events = await self.get_events(day_start, day_end)
+            logger.info(f"[空き時間デバッグ] {day_str} 取得予定リスト: {[{'title': e.get('summary'), 'start': e.get('start'), 'end': e.get('end')} for e in events]}")
             slots = await self.get_free_time_slots_in_range(day_start, day_end, min_duration)
             result[day_str] = slots
             current += timedelta(days=1)
