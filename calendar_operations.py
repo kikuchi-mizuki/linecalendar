@@ -1090,15 +1090,12 @@ class CalendarManager:
             time_max = date.replace(hour=23, minute=59, second=59, microsecond=999999)
             events = await self.get_events(time_min, time_max)
             # 予定を時系列順にソート
-            sorted_events = sorted(events, key=lambda x: x['start'].get('dateTime', x['start'].get('date')))
+            sorted_events = sorted(events, key=lambda x: x['start'])
             # 空き時間を計算
             free_slots = []
             current_time = time_min
             for event in sorted_events:
-                event_start = event['start'].get('dateTime', event['start'].get('date'))
-                event_end = event['end'].get('dateTime', event['end'].get('date'))
-                event_start_dt = datetime.fromisoformat(event_start.replace('Z', '+00:00'))
-                event_start_dt = event_start_dt.astimezone(self.timezone)
+                event_start_dt = event['start']  # すでにdatetime型
                 # 現在時刻と予定開始時刻の間に空き時間がある場合
                 if (event_start_dt - current_time).total_seconds() / 60 >= min_duration:
                     free_slots.append({
@@ -1107,8 +1104,7 @@ class CalendarManager:
                         'duration': int((event_start_dt - current_time).total_seconds() / 60)
                     })
                 # 予定の終了時刻を次の開始時刻として設定
-                event_end_dt = datetime.fromisoformat(event_end.replace('Z', '+00:00'))
-                event_end_dt = event_end_dt.astimezone(self.timezone)
+                event_end_dt = event['end']  # すでにdatetime型
                 current_time = event_end_dt
             # 最後の予定から23:59までの空き時間を追加
             if (time_max - current_time).total_seconds() / 60 >= min_duration:
@@ -1175,21 +1171,17 @@ class CalendarManager:
         """
         try:
             events = await self.get_events(range_start, range_end)
-            sorted_events = sorted(events, key=lambda x: x['start'].get('dateTime', x['start'].get('date')))
+            sorted_events = sorted(events, key=lambda x: x['start'])
             free_slots = []
             current_time = range_start
             for event in sorted_events:
-                event_start = event['start'].get('dateTime', event['start'].get('date'))
-                event_end = event['end'].get('dateTime', event['end'].get('date'))
-                event_start_dt = datetime.fromisoformat(event_start.replace('Z', '+00:00'))
-                event_start_dt = event_start_dt.astimezone(self.timezone)
+                event_start_dt = event['start']  # すでにdatetime型
                 if (event_start_dt - current_time).total_seconds() / 60 >= min_duration:
                     free_slots.append({
                         'start': current_time,
                         'end': event_start_dt
                     })
-                event_end_dt = datetime.fromisoformat(event_end.replace('Z', '+00:00'))
-                event_end_dt = event_end_dt.astimezone(self.timezone)
+                event_end_dt = event['end']  # すでにdatetime型
                 current_time = event_end_dt
             if (range_end - current_time).total_seconds() / 60 >= min_duration:
                 free_slots.append({
