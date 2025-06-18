@@ -1180,13 +1180,18 @@ class CalendarManager:
         Returns:
             List[Dict]: 空き時間リスト
         """
+        def parse_event_time(event_time):
+            if isinstance(event_time, dict):
+                dt_str = event_time.get('dateTime', event_time.get('date'))
+                return datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
+            return event_time
         try:
             events = await self.get_events(range_start, range_end)
-            sorted_events = sorted(events, key=lambda x: x['start'])
+            sorted_events = sorted(events, key=lambda x: parse_event_time(x['start']))
             free_slots = []
             current_time = range_start
             for event in sorted_events:
-                event_start_dt = event['start']  # すでにdatetime型
+                event_start_dt = parse_event_time(event['start'])
                 duration_min = (event_start_dt - current_time).total_seconds() / 60
                 if duration_min >= 30:  # min_duration=30固定
                     free_slots.append({
@@ -1194,7 +1199,7 @@ class CalendarManager:
                         'end': event_start_dt
                     })
                     logger.info(f"[空き時間デバッグ] 候補: {current_time.strftime('%H:%M')}〜{event_start_dt.strftime('%H:%M')}（{duration_min}分）")
-                event_end_dt = event['end']  # すでにdatetime型
+                event_end_dt = parse_event_time(event['end'])
                 current_time = event_end_dt
             duration_min = (range_end - current_time).total_seconds() / 60
             if duration_min >= 30:
