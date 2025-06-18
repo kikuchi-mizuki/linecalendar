@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
 from typing import List, Dict
+import re
 
 def format_event_list(events: List[Dict], start_time: datetime = None, end_time: datetime = None) -> str:
     def border():
@@ -97,4 +98,39 @@ def format_free_time_calendar(free_slots_by_day: Dict[str, List[Dict]]) -> str:
             lines.append("空き時間はありません。")
         lines.append("")
         lines.append(border())
-    return "\n".join(lines) 
+    return "\n".join(lines)
+
+def format_simple_free_time(free_slots_by_day: dict) -> str:
+    """
+    シンプルな空き時間表示（例: 6/18（水）\n・8:00〜22:00）
+    Args:
+        free_slots_by_day (dict): {日付文字列: 空き時間リスト}
+    Returns:
+        str: 整形された空き時間情報
+    """
+    lines = []
+    for date_str, slots in free_slots_by_day.items():
+        # 年を省略し「M/D（曜）」形式に変換
+        m = re.match(r'(\d{4})年(\d{2})月(\d{2})日 \((.)\)', date_str)
+        if m:
+            month = int(m.group(2))
+            day = int(m.group(3))
+            youbi = m.group(4)
+            simple_date = f"{month}/{day}（{youbi}）"
+        else:
+            simple_date = date_str
+        lines.append(simple_date)
+        if slots:
+            for slot in slots:
+                start_time = slot['start'].strftime('%H:%M').lstrip('0')
+                end_time = slot['end'].strftime('%H:%M').lstrip('0')
+                # 8:00→8:00, 13:00→13:00
+                if start_time.startswith('0'):
+                    start_time = start_time[1:]
+                if end_time.startswith('0'):
+                    end_time = end_time[1:]
+                lines.append(f"・{start_time}〜{end_time}")
+        else:
+            lines.append("空き時間はありません")
+        lines.append("")
+    return "\n".join(lines).strip() 

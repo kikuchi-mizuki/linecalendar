@@ -13,7 +13,7 @@ from utils.db import get_db_connection, db_manager
 import logging
 import google_auth_oauthlib
 from flask import url_for
-from utils.formatters import format_free_time_calendar
+from utils.formatters import format_free_time_calendar, format_simple_free_time
 # ↓循環import回避のため直接定義
 CLIENT_SECRETS_FILE = "client_secret.json"
 
@@ -165,7 +165,7 @@ async def handle_message(event):
                     end_date = start_date + timedelta(days=13)
                 # 空き時間取得
                 free_slots_by_day = await calendar_manager.get_free_time_slots_range(start_date, end_date)
-                msg = format_free_time_calendar(free_slots_by_day)
+                msg = format_simple_free_time(free_slots_by_day)
                 await reply_text(reply_token, msg)
                 logger.info(f"[handle_message] 空き時間案内送信: user_id={user_id}")
                 return
