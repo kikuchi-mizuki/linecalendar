@@ -122,13 +122,8 @@ def format_simple_free_time(free_slots_by_day: dict) -> str:
         lines.append(simple_date)
         if slots:
             for slot in slots:
-                start_time = slot['start'].strftime('%H:%M').lstrip('0')
-                end_time = slot['end'].strftime('%H:%M').lstrip('0')
-                # 8:00→8:00, 13:00→13:00
-                if start_time.startswith('0'):
-                    start_time = start_time[1:]
-                if end_time.startswith('0'):
-                    end_time = end_time[1:]
+                start_time = slot['start'].strftime('%-H:%M') if hasattr(slot['start'], 'strftime') else str(slot['start'])
+                end_time = slot['end'].strftime('%-H:%M') if hasattr(slot['end'], 'strftime') else str(slot['end'])
                 lines.append(f"・{start_time}〜{end_time}")
         else:
             lines.append("空き時間はありません")
