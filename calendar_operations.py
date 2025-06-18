@@ -1187,18 +1187,22 @@ class CalendarManager:
             current_time = range_start
             for event in sorted_events:
                 event_start_dt = event['start']  # すでにdatetime型
-                if (event_start_dt - current_time).total_seconds() / 60 >= min_duration:
+                duration_min = (event_start_dt - current_time).total_seconds() / 60
+                if duration_min >= 30:  # min_duration=30固定
                     free_slots.append({
                         'start': current_time,
                         'end': event_start_dt
                     })
+                    logger.info(f"[空き時間デバッグ] 候補: {current_time.strftime('%H:%M')}〜{event_start_dt.strftime('%H:%M')}（{duration_min}分）")
                 event_end_dt = event['end']  # すでにdatetime型
                 current_time = event_end_dt
-            if (range_end - current_time).total_seconds() / 60 >= min_duration:
+            duration_min = (range_end - current_time).total_seconds() / 60
+            if duration_min >= 30:
                 free_slots.append({
                     'start': current_time,
                     'end': range_end
                 })
+                logger.info(f"[空き時間デバッグ] 候補: {current_time.strftime('%H:%M')}〜{range_end.strftime('%H:%M')}（{duration_min}分）")
             return free_slots
         except Exception as e:
             logger.error(f"空き時間の取得中にエラーが発生: {str(e)}")
