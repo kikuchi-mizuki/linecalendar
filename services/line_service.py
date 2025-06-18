@@ -472,6 +472,7 @@ async def handle_update_event(result, calendar_manager, user_id, reply_token):
                     'operation_type': 'update',
                     'update_index': result.get('update_index'),
                     'start_time': result.get('start_time').isoformat() if result.get('start_time') else None,
+                    'end_time': result.get('end_time').isoformat() if result.get('end_time') else None,
                     'new_start_time': result.get('new_start_time').isoformat() if result.get('new_start_time') else None,
                     'new_end_time': result.get('new_end_time').isoformat() if result.get('new_end_time') else None,
                     'title': result.get('title'),
