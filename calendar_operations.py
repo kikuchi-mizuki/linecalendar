@@ -1075,7 +1075,7 @@ class CalendarManager:
                 'error': str(e)
             }
 
-    def get_free_time_slots(self, date: datetime, min_duration: int = 30) -> List[Dict]:
+    async def get_free_time_slots(self, date: datetime, min_duration: int = 30) -> List[Dict]:
         """
         指定された日付の空き時間を取得する
         Args:
@@ -1088,7 +1088,7 @@ class CalendarManager:
             # その日の予定を取得
             time_min = date.replace(hour=0, minute=0, second=0, microsecond=0)
             time_max = date.replace(hour=23, minute=59, second=59, microsecond=999999)
-            events = self.get_events(time_min, time_max)
+            events = await self.get_events(time_min, time_max)
             # 予定を時系列順にソート
             sorted_events = sorted(events, key=lambda x: x['start'].get('dateTime', x['start'].get('date')))
             # 空き時間を計算
@@ -1121,4 +1121,22 @@ class CalendarManager:
         except Exception as e:
             logger.error(f"空き時間の取得中にエラーが発生: {str(e)}")
             logger.error(traceback.format_exc())
-            return [] 
+            return []
+
+    def format_free_time_slots(self, free_slots: List[Dict]) -> str:
+        """
+        空き時間を整形して返す
+        Args:
+            free_slots (List[Dict]): 空き時間のリスト
+        Returns:
+            str: 整形された空き時間情報
+        """
+        if not free_slots:
+            return "空き時間はありません。"
+        message = "🕒 空き時間\n\n"
+        for slot in free_slots:
+            start_time = slot['start'].strftime('%H:%M')
+            end_time = slot['end'].strftime('%H:%M')
+            duration = slot['duration']
+            message += f"⏰ {start_time}〜{end_time}（{duration}分）\n"
+        return message 
