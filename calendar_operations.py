@@ -466,7 +466,7 @@ class CalendarManager:
                     }
             # 予定の作成
             event = {
-                'summary': title,  # タイトルをそのまま使用
+                'summary': title,
                 'start': {
                     'dateTime': start_time.isoformat(),
                     'timeZone': self.timezone.zone,
