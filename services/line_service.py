@@ -292,7 +292,7 @@ async def handle_add_event(result, calendar_manager, user_id, reply_token):
                     'recurrence': result.get('recurrence'),
                     'force_add': True
                 }
-                # db_manager.save_pending_event(user_id, pending_event)
+                db_manager.save_pending_event(user_id, pending_event)
             await reply_text(reply_token, f"予定の追加に失敗しました: {add_result.get('message', '不明なエラー')}")
     except Exception as e:
         logger.error(f"予定の追加中にエラーが発生: {str(e)}")
