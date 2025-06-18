@@ -109,13 +109,17 @@ def format_simple_free_time(free_slots_by_day: dict) -> str:
         str: 整形された空き時間情報
     """
     lines = []
+    WEEKDAYS = ['月', '火', '水', '木', '金', '土', '日']
     for date_str, slots in free_slots_by_day.items():
-        # 年を省略し「M/D（曜）」形式に変換
-        m = re.match(r'(\d{4})年(\d{2})月(\d{2})日 \((.)\)', date_str)
+        # 年を省略し「M/D（曜）」形式に変換（曜日は日本語1文字）
+        m = re.match(r'(\d{4})年(\d{2})月(\d{2})日 \((\w{3})\)', date_str)
         if m:
             month = int(m.group(2))
             day = int(m.group(3))
-            youbi = m.group(4)
+            # 英語曜日→日本語1文字
+            en_week = m.group(4)
+            en2jp = {'Mon':'月','Tue':'火','Wed':'水','Thu':'木','Fri':'金','Sat':'土','Sun':'日'}
+            youbi = en2jp.get(en_week, en_week)
             simple_date = f"{month}/{day}（{youbi}）"
         else:
             simple_date = date_str
