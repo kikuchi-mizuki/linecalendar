@@ -1149,12 +1149,17 @@ class CalendarManager:
         """
         result = {}
         tz = pytz.timezone('Asia/Tokyo')
+        def to_jst(dt):
+            if dt.tzinfo is None or dt.tzinfo.utcoffset(dt) is None:
+                return tz.localize(dt)
+            else:
+                return dt.astimezone(tz)
         current = start_date.replace(hour=0, minute=0, second=0, microsecond=0)
         while current <= end_date:
             day_str = current.strftime('%Y年%m月%d日 (%a)')
             # 8:00〜22:00の範囲で空き時間を取得（JSTで必ず生成）
-            day_start = tz.localize(current.replace(hour=8, minute=0, second=0, microsecond=0))
-            day_end = tz.localize(current.replace(hour=22, minute=0, second=0, microsecond=0))
+            day_start = to_jst(current.replace(hour=8, minute=0, second=0, microsecond=0))
+            day_end = to_jst(current.replace(hour=22, minute=0, second=0, microsecond=0))
             # デバッグ: 予定取得範囲とタイムゾーンを出力
             logger.info(f"[空き時間デバッグ] {day_str} 予定取得範囲: {day_start.isoformat()} 〜 {day_end.isoformat()} (tz={day_start.tzinfo})")
             # 予定リストも出力
