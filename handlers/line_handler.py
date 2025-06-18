@@ -138,15 +138,8 @@ async def handle_message(event):
             logger.info(f"[handle_message] サブスク未登録案内送信: user_id={user_id}")
             return
 
-        # 空き時間キーワードまたは日付指定＋空き時間パターンに反応
-        import re
-        date_free_pattern = r'(\d{1,2})[\/月](\d{1,2})[日]?(の空き時間)?'
-        week_free_pattern = r'(\d+)週間の空き時間'
-        if (
-            any(kw in message_text for kw in free_keywords)
-            or re.search(date_free_pattern, message_text)
-            or re.search(week_free_pattern, message_text)
-        ):
+        # 空き時間キーワードに反応（キーワードが含まれる場合のみ空き時間分岐）
+        if any(kw in message_text for kw in free_keywords):
             creds = get_user_credentials(user_id)
             if not creds:
                 code = get_auth_url(user_id)
@@ -162,13 +155,14 @@ async def handle_message(event):
                 # デフォルトは今日のみ
                 start_date = today.replace(hour=0, minute=0, second=0, microsecond=0)
                 end_date = start_date
+                import re
                 # 「今日からn週間」パターン
                 week_match = re.search(r'今日から(\d+)週間', message_text)
                 if week_match:
                     n_weeks = int(week_match.group(1))
                     end_date = start_date + timedelta(days=7*n_weeks-1)
                 # 「n週間の空き時間」パターン
-                week2_match = re.search(week_free_pattern, message_text)
+                week2_match = re.search(r'(\d+)週間の空き時間', message_text)
                 if week2_match:
                     n_weeks = int(week2_match.group(1))
                     end_date = start_date + timedelta(days=7*n_weeks-1)
@@ -178,7 +172,7 @@ async def handle_message(event):
                 elif '今日から2週間' in message_text:
                     end_date = start_date + timedelta(days=13)
                 # 「M/Dの空き時間」パターン
-                date_match = re.search(date_free_pattern, message_text)
+                date_match = re.search(r'(\d{1,2})[\/月](\d{1,2})[日]?(の空き時間)?', message_text)
                 if date_match:
                     month = int(date_match.group(1))
                     day = int(date_match.group(2))
