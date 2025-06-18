@@ -360,7 +360,8 @@ class CalendarManager:
                 logger.debug(f"取得したイベント: タイトル={event_title}, 開始時刻={event_start}")
             
             # タイトルでフィルタリング（カタカナ保持の正規化で部分一致）
-            if norm_title:
+            # タイトルが「予定」や空の場合はフィルタをスキップ
+            if norm_title and norm_title != '予定':
                 filtered_events = []
                 for event in events:
                     event_title = event.get('summary', '')
