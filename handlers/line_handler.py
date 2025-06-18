@@ -241,8 +241,18 @@ async def handle_message(event):
         logger.error(traceback.format_exc())
         try:
             if event.reply_token:
-                await reply_text(event.reply_token, "Google認証が必要です。LINEで「連携」や「認証」と送信してください。")
-                logger.info(f"[handle_message] 例外時Google認証案内送信: user_id={getattr(event.source, 'user_id', None)}")
+                # 例外時もGoogle認証案内を返す
+                user_id = getattr(event.source, 'user_id', None)
+                if user_id:
+                    code = get_auth_url(user_id)
+                    login_url = f"{os.getenv('BASE_URL', 'https://linecalendar-production.up.railway.app')}/onetimelogin"
+                    msg1 = f"カレンダーを利用するにはGoogle認証が必要です。\nあなたのワンタイムコードは【{code}】です。"
+                    msg2 = f"下記URLから認証ページにアクセスし、ワンタイムコードを入力してください：\n{login_url}"
+                    await reply_text(event.reply_token, [msg1, msg2])
+                    logger.info(f"[handle_message] 例外時Google認証案内送信: user_id={user_id}, code={code}")
+                else:
+                    await reply_text(event.reply_token, "Google認証が必要です。LINEで『連携』や『認証』と送信してください。")
+                    logger.info(f"[handle_message] 例外時Google認証案内送信: user_id=None")
         except Exception as reply_error:
             logger.error(f"Error sending error message: {str(reply_error)}")
         return {'type': 'text', 'text': 'エラーが発生しました。'}
