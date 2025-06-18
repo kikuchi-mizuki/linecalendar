@@ -160,7 +160,7 @@ async def handle_message(user_id: str, message: str, reply_token: str):
                     day = parse_dt(pending_event.get('start_time')).replace(hour=0, minute=0, second=0, microsecond=0)
                     day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
                     events = await calendar_manager.get_events(start_time=day, end_time=day_end)
-                    msg = f"✅ 予定を追加しました：\n{pending_event.get('title')}\n{pending_event.get('start_time')}～{pending_event.get('end_time')}\n\n" + format_event_list(events, day, day_end)
+                    msg = f"✅ 予定を追加しました：\n{pending_event.get('title')}\n\n" + format_event_list(events, day, day_end)
                 else:
                     msg = f"強制追加に失敗しました: {add_result.get('message', '不明なエラー')}"
                 await reply_text(reply_token, msg)
@@ -342,7 +342,7 @@ async def handle_add_event(result, calendar_manager, user_id, reply_token):
             day = result['start_time'].replace(hour=0, minute=0, second=0, microsecond=0)
             day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
             events = await calendar_manager.get_events(start_time=day, end_time=day_end)
-            msg = f"✅ 予定を追加しました：\n{result['title']}\n{result['start_time'].strftime('%m月%d日 %H:%M')}～{result['end_time'].strftime('%H:%M')}\n\n" + format_event_list(events, day, day_end)
+            msg = f"✅ 予定を追加しました：\n{result['title']}\n\n" + format_event_list(events, day, day_end)
             await reply_text(reply_token, msg)
         else:
             if add_result.get('error') == 'duplicate':
@@ -358,7 +358,10 @@ async def handle_add_event(result, calendar_manager, user_id, reply_token):
                     'force_add': True
                 }
                 db_manager.save_pending_event(user_id, pending_event)
-            await reply_text(reply_token, f"予定の追加に失敗しました: {add_result.get('message', '不明なエラー')}")
+            if add_result.get('message'):
+                await reply_text(reply_token, add_result['message'])
+            else:
+                await reply_text(reply_token, '予定の追加に失敗しました。')
     except Exception as e:
         logger.error(f"予定の追加中にエラーが発生: {str(e)}")
         logger.error(traceback.format_exc())
