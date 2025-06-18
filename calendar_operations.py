@@ -130,8 +130,8 @@ class CalendarManager:
     def _ensure_timezone(self, dt: datetime) -> datetime:
         """タイムゾーンの設定"""
         if dt.tzinfo is None:
-            return pytz.timezone(self.timezone).localize(dt)
-        return dt.astimezone(pytz.timezone(self.timezone))
+            return self.timezone.localize(dt)
+        return dt.astimezone(self.timezone)
 
     def _check_overlapping_events(self, start_time: datetime, end_time: datetime) -> List[Dict]:
         """
