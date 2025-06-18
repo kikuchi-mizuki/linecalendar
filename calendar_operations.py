@@ -359,27 +359,23 @@ class CalendarManager:
                 event_start = event.get('start', {}).get('dateTime', '')
                 logger.debug(f"取得したイベント: タイトル={event_title}, 開始時刻={event_start}")
             
-            # タイトルでフィルタリング（カタカナ保持の正規化で部分一致）
-            # タイトルが「予定」や空の場合はフィルタをスキップ
-            if norm_title and norm_title != '予定':
-                filtered_events = []
-                for event in events:
-                    event_title = event.get('summary', '')
-                    # タイトルをそのまま比較
-                    if norm_title in event_title:
-                        filtered_events.append(event)
-                        logger.debug(f"タイトル一致: 検索={norm_title}, イベント={event_title}")
-                events = filtered_events
-                logger.info(f"タイトルフィルタリング後の予定数: {len(events)}")
+            # タイトルでフィルタ（「予定」や空の場合はスキップ）
+            if title and title != '予定':
+                matching_events = [
+                    event for event in events
+                    if title.lower() in event.get('summary', '').lower()
+                ]
+            else:
+                matching_events = events
             
             # ignore_event_idでフィルタリング
             if ignore_event_id:
-                events = [event for event in events if event.get('id') != ignore_event_id]
+                matching_events = [event for event in matching_events if event.get('id') != ignore_event_id]
 
             # 予定を時系列順にソート
-            events.sort(key=lambda x: x.get('start', {}).get('dateTime', ''))
+            matching_events.sort(key=lambda x: x.get('start', {}).get('dateTime', ''))
             
-            return events
+            return matching_events
             
         except Exception as e:
             logger.error(f"イベント取得中にエラーが発生: {str(e)}")
