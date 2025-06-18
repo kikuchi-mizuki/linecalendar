@@ -148,7 +148,10 @@ async def handle_message(user_id: str, message: str, reply_token: str):
                 )
                 db_manager.clear_pending_event(user_id)
                 if add_result['success']:
-                    msg = f"✅ 強制的に予定を追加しました：\n{pending_event.get('title')}\n{pending_event.get('start_time')}～{pending_event.get('end_time')}"
+                    day = parse_dt(pending_event.get('start_time')).replace(hour=0, minute=0, second=0, microsecond=0)
+                    day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
+                    events = await calendar_manager.get_events(start_time=day, end_time=day_end)
+                    msg = f"✅ 強制的に予定を追加しました：\n{pending_event.get('title')}\n{pending_event.get('start_time')}～{pending_event.get('end_time')}\n\n" + format_event_list(events, day, day_end)
                 else:
                     msg = f"強制追加に失敗しました: {add_result.get('message', '不明なエラー')}"
                 await reply_text(reply_token, msg)
