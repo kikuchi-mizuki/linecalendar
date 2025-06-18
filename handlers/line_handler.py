@@ -117,6 +117,9 @@ async def handle_message(event):
         message_text = event.message.text
         reply_token = event.reply_token
 
+        # 空き時間キーワードを必ず定義
+        free_keywords = ['空いている時間', '空き時間', 'あき時間', '空いてる時間', '空いてる', 'free time', 'free slot']
+
         logger.info(f"Received message from {user_id}: {message_text}")
 
         # サブスクリプション確認
