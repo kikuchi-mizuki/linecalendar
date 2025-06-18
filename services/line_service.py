@@ -95,6 +95,15 @@ async def handle_message(user_id: str, message: str, reply_token: str):
         calendar_manager = get_calendar_manager(user_id)
         operation = result.get('operation_type')
         logger.debug(f"[handle_parsed_message] 操作タイプ: {operation}")
+        
+        # 「いいえ」の処理を追加
+        if message == "いいえ":
+            pending_event = db_manager.get_pending_event(user_id)
+            if pending_event:
+                db_manager.clear_pending_event(user_id)
+                await reply_text(reply_token, "予定の更新をキャンセルしました。")
+                return
+        
         if operation == 'add':
             await handle_add_event(result, calendar_manager, user_id, reply_token)
         elif operation == 'read':
@@ -171,7 +180,7 @@ async def handle_message(user_id: str, message: str, reply_token: str):
                     day = parse_dt(pending_event.get('new_start_time')).replace(hour=0, minute=0, second=0, microsecond=0)
                     day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
                     events = await calendar_manager.get_events(start_time=day, end_time=day_end)
-                    msg = "✅ 強制的に予定を更新しました。\n\n" + format_event_list(events, day, day_end)
+                    msg = "✅ 予定を更新しました。\n\n" + format_event_list(events, day, day_end)
                 else:
                     msg = f"強制更新に失敗しました: {update_result.get('message', '不明なエラー')}"
                 await reply_text(reply_token, msg)
@@ -469,7 +478,7 @@ async def handle_update_event(result, calendar_manager, user_id, reply_token):
             day = result['new_start_time'].replace(hour=0, minute=0, second=0, microsecond=0)
             day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
             events = await calendar_manager.get_events(start_time=day, end_time=day_end)
-            msg = f"予定を更新しました！\n\n" + format_event_list(events, day, day_end)
+            msg = "✅ 予定を更新しました。\n\n" + format_event_list(events, day, day_end)
             await reply_text(reply_token, msg)
         else:
             # 予定更新時に重複が発生した場合はpending_eventを保存
