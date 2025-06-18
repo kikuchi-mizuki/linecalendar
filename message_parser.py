@@ -484,9 +484,12 @@ def extract_operation_type(text: str) -> Optional[str]:
     """
     メッセージから操作タイプを抽出する
     """
-    # テキストを正規化
     normalized_text = normalize_text(text)
-
+    # 「はい」「いいえ」などの返答を判定
+    if normalized_text.strip() in ['はい', 'yes', 'はい。', 'yes.']:
+        return 'confirm'
+    if normalized_text.strip() in ['いいえ', 'no', 'いいえ。', 'no.']:
+        return 'cancel'
     # 各操作タイプのキーワードをチェック
     for keyword in ADD_KEYWORDS:
         if keyword in normalized_text:

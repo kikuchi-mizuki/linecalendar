@@ -118,13 +118,63 @@ async def handle_message(user_id: str, message: str, reply_token: str):
         elif operation == 'update':
             await handle_update_event(result, calendar_manager, user_id, reply_token)
         elif operation == 'confirm':
-            today = datetime.now(JST).date()
-            start_time = datetime.combine(today, datetime.min.time()).replace(tzinfo=JST)
-            end_time = datetime.combine(today, datetime.max.time()).replace(tzinfo=JST)
-            events = await calendar_manager.get_events(start_time, end_time)
-            msg = format_event_list(events, today, today)
-            await reply_text(reply_token, msg)
-            return
+            pending_event = db_manager.get_pending_event(user_id)
+            if not pending_event:
+                await reply_text(reply_token, "強制実行する保留中の操作が見つかりませんでした。")
+                return
+
+            op_type = pending_event.get('operation_type')
+            # ISO文字列→datetime変換
+            def parse_dt(dt):
+                if dt is None:
+                    return None
+                if isinstance(dt, str):
+                    try:
+                        return datetime.fromisoformat(dt)
+                    except Exception:
+                        return None
+                return dt
+
+            if op_type == 'add':
+                add_result = await calendar_manager.add_event(
+                    title=pending_event.get('title'),
+                    start_time=parse_dt(pending_event.get('start_time')),
+                    end_time=parse_dt(pending_event.get('end_time')),
+                    location=pending_event.get('location'),
+                    person=pending_event.get('person'),
+                    description=pending_event.get('description'),
+                    recurrence=pending_event.get('recurrence'),
+                    skip_overlap_check=True  # 強制追加
+                )
+                db_manager.clear_pending_event(user_id)
+                if add_result['success']:
+                    msg = f"✅ 強制的に予定を追加しました：\n{pending_event.get('title')}\n{pending_event.get('start_time')}～{pending_event.get('end_time')}"
+                else:
+                    msg = f"強制追加に失敗しました: {add_result.get('message', '不明なエラー')}"
+                await reply_text(reply_token, msg)
+                return
+
+            elif op_type == 'update':
+                update_result = await calendar_manager.update_event(
+                    start_time=parse_dt(pending_event.get('start_time')),
+                    end_time=parse_dt(pending_event.get('end_time')),
+                    new_start_time=parse_dt(pending_event.get('new_start_time')),
+                    new_end_time=parse_dt(pending_event.get('new_end_time')),
+                    title=pending_event.get('title'),
+                    skip_overlap_check=True  # 強制更新
+                )
+                db_manager.clear_pending_event(user_id)
+                if update_result['success']:
+                    msg = "✅ 強制的に予定を更新しました。"
+                else:
+                    msg = f"強制更新に失敗しました: {update_result.get('message', '不明なエラー')}"
+                await reply_text(reply_token, msg)
+                return
+
+            else:
+                await reply_text(reply_token, "未対応の保留中操作タイプです。")
+                db_manager.clear_pending_event(user_id)
+                return
         else:
             await reply_text(reply_token, "未対応の操作です。\n予定の追加、確認、削除、更新のいずれかを指定してください。")
     except Exception as e:
