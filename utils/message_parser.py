@@ -2,7 +2,7 @@ import re
 from datetime import datetime, timedelta, time
 import pytz
 import logging
-from typing import Dict
+from typing import Dict, Optional
 
 logger = logging.getLogger(__name__)
 JST = pytz.timezone('Asia/Tokyo')
@@ -151,4 +151,52 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
         return {'start_time': None, 'end_time': None, 'is_time_range': False}
     except Exception as e:
         logger.error(f"extract_datetime_from_message error: {str(e)}")
-        return {'start_time': None, 'end_time': None, 'is_time_range': False} 
+        return {'start_time': None, 'end_time': None, 'is_time_range': False}
+
+def extract_title(text: str, operation_type: str = None) -> Optional[str]:
+    """
+    メッセージからタイトルを抽出。delete/update時は抽出できなければ必ず「予定」を返す。
+    """
+    try:
+        normalized_text = normalize_text(text, keep_katakana=True)
+        # 時間属性ワードリスト
+        time_keywords = ['終日', '午前', '午後', '朝', '夜', '昼', '夕方', '深夜']
+        # 削除・更新操作の場合の特別処理
+        if operation_type in ('delete', 'update'):
+            lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
+            for line in lines:
+                if any(kw in line for kw in DELETE_KEYWORDS + UPDATE_KEYWORDS):
+                    continue
+                if re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z]', line) and not any(kw == line for kw in time_keywords):
+                    return line
+            return '予定'
+        # 通常の抽出ロジック
+        lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
+        # 複数行の場合は2行目以降を優先
+        if len(lines) >= 2:
+            for line in lines[1:]:
+                if re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z]', line) and not any(kw == line for kw in time_keywords):
+                    return line.strip()
+        # 1行目のみの場合
+        if len(lines) == 1:
+            line = lines[0]
+            # 日付・時刻部分を除去
+            line = re.sub(r'^(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?[\-〜~～](\d{1,2}):?(\d{2})?', '', line)
+            line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時[\-〜~～](\d{1,2})時', '', line)
+            line = re.sub(r'^(\d{1,2}):?(\d{2})?[\-〜~～](\d{1,2}):?(\d{2})?', '', line)
+            line = re.sub(r'^(\d{1,2})時[\-〜~～](\d{1,2})時', '', line)
+            line = re.sub(r'^(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?', '', line)
+            line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時(\d{1,2})分?', '', line)
+            line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時', '', line)
+            line = re.sub(r'^(\d{1,2})[\/](\d{1,2})[\s　]*(\d{1,2}):?(\d{2})?', '', line)
+            line = re.sub(r'^[\s　:：,、。]+', '', line)
+            if not line or re.fullmatch(r'[\d/:年月日時分\-〜~～\s　]+', line):
+                return None
+            if any(kw == line for kw in time_keywords):
+                return None
+            return line.strip()
+        # どの行にもタイトルらしきものがなければNone
+        return None
+    except Exception as e:
+        logger.error(f"タイトル抽出エラー: {str(e)}")
+        return None 
