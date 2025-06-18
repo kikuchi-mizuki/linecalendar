@@ -149,7 +149,7 @@ async def handle_message(event):
             try:
                 calendar_manager = get_calendar_manager(user_id)
                 today = datetime.now().astimezone()
-                free_slots = calendar_manager.get_free_time_slots(today)
+                free_slots = await calendar_manager.get_free_time_slots(today)
                 msg = calendar_manager.format_free_time_slots(free_slots)
                 await reply_text(reply_token, msg)
                 logger.info(f"[handle_message] 空き時間案内送信: user_id={user_id}")
