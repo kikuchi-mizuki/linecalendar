@@ -8,11 +8,12 @@ from services.line_service import reply_text, get_auth_url, handle_message, form
 from message_parser import parse_message
 import os
 import traceback
-from datetime import datetime
+from datetime import datetime, timedelta
 from utils.db import get_db_connection, db_manager
 import logging
 import google_auth_oauthlib
 from flask import url_for
+from utils.formatters import format_free_time_calendar
 # ↓循環import回避のため直接定義
 CLIENT_SECRETS_FILE = "client_secret.json"
 
@@ -149,8 +150,22 @@ async def handle_message(event):
             try:
                 calendar_manager = get_calendar_manager(user_id)
                 today = datetime.now().astimezone()
-                free_slots = await calendar_manager.get_free_time_slots(today)
-                msg = calendar_manager.format_free_time_slots(free_slots)
+                # デフォルトは今日のみ
+                start_date = today.replace(hour=0, minute=0, second=0, microsecond=0)
+                end_date = start_date
+                # 「今日からn週間」などのパターンを判定
+                import re
+                week_match = re.search(r'今日から(\d+)週間', message_text)
+                if week_match:
+                    n_weeks = int(week_match.group(1))
+                    end_date = start_date + timedelta(days=7*n_weeks-1)
+                elif '今日から1週間' in message_text:
+                    end_date = start_date + timedelta(days=6)
+                elif '今日から2週間' in message_text:
+                    end_date = start_date + timedelta(days=13)
+                # 空き時間取得
+                free_slots_by_day = await calendar_manager.get_free_time_slots_range(start_date, end_date)
+                msg = format_free_time_calendar(free_slots_by_day)
                 await reply_text(reply_token, msg)
                 logger.info(f"[handle_message] 空き時間案内送信: user_id={user_id}")
                 return
