@@ -823,6 +823,9 @@ class CalendarManager:
                 # 開始時刻が一致するものだけ
                 elif event_start == start_time:
                     matching_events.append(event)
+            # タイトルフィルタは「予定」や空の場合は外す
+            if title in [None, '', '予定']:
+                title = None
             if title:
                 matching_events = [
                     event for event in matching_events
