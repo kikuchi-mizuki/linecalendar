@@ -817,11 +817,18 @@ class CalendarManager:
             for event in events:
                 event_start = self._parse_event_time(event['start'])
                 event_end = self._parse_event_time(event['end'])
-                # 完全一致のみを最優先
+                # 完全一致
                 if event_start == start_time and event_end == end_time:
                     matching_events.insert(0, event)
-                # 開始時刻が一致するものだけ
-                elif event_start == start_time:
+                # 日全体指定の場合、その日のイベントをすべて対象にする
+                elif (
+                    start_time.time() == datetime.min.time() and
+                    end_time.time() == datetime.max.time() and
+                    event_start.date() == start_time.date()
+                ):
+                    matching_events.append(event)
+                # 範囲内にあるイベントも候補に
+                elif (event_start >= start_time and event_start <= end_time) or (event_end >= start_time and event_end <= end_time):
                     matching_events.append(event)
             # タイトルフィルタは「予定」や空の場合は外す
             if title in [None, '', '予定']:
