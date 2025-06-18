@@ -216,5 +216,29 @@ class TestMessageParser(unittest.TestCase):
                 self.assertTrue(result['success'])
                 self.assertEqual(result['operation_type'], 'read')
 
+    def test_extract_title_multiline(self):
+        """
+        2行目タイトルの抽出テスト
+        """
+        from message_parser import extract_title
+        # 2行目がタイトル
+        message = "6/20 終日\n汐留出社"
+        title = extract_title(message)
+        self.assertEqual(title, "汐留出社")
+        # 2行目が時間属性ワードのみの場合はNone
+        message2 = "6/20 終日\n終日"
+        title2 = extract_title(message2)
+        self.assertIsNone(title2)
+
+    def test_parse_message_multiline_title(self):
+        """
+        2行目タイトルのパーステスト
+        """
+        from message_parser import parse_message
+        message = "6/20 終日\n汐留出社"
+        result = parse_message(message)
+        self.assertTrue(result["success"])
+        self.assertEqual(result["title"], "汐留出社")
+
 if __name__ == '__main__':
     unittest.main() 
