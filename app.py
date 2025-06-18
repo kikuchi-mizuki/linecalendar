@@ -34,6 +34,7 @@ from utils.formatters import format_event_list
 from utils.message_parser import extract_datetime_from_message
 from urllib.parse import urlparse
 from utils.logger import setup_logging, SensitiveDataFilter
+import migrate_db
 
 logging.basicConfig(level=logging.DEBUG)
 
