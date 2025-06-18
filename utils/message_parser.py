@@ -96,19 +96,6 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             start_time = start_time.replace(hour=0, minute=0, second=0, microsecond=0)
             end_time = start_time + timedelta(days=6, hours=23, minutes=59, seconds=59, microseconds=999999)
             return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True}
-        # 「6/18 1」や「6月18日1時」
-        m = re.search(r'(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2})時?', message)
-        if m:
-            logger.debug(f"[extract_datetime_from_message] 月日＋時刻パターン matched: {m.groups()} message={message}")
-            month = int(m.group(1))
-            day = int(m.group(2))
-            hour = int(m.group(3))
-            year = now.year
-            if (month < now.month) or (month == now.month and day < now.day):
-                year += 1
-            start_time = JST.localize(datetime(year, month, day, hour, 0, 0))
-            end_time = start_time + timedelta(hours=1)
-            return {'start_time': start_time, 'end_time': end_time, 'is_time_range': False}
         # --- 月日指定パターンを最優先で抽出 ---
         m = re.search(r'(\d{1,2})[\/月](\d{1,2})(?:日)?(?=\D|$)', message)
         if m:
@@ -127,6 +114,19 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             end_time = JST.localize(datetime(year, month, day, 23, 59, 59, 999999))
             logger.debug(f"[DEBUG] 月日パターン return: start_time={start_time}, end_time={end_time}")
             return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True}
+        # 「6/18 1」や「6月18日1時」
+        m = re.search(r'(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2})時?', message)
+        if m:
+            logger.debug(f"[extract_datetime_from_message] 月日＋時刻パターン matched: {m.groups()} message={message}")
+            month = int(m.group(1))
+            day = int(m.group(2))
+            hour = int(m.group(3))
+            year = now.year
+            if (month < now.month) or (month == now.month and day < now.day):
+                year += 1
+            start_time = JST.localize(datetime(year, month, day, hour, 0, 0))
+            end_time = start_time + timedelta(hours=1)
+            return {'start_time': start_time, 'end_time': end_time, 'is_time_range': False}
         # --- 日本語日付＋時刻範囲パターンを最優先で抽出 ---
         jp_date_time_range_match = re.search(r'(\d{1,2})月(\d{1,2})日[\s　]*(\d{1,2}):?(\d{2})[〜~～-](\d{1,2}):?(\d{2})', message)
         if jp_date_time_range_match:
