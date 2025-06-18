@@ -163,6 +163,7 @@ class DatabaseManager:
     def save_pending_event(self, user_id, event_info):
         """保留中のイベントを保存する"""
         try:
+            logger.info(f"[save_pending_event] user_id={user_id}, event_info={event_info}")
             with self.get_db_connection() as conn:
                 cursor = conn.cursor()
                 cursor.execute(

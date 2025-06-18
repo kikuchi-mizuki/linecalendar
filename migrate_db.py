@@ -29,4 +29,15 @@ for db_path in ["calendar_bot.db", "instance/calendar.db"]:
             print("updated_atカラムは既に存在します。")
         conn.close()
     else:
-        print(f"{db_path} は存在しません。") 
+        print(f"{db_path} は存在しません。")
+
+# pending_eventsテーブルの全データを出力
+try:
+    conn = sqlite3.connect("calendar_bot.db")
+    cursor = conn.cursor()
+    print("=== pending_events全件 ===")
+    for row in cursor.execute("SELECT * FROM pending_events"):
+        print(row)
+    conn.close()
+except Exception as e:
+    print("pending_events全件出力エラー:", e) 
