@@ -416,6 +416,20 @@ async def handle_update_event(result, calendar_manager, user_id, reply_token):
             msg = f"予定を更新しました！\n\n" + format_event_list(events, day, day_end)
             await reply_text(reply_token, msg)
         else:
+            # 予定更新時に重複が発生した場合はpending_eventを保存
+            if update_result.get('error') == 'duplicate':
+                pending_event = {
+                    'operation_type': 'update',
+                    'update_index': result.get('update_index'),
+                    'start_time': result.get('start_time').isoformat() if result.get('start_time') else None,
+                    'new_start_time': result.get('new_start_time').isoformat() if result.get('new_start_time') else None,
+                    'new_end_time': result.get('new_end_time').isoformat() if result.get('new_end_time') else None,
+                    'title': result.get('title'),
+                    'force_update': True
+                }
+                db_manager.save_pending_event(user_id, pending_event)
+                await reply_text(reply_token, update_result.get('message', '重複しています。強制的に更新しますか？'))
+                return
             await reply_text(reply_token, f"予定の更新に失敗しました: {update_result.get('message', '不明なエラー')}")
     except Exception as e:
         logger.error(f"予定の更新中にエラーが発生: {str(e)}")
