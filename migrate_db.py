@@ -18,6 +18,15 @@ for db_path in ["calendar_bot.db", "instance/calendar.db"]:
                 print("エラー:", e)
         else:
             print("event_infoカラムは既に存在します。")
+        if "updated_at" not in columns:
+            try:
+                cursor.execute("ALTER TABLE pending_events ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;")
+                print("updated_atカラムを追加しました。")
+                conn.commit()
+            except Exception as e:
+                print("エラー:", e)
+        else:
+            print("updated_atカラムは既に存在します。")
         conn.close()
     else:
         print(f"{db_path} は存在しません。") 
