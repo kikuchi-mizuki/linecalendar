@@ -288,14 +288,22 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
     try:
         if current_time is None:
             current_time = datetime.now(pytz.timezone('Asia/Tokyo'))
-        
         # メッセージを正規化
         normalized_message = normalize_text(message)
         logger.debug(f"正規化後のメッセージ: {normalized_message}")
-        
         # まず従来の方法でoperation_typeを抽出
         operation_type = extract_operation_type(normalized_message)
-        
+        # confirm/cancelの場合はtitleをNoneで返す
+        if operation_type in ['confirm', 'cancel']:
+            return {
+                'success': True,
+                'operation_type': operation_type,
+                'title': None,
+                'date': None,
+                'start_time': None,
+                'end_time': None,
+                'is_range': False
+            }
         # 操作タイプが特定できない場合、内容から推論
         if not operation_type:
             # 日時やタイトルを抽出して推論
