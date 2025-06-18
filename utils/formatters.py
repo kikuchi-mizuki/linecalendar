@@ -72,4 +72,29 @@ def format_event_list(events: List[Dict], start_time: datetime = None, end_time:
         
         lines.append(border())
     
+    return "\n".join(lines)
+
+def format_free_time_calendar(free_slots_by_day: Dict[str, List[Dict]]) -> str:
+    """
+    カレンダー風に空き時間を整形して返す
+    Args:
+        free_slots_by_day (Dict[str, List[Dict]]): 日付ごとの空き時間リスト
+    Returns:
+        str: 整形された空き時間情報
+    """
+    def border():
+        return '━━━━━━━━━━'
+    lines = []
+    for date_str, slots in free_slots_by_day.items():
+        lines.append(f'📅 {date_str}')
+        lines.append(border())
+        if slots:
+            for slot in slots:
+                start_time = slot['start'].strftime('%H:%M')
+                end_time = slot['end'].strftime('%H:%M')
+                lines.append(f"⏰ {start_time}～{end_time}")
+        else:
+            lines.append("空き時間はありません。")
+        lines.append("")
+        lines.append(border())
     return "\n".join(lines) 
