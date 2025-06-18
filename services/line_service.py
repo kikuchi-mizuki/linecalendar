@@ -390,16 +390,25 @@ async def handle_delete_event(result, calendar_manager, user_id, reply_token):
 
 async def handle_update_event(result, calendar_manager, user_id, reply_token):
     try:
-        if not all(k in result for k in ['start_time', 'end_time', 'new_start_time', 'new_end_time']):
-            await reply_text(reply_token, "予定の更新に必要な情報が不足しています。\n更新する予定の時間と新しい時間を指定してください。")
-            return
-        update_result = await calendar_manager.update_event(
-            start_time=result['start_time'],
-            end_time=result['end_time'],
-            new_start_time=result['new_start_time'],
-            new_end_time=result['new_end_time'],
-            title=result.get('title')
-        )
+        # インデックス指定がある場合はupdate_event_by_indexを呼ぶ
+        if 'update_index' in result and result.get('start_time') and result.get('new_start_time') and result.get('new_end_time'):
+            update_result = await calendar_manager.update_event_by_index(
+                index=result['update_index'],
+                new_start_time=result['new_start_time'],
+                new_end_time=result['new_end_time'],
+                start_time=result.get('start_time')
+            )
+        else:
+            if not all(k in result for k in ['start_time', 'end_time', 'new_start_time', 'new_end_time']):
+                await reply_text(reply_token, "予定の更新に必要な情報が不足しています。\n更新する予定の時間と新しい時間を指定してください。")
+                return
+            update_result = await calendar_manager.update_event(
+                start_time=result['start_time'],
+                end_time=result['end_time'],
+                new_start_time=result['new_start_time'],
+                new_end_time=result['new_end_time'],
+                title=result.get('title')
+            )
         if update_result['success']:
             day = result['new_start_time'].replace(hour=0, minute=0, second=0, microsecond=0)
             day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
