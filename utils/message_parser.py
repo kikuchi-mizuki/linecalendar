@@ -4,7 +4,18 @@ import pytz
 import logging
 from typing import Dict, Optional
 
+# ロガーの設定
 logger = logging.getLogger(__name__)
+logger.setLevel(logging.DEBUG)
+
+# 既存のハンドラーがない場合のみ追加
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+
 JST = pytz.timezone('Asia/Tokyo')
 
 def extract_datetime_from_message(message: str, operation_type: str = None) -> Dict:
@@ -274,3 +285,89 @@ def extract_title(text: str, operation_type: str = None) -> Optional[str]:
     except Exception as e:
         logger.error(f"タイトル抽出エラー: {str(e)}")
         return None 
+
+def parse_message(message: str, current_time: datetime = None) -> Dict:
+    print(f"[parse_message] called: message={message}")
+    try:
+        if current_time is None:
+            current_time = datetime.now(pytz.timezone('Asia/Tokyo'))
+        # メッセージを正規化
+        normalized_message = normalize_text(message)
+        logger.debug(f"正規化後のメッセージ: {normalized_message}")
+        # まず従来の方法でoperation_typeを抽出
+        operation_type = extract_operation_type(normalized_message)
+        # confirm/cancelの場合はtitleをNoneで返す
+        if operation_type in ['confirm', 'cancel']:
+            return {
+                'success': True,
+                'operation_type': operation_type,
+                'title': None,
+                'date': None,
+                'start_time': None,
+                'end_time': None,
+                'is_range': False
+            }
+        # 操作タイプが特定できない場合、内容から推論
+        if not operation_type:
+            # 日時やタイトルを抽出して推論
+            datetime_info = extract_datetime_from_message(normalized_message)
+            title = extract_title(normalized_message)
+            logger.debug(f"[parse_message] タイトル抽出結果: {title}")
+            extracted = {}
+            if datetime_info:
+                extracted["start_time"] = datetime_info.get("start_time")
+            if title:
+                extracted["title"] = title
+            operation_type = detect_operation_type(normalized_message, extracted)
+            # それでも特定できない場合は、メッセージの内容から推測
+            if not operation_type:
+                # 日付や時刻が含まれている、またはdatetime_info/titleがどちらかあれば追加とみなす
+                if (datetime_info and datetime_info.get("start_time")) or title or re.search(r'\d{1,2}月\d{1,2}日|\d{1,2}/\d{1,2}|\d{1,2}時|\d{1,2}:\d{2}', normalized_message):
+                    operation_type = "add"
+                elif re.search(r'確認|教えて|見せて|表示|一覧', normalized_message):
+                    operation_type = "read"
+                else:
+                    return {'success': False, 'error': '操作タイプを特定できませんでした。'}
+
+        # 操作タイプごとの処理
+        if operation_type == 'add':
+            lines = normalized_message.splitlines()
+            if len(lines) >= 2:
+                datetime_info = extract_datetime_from_message(lines[0], operation_type)
+            else:
+                datetime_info = extract_datetime_from_message(normalized_message, operation_type)
+            if not datetime_info or not datetime_info.get('start_time'):
+                return {'success': False, 'error': '日時情報が特定できません。'}
+            
+            title = extract_title(message)
+            logger.debug(f"[parse_message][add] タイトル抽出結果: {title}")
+            if not title:
+                return {'success': False, 'error': 'タイトルを特定できません。'}
+            
+            location = extract_location(normalized_message)
+            person = extract_person(normalized_message)
+            recurrence = extract_recurrence(normalized_message)
+            
+            # durationがあればend_timeを上書き
+            if 'duration' in datetime_info:
+                end_time = datetime_info['start_time'] + datetime_info['duration']
+            else:
+                end_time = datetime_info.get('end_time', datetime_info['start_time'] + timedelta(hours=1))
+            
+            result = {
+                "success": True,
+                "operation_type": operation_type,
+                "title": title,
+                "start_time": datetime_info['start_time'],
+                "end_time": end_time,
+                "location": location,
+                "person": person,
+                "recurrence": recurrence
+            }
+            logger.info(f"[parse_message result] {result}")
+            print(f"[parse_message result] {result}")
+            return result
+        # ... existing code ...
+    except Exception as e:
+        logger.error(f"parse_message error: {str(e)}")
+        return {'success': False, 'error': '処理中にエラーが発生しました。'} 
