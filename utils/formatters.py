@@ -110,7 +110,16 @@ def format_simple_free_time(free_slots_by_day: dict) -> str:
     """
     lines = []
     WEEKDAYS = ['月', '火', '水', '木', '金', '土', '日']
-    for date_str, slots in free_slots_by_day.items():
+    
+    # 空き時間がある日のみをフィルタリング
+    days_with_slots = {date_str: slots for date_str, slots in free_slots_by_day.items() if slots}
+    
+    # すべての日に空き時間がない場合
+    if not days_with_slots:
+        return "空き時間はありません"
+    
+    # 空き時間がある日のみを表示
+    for date_str, slots in days_with_slots.items():
         # 年を省略し「M/D（曜）」形式に変換（曜日は日本語1文字）
         m = re.match(r'(\d{4})年(\d{2})月(\d{2})日 \((\w{3})\)', date_str)
         if m:
@@ -124,12 +133,9 @@ def format_simple_free_time(free_slots_by_day: dict) -> str:
         else:
             simple_date = date_str
         lines.append(simple_date)
-        if slots:
-            for slot in slots:
-                start_time = slot['start'].strftime('%-H:%M') if hasattr(slot['start'], 'strftime') else str(slot['start'])
-                end_time = slot['end'].strftime('%-H:%M') if hasattr(slot['end'], 'strftime') else str(slot['end'])
-                lines.append(f"・{start_time}〜{end_time}")
-        else:
-            lines.append("空き時間はありません")
+        for slot in slots:
+            start_time = slot['start'].strftime('%-H:%M') if hasattr(slot['start'], 'strftime') else str(slot['start'])
+            end_time = slot['end'].strftime('%-H:%M') if hasattr(slot['end'], 'strftime') else str(slot['end'])
+            lines.append(f"・{start_time}〜{end_time}")
         lines.append("")
     return "\n".join(lines).strip() 
