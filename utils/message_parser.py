@@ -3,6 +3,7 @@ from datetime import datetime, timedelta, time
 import pytz
 import logging
 from typing import Dict, Optional
+from message_parser import normalize_text
 
 # ロガーの設定
 logger = logging.getLogger("app")
@@ -284,6 +285,7 @@ def extract_title(text: str, operation_type: str = None) -> Optional[str]:
         return None
     except Exception as e:
         logger.error(f"タイトル抽出エラー: {str(e)}")
+        print(f"[extract_title][EXCEPTION] {e}")
         return None 
 
 def parse_message(message: str, current_time: datetime = None) -> Dict:
