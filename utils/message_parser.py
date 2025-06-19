@@ -3,7 +3,7 @@ from datetime import datetime, timedelta, time
 import pytz
 import logging
 from typing import Dict, Optional
-from message_parser import normalize_text
+import jaconv
 
 # ロガーの設定
 logger = logging.getLogger("app")
@@ -18,6 +18,80 @@ if not logger.handlers:
     logger.addHandler(handler)
 
 JST = pytz.timezone('Asia/Tokyo')
+
+def normalize_text(text: str, keep_katakana: bool = False) -> str:
+    """
+    テキストを正規化する
+    """
+    if not keep_katakana:
+        # 半角カタカナ→全角カタカナ
+        text = jaconv.h2z(text, kana=True)
+        # 全角カタカナ→ひらがな
+        text = jaconv.kata2hira(text)
+    else:
+        # カタカナはそのまま、英数字のみ半角化
+        text = jaconv.z2h(text, ascii=True, digit=True)
+    # 全角スペースを半角に変換
+    text = text.replace('　', ' ')
+    # 半角カタカナの「キャンセル」をひらがなに変換（複数のパターンに対応）
+    text = text.replace('ｷｬﾝｾﾙ', 'きゃんせる')
+    text = text.replace('ｷｬﾝｾﾙして', 'きゃんせるして')
+    text = text.replace('ｷｬﾝｾﾙしてください', 'きゃんせるしてください')
+    # 相対日付表現の正規化
+    text = text.replace('あした', '明日')
+    text = text.replace('あす', '明日')
+    text = text.replace('みょうにち', '明日')
+    text = text.replace('あさって', '明後日')
+    text = text.replace('みょうごにち', '明後日')
+    text = text.replace('きのう', '昨日')
+    text = text.replace('さくじつ', '昨日')
+    text = text.replace('おととい', '一昨日')
+    text = text.replace('いっさくじつ', '一昨日')
+    text = text.replace('こんしゅう', '今週')
+    text = text.replace('らいしゅう', '来週')
+    text = text.replace('さらいしゅう', '再来週')
+    text = text.replace('こんげつ', '今月')
+    text = text.replace('らいげつ', '来月')
+    text = text.replace('さらいげつ', '再来月')
+    # 助詞付きの表現も正規化
+    text = text.replace('あしたの', '明日の')
+    text = text.replace('あすの', '明日の')
+    text = text.replace('みょうにちの', '明日の')
+    text = text.replace('あさっての', '明後日の')
+    text = text.replace('みょうごにちの', '明後日の')
+    text = text.replace('きのうの', '昨日の')
+    text = text.replace('さくじつの', '昨日の')
+    text = text.replace('おとといの', '一昨日の')
+    text = text.replace('いっさくじつの', '一昨日の')
+    text = text.replace('こんしゅうの', '今週の')
+    text = text.replace('らいしゅうの', '来週の')
+    text = text.replace('さらいしゅうの', '再来週の')
+    text = text.replace('こんげつの', '今月の')
+    text = text.replace('らいげつの', '来月の')
+    text = text.replace('さらいげつの', '再来月の')
+    # 全角数字を半角数字に変換（追加）
+    text = text.replace('０', '0')
+    text = text.replace('１', '1')
+    text = text.replace('２', '2')
+    text = text.replace('３', '3')
+    text = text.replace('４', '4')
+    text = text.replace('５', '5')
+    text = text.replace('６', '6')
+    text = text.replace('７', '7')
+    text = text.replace('８', '8')
+    text = text.replace('９', '9')
+    # 全角数字の「一」を半角数字に変換（追加）
+    text = text.replace('一', '1')
+    text = text.replace('二', '2')
+    text = text.replace('三', '3')
+    text = text.replace('四', '4')
+    text = text.replace('五', '5')
+    text = text.replace('六', '6')
+    text = text.replace('七', '7')
+    text = text.replace('八', '8')
+    text = text.replace('九', '9')
+    text = text.replace('十', '10')
+    return text
 
 def extract_datetime_from_message(message: str, operation_type: str = None) -> Dict:
     """
