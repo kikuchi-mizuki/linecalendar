@@ -96,7 +96,32 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             start_time = start_time.replace(hour=0, minute=0, second=0, microsecond=0)
             end_time = start_time + timedelta(days=6, hours=23, minutes=59, seconds=59, microseconds=999999)
             return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True}
-        # --- 複数日指定パターンを最優先で抽出（例：6/21と6/22の予定） ---
+        # --- 3個以上の複数日指定パターンを最優先で抽出（例：6/21と6/22と6/23の予定） ---
+        multiple_dates_all_pattern = r'((?:\d{1,2}[\/月]\d{1,2}(?:日)?)(?:\s*と\s*\d{1,2}[\/月]\d{1,2}(?:日)?)+)'
+        multiple_dates_all_match = re.search(multiple_dates_all_pattern, message)
+        if multiple_dates_all_match:
+            logger.debug(f"[DEBUG] 複数日(3個以上)パターン message={message} match={multiple_dates_all_match.group(1)}")
+            date_strs = re.findall(r'(\d{1,2})[\/月](\d{1,2})(?:日)?', multiple_dates_all_match.group(1))
+            now = datetime.now(JST)
+            year = now.year
+            date_objs = []
+            for month_str, day_str in date_strs:
+                month = int(month_str)
+                day = int(day_str)
+                this_year_date_naive = datetime(year, month, day, 0, 0, 0)
+                today_naive = now.replace(hour=0, minute=0, second=0, microsecond=0).replace(tzinfo=None)
+                # 今日より前なら翌年
+                if this_year_date_naive < today_naive:
+                    date_obj = JST.localize(datetime(year+1, month, day, 0, 0, 0))
+                else:
+                    date_obj = JST.localize(datetime(year, month, day, 0, 0, 0))
+                date_objs.append(date_obj)
+            # 最小日付と最大日付を範囲として返す
+            start_time = min(date_objs)
+            end_time = max(date_objs).replace(hour=23, minute=59, second=59, microsecond=999999)
+            logger.debug(f"[DEBUG] 複数日(3個以上)パターン return: start_time={start_time}, end_time={end_time}")
+            return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True}
+        # --- 複数日指定パターン（2個） ---
         multiple_dates_pattern = r'(\d{1,2})[\/月](\d{1,2})(?:日)?\s*と\s*(\d{1,2})[\/月](\d{1,2})(?:日)?'
         multiple_dates_match = re.search(multiple_dates_pattern, message)
         if multiple_dates_match:
