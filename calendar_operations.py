@@ -1203,17 +1203,23 @@ class CalendarManager:
 
         try:
             events = await self.get_events(range_start, range_end)
+            
+            # 終日予定があるかチェック
+            for event in events:
+                if 'date' in event['start'] and 'date' in event['end']:
+                    event_start_dt = parse_event_time(event['start'])
+                    event_end_dt = parse_event_time(event['end'])
+                    # 終日予定の日付が範囲内なら、その日は空き時間なし
+                    if event_start_dt.date() <= range_end.date() and event_end_dt.date() >= range_start.date():
+                        logger.info(f"[空き時間デバッグ] 終日予定を検出: {event.get('summary')} ({event_start_dt.date()}～{event_end_dt.date()})")
+                        return []  # 空き時間なしで即座に返す
+            
             sorted_events = sorted(events, key=lambda x: parse_event_time(x['start']))
             free_slots = []
             current_time = range_start
             for event in sorted_events:
                 event_start_dt = parse_event_time(event['start'])
                 event_end_dt = parse_event_time(event['end'])
-                # 終日予定の場合、その日の範囲（例: 8:00～22:00）をすべて埋まっている扱いにする
-                if 'date' in event['start'] and 'date' in event['end']:
-                    # 終日予定の日付が範囲内なら、その日は空き時間なし
-                    if event_start_dt.date() <= range_end.date() and event_end_dt.date() >= range_start.date():
-                        continue
                 duration_min = (event_start_dt - current_time).total_seconds() / 60
                 if duration_min >= 30:  # min_duration=30固定
                     free_slots.append({
