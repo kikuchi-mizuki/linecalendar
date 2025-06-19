@@ -96,6 +96,33 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             start_time = start_time.replace(hour=0, minute=0, second=0, microsecond=0)
             end_time = start_time + timedelta(days=6, hours=23, minutes=59, seconds=59, microseconds=999999)
             return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True}
+        # --- 複数日指定パターンを最優先で抽出（例：6/21と6/22の予定） ---
+        multiple_dates_pattern = r'(\d{1,2})[\/月](\d{1,2})(?:日)?\s*と\s*(\d{1,2})[\/月](\d{1,2})(?:日)?'
+        multiple_dates_match = re.search(multiple_dates_pattern, message)
+        if multiple_dates_match:
+            logger.debug(f"[DEBUG] 複数日パターン message={message} groups={multiple_dates_match.groups()}")
+            month1 = int(multiple_dates_match.group(1))
+            day1 = int(multiple_dates_match.group(2))
+            month2 = int(multiple_dates_match.group(3))
+            day2 = int(multiple_dates_match.group(4))
+            year = now.year
+            
+            # 最初の日付の年を決定
+            this_year_date1_naive = datetime(year, month1, day1, 0, 0, 0)
+            today_naive = now.replace(hour=0, minute=0, second=0, microsecond=0).replace(tzinfo=None)
+            if this_year_date1_naive < today_naive:
+                year += 1
+            
+            # 2番目の日付の年を決定（最初の日付より前なら翌年）
+            this_year_date2_naive = datetime(year, month2, day2, 0, 0, 0)
+            this_year_date1_naive = datetime(year, month1, day1, 0, 0, 0)
+            if this_year_date2_naive < this_year_date1_naive:
+                year += 1
+            
+            start_time = JST.localize(datetime(year, month1, day1, 0, 0, 0))
+            end_time = JST.localize(datetime(year, month2, day2, 23, 59, 59, 999999))
+            logger.debug(f"[DEBUG] 複数日パターン return: start_time={start_time}, end_time={end_time}")
+            return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True}
         # --- 月日指定パターンを最優先で抽出 ---
         m = re.search(r'(\d{1,2})[\/月](\d{1,2})(?:日)?(?=\D|$)', message)
         if m:
