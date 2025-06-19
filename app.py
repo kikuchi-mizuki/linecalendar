@@ -36,7 +36,8 @@ from urllib.parse import urlparse
 from utils.logger import setup_logging, SensitiveDataFilter
 import migrate_db
 
-logging.basicConfig(level=logging.DEBUG)
+# ログ設定を初期化
+logger = setup_logging()
 
 print("=== APP STARTED ===")
 
@@ -94,117 +95,6 @@ from services.stripe_manager import StripeManager
 from handlers.line_handler import line_bp, handle_message
 from utils.db import get_db_connection
 from services.calendar_service import get_calendar_manager
-
-# loggerのグローバル定義
-logger = logging.getLogger('app')
-
-# ログ設定
-def setup_logging():
-    """
-    ログ設定を行う
-    """
-    try:
-        # ログレベルを必ずDEBUGに固定
-        log_level = 'DEBUG'
-        numeric_level = getattr(logging, log_level.upper(), None)
-        if not isinstance(numeric_level, int):
-            raise ValueError(f'Invalid log level: {log_level}')
-
-        # ログフォーマットの設定
-        log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        
-        # ログハンドラの設定
-        handlers = []
-        
-        # コンソール出力
-        console_handler = logging.StreamHandler(sys.stdout)
-        console_handler.setFormatter(logging.Formatter(log_format))
-        handlers.append(console_handler)
-        
-        # ファイル出力（本番環境の場合）
-        if os.getenv('ENVIRONMENT') == 'production':
-            from logging.handlers import RotatingFileHandler
-            file_handler = RotatingFileHandler(
-                'app.log',
-                maxBytes=10*1024*1024,  # 10MB
-                backupCount=5
-            )
-            file_handler.setFormatter(logging.Formatter(log_format))
-            handlers.append(file_handler)
-        
-        # 機密情報フィルターの追加
-        sensitive_filter = SensitiveDataFilter()
-        for handler in handlers:
-            handler.addFilter(sensitive_filter)
-        
-        # ログ設定の適用
-        logging.basicConfig(
-            level=numeric_level,
-            format=log_format,
-            handlers=handlers,
-            stream=sys.stdout
-        )
-        
-        # 特定のライブラリのログレベルを設定
-        logging.getLogger('googleapiclient.discovery_cache').setLevel(logging.ERROR)
-        logging.getLogger('urllib3').setLevel(logging.ERROR)
-        logging.getLogger('linebot').setLevel(logging.ERROR)
-        
-        global logger
-        logger = logging.getLogger('app')
-        logger.info(f"Logging configured with level: {log_level}")
-        
-        # Flaskのapp.loggerにも同じハンドラを追加
-        if 'app' in globals():
-            for handler in handlers:
-                app.logger.addHandler(handler)
-            app.logger.setLevel(numeric_level)
-            app.logger.info("Flask app.logger configured.")
-        
-        # すべてのロガーのルートレベルをDEBUGに強制
-        logging.getLogger().setLevel(logging.DEBUG)
-        
-    except Exception as e:
-        print(f"Error setting up logging: {str(e)}")
-        raise
-
-def validate_environment():
-    """
-    環境変数の検証を行う
-    """
-    required_vars = {
-        'LINE_CHANNEL_ACCESS_TOKEN': str,
-        'LINE_CHANNEL_SECRET': str,
-        'FLASK_SECRET_KEY': str,
-        'GOOGLE_CLIENT_SECRET': str
-    }
-    
-    missing_vars = []
-    invalid_vars = []
-    
-    for var_name, var_type in required_vars.items():
-        value = os.getenv(var_name)
-        if not value:
-            missing_vars.append(var_name)
-        elif not isinstance(value, var_type):
-            invalid_vars.append(var_name)
-    
-    if missing_vars:
-        raise ValueError(f"Missing required environment variables: {', '.join(missing_vars)}")
-    if invalid_vars:
-        raise ValueError(f"Invalid environment variables: {', '.join(invalid_vars)}")
-    
-    # オプションの環境変数の検証
-    if os.getenv('ENVIRONMENT') not in [None, 'development', 'production']:
-        raise ValueError("ENVIRONMENT must be either 'development' or 'production'")
-    
-    if os.getenv('PORT'):
-        try:
-            port = int(os.getenv('PORT'))
-            if not (1024 <= port <= 65535):
-                raise ValueError
-        except ValueError:
-            raise ValueError("PORT must be a number between 1024 and 65535")
 
 # Flaskアプリケーションの初期化
 app = Flask(__name__, static_folder='static', static_url_path='/static')
