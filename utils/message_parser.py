@@ -296,6 +296,7 @@ def extract_title(text: str, operation_type: str = None) -> Optional[str]:
     メッセージからタイトルを抽出。delete/update時は抽出できなければ必ず「予定」を返す。
     """
     try:
+        logger.debug(f"[extract_title] 入力テキスト: {text}")
         normalized_text = normalize_text(text, keep_katakana=True)
         logger.debug(f"[extract_title] 正規化後のテキスト: {normalized_text}")
         
@@ -360,7 +361,7 @@ def extract_title(text: str, operation_type: str = None) -> Optional[str]:
     except Exception as e:
         logger.error(f"タイトル抽出エラー: {str(e)}")
         print(f"[extract_title][EXCEPTION] {e}")
-        return None 
+        return None
 
 def parse_message(message: str, current_time: datetime = None) -> Dict:
     print(f"[parse_message] called: message={message}")
@@ -417,7 +418,9 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
             
             title = extract_title(message)
             logger.debug(f"[parse_message][add] タイトル抽出結果: {title}")
+            logger.debug(f"[parse_message][add] タイトル抽出前のメッセージ: {message}")
             if not title:
+                logger.debug(f"[parse_message][add] タイトルが抽出できませんでした")
                 return {'success': False, 'error': 'タイトルを特定できません。'}
             
             location = extract_location(normalized_message)
