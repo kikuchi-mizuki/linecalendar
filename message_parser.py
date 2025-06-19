@@ -578,6 +578,7 @@ class MessageParser:
 
     def parse_message(self, message: str, current_time: datetime = None) -> Dict:
         try:
+            logger.debug(f"[MessageParser.parse_message] 入力メッセージ: {message}")
             now = current_time or datetime.now(JST)
             # 日付＋番号＋削除パターン
             m = re.search(r'(\d{1,4}[\/年])?(\d{1,2})[\/月](\d{1,2})日?\s*(\d+)\s*(番)?\s*(削除|消す|キャンセル|取り消し|中止)', message)
@@ -599,6 +600,7 @@ class MessageParser:
                 }
             # 通常のパース処理
             operation_type = extract_operation_type(message)
+            logger.debug(f"[MessageParser.parse_message] 操作タイプ: {operation_type}")
             if not operation_type:
                 return {
                     'operation_type': None,
@@ -609,8 +611,10 @@ class MessageParser:
                     'is_range': False
                 }
             title = extract_title(message, operation_type)
+            logger.debug(f"[MessageParser.parse_message] タイトル抽出結果: {title}")
             # extract_datetime_from_messageを1回だけ呼ぶ
             datetime_info = extract_datetime_from_message(message)
+            logger.debug(f"[MessageParser.parse_message] 日時情報: {datetime_info}")
             result = {
                 'operation_type': operation_type,
                 'title': title,
@@ -626,6 +630,7 @@ class MessageParser:
                 result['new_end_time'] = datetime_info['new_end_time']
             if 'update_index' in datetime_info:
                 result['update_index'] = datetime_info['update_index']
+            logger.debug(f"[MessageParser.parse_message] 最終結果: {result}")
             return result
         except Exception as e:
             logger.error(f"メッセージの解析中にエラーが発生: {str(e)}")
