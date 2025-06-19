@@ -1201,12 +1201,31 @@ class CalendarManager:
                 return datetime.fromisoformat(dt_str.replace('Z', '+00:00'))
             return event_time
 
+        def is_all_day_event(event):
+            """終日予定かどうかを判定"""
+            # dateフィールドがある場合（Googleカレンダーの標準的な終日予定）
+            if 'date' in event['start'] and 'date' in event['end']:
+                return True
+            
+            # dateTimeフィールドで、時間が00:00:00～23:59:00の範囲で1日分の予定の場合
+            if 'dateTime' in event['start'] and 'dateTime' in event['end']:
+                start_dt = parse_event_time(event['start'])
+                end_dt = parse_event_time(event['end'])
+                
+                # 同じ日で、開始時刻が00:00:00、終了時刻が23:59:00付近の場合
+                if (start_dt.date() == end_dt.date() and 
+                    start_dt.hour == 0 and start_dt.minute == 0 and start_dt.second == 0 and
+                    end_dt.hour == 23 and end_dt.minute >= 59):
+                    return True
+            
+            return False
+
         try:
             events = await self.get_events(range_start, range_end)
             
             # 終日予定があるかチェック
             for event in events:
-                if 'date' in event['start'] and 'date' in event['end']:
+                if is_all_day_event(event):
                     event_start_dt = parse_event_time(event['start'])
                     event_end_dt = parse_event_time(event['end'])
                     # 終日予定の日付が範囲内なら、その日は空き時間なし
