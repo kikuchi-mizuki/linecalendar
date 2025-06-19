@@ -164,6 +164,18 @@ async def handle_message(event):
                 if week_match:
                     n_weeks = int(week_match.group(1))
                     end_date = start_date + timedelta(days=7*n_weeks-1)
+                # 「明日からn週間」パターン
+                elif re.search(r'明日から(\d+)週間', message_text):
+                    tomorrow_match = re.search(r'明日から(\d+)週間', message_text)
+                    n_weeks = int(tomorrow_match.group(1))
+                    start_date = start_date + timedelta(days=1)
+                    end_date = start_date + timedelta(days=7*n_weeks-1)
+                # 「明後日からn週間」パターン
+                elif re.search(r'明後日から(\d+)週間', message_text):
+                    day_after_tomorrow_match = re.search(r'明後日から(\d+)週間', message_text)
+                    n_weeks = int(day_after_tomorrow_match.group(1))
+                    start_date = start_date + timedelta(days=2)
+                    end_date = start_date + timedelta(days=7*n_weeks-1)
                 # 「n週間の空き時間」パターン
                 week2_match = re.search(r'(\d+)週間の空き時間', message_text)
                 if week2_match:
@@ -173,6 +185,20 @@ async def handle_message(event):
                 elif '今日から1週間' in message_text:
                     end_date = start_date + timedelta(days=6)
                 elif '今日から2週間' in message_text:
+                    end_date = start_date + timedelta(days=13)
+                # 「明日から1週間」など
+                elif '明日から1週間' in message_text:
+                    start_date = start_date + timedelta(days=1)
+                    end_date = start_date + timedelta(days=6)
+                elif '明日から2週間' in message_text:
+                    start_date = start_date + timedelta(days=1)
+                    end_date = start_date + timedelta(days=13)
+                # 「明後日から1週間」など
+                elif '明後日から1週間' in message_text:
+                    start_date = start_date + timedelta(days=2)
+                    end_date = start_date + timedelta(days=6)
+                elif '明後日から2週間' in message_text:
+                    start_date = start_date + timedelta(days=2)
                     end_date = start_date + timedelta(days=13)
                 # 「M/Dの空き時間」パターン
                 date_match = re.search(r'(\d{1,2})[\/月](\d{1,2})[日]?(の空き時間)?', message_text)
