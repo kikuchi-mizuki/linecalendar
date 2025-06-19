@@ -5,7 +5,7 @@ import logging
 from typing import Dict, Optional
 
 # ロガーの設定
-logger = logging.getLogger(__name__)
+logger = logging.getLogger("app")
 logger.setLevel(logging.DEBUG)
 
 # 既存のハンドラーがない場合のみ追加
