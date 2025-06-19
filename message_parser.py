@@ -17,7 +17,7 @@ from constants import (
     ADD_KEYWORDS, DELETE_KEYWORDS, UPDATE_KEYWORDS, READ_KEYWORDS,
     RELATIVE_DATES, WEEKDAYS, TIME_PATTERNS, DATE_PATTERNS
 )
-from utils.message_parser import extract_datetime_from_message
+from utils.message_parser import extract_datetime_from_message, extract_title
 
 logger = logging.getLogger('app')
 
@@ -542,65 +542,6 @@ def extract_operation_type(text: str) -> Optional[str]:
         if len(lines) >= 2:
             return 'add'
     return None
-
-def extract_title(text: str, operation_type: str = None) -> Optional[str]:
-    """
-    メッセージからタイトルを抽出。delete/update時は抽出できなければ必ず「予定」を返す。
-    """
-    try:
-        normalized_text = normalize_text(text, keep_katakana=True)
-        time_keywords = ['終日', '午前', '午後', '朝', '夜', '昼', '夕方', '深夜']
-        # 削除・更新操作の場合の特別処理
-        if operation_type in ('delete', 'update'):
-            lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
-            for line in lines:
-                if any(kw in line for kw in DELETE_KEYWORDS + UPDATE_KEYWORDS):
-                    continue
-                if re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z]', line) and not any(kw == line for kw in time_keywords):
-                    return line
-            return '予定'
-        # 通常の抽出ロジック
-        lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
-        # 複数行の場合は2行目以降を優先
-        if len(lines) >= 2:
-            for line in lines[1:]:
-                if re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z]', line) and not any(kw == line for kw in time_keywords):
-                    return line.strip()
-        # 1行目のみの場合
-        if len(lines) == 1:
-            line = lines[0]
-            # 文頭の日時表現を広く除去
-            line = re.sub(
-                r'^(明日|今日|明後日|昨日|一昨日|今週|来週|再来週|先週|今月|来月|先月|今年|来年|去年|一昨年)?'
-                r'[\d/年月日\s]*'
-                r'((\d{1,2}時半(から|まで)?|\d{1,2}時(\d{1,2}分)?(から|～|〜|\-|まで)?)+)?',
-                '', line
-            )
-            # 文中の時刻範囲表現を除去（「9時から9時半まで」や「9:00〜9:30」など）
-            line = re.sub(
-                r'(\d{1,2}時半(から|まで)?|\d{1,2}時(\d{1,2}分)?(から|～|〜|\-|まで)?)+',
-                '', line
-            )
-            line = re.sub(r'(\d{1,2}[:：]\d{2}[〜~～\-]\d{1,2}[:：]\d{2})', '', line)
-            # さらに「時から」「時半から」などの断片も消す
-            line = re.sub(r'(時から|時まで|時半から|時半まで|時半)', '', line)
-            # 末尾の不要なフレーズを除去
-            line = re.sub(r'(を)?(追加|登録|設定|作成|入れる|入れて|追加してください|登録してください|設定してください|作成してください|入れてください|してください|して)$', '', line)
-            # 末尾に「さんとMTG」「さんと打ち合わせ」などがあれば優先
-            m2 = re.search(r'([\u3040-\u30ff\u4e00-\u9fffA-Za-z]+さんと.*)', line)
-            if m2:
-                return m2.group(1).strip()
-            # 最初の助詞（を・で・と等）以降を必ずカットし、strip()で前後の空白も除去
-            line = re.split(r'[をでとにへがはもや]', line, 1)[0].strip()
-            # まだ日本語文字列が残っていればそれを返す
-            m = re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z].*', line)
-            if m:
-                return m.group(0).strip()
-        # どの行にもタイトルらしきものがなければNone
-        return None
-    except Exception as e:
-        logger.error(f"タイトル抽出エラー: {str(e)}")
-        return None
 
 def extract_location(text: str) -> Optional[str]:
     return None
