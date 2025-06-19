@@ -227,10 +227,11 @@ def extract_title(text: str, operation_type: str = None) -> Optional[str]:
         # 複数行の場合は2行目以降を優先
         if len(lines) >= 2:
             for line in lines[1:]:
+                # 日本語・英字が1文字でも含まれ、かつtime_keywordsと完全一致しない行をタイトルとする
                 if re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z]', line) and not any(kw == line for kw in time_keywords):
                     return line.strip()
-        # 1行目のみの場合
-        if len(lines) == 1:
+        # 1行目のみの場合、または2行目以降でタイトルが見つからなかった場合
+        if len(lines) >= 1:
             line = lines[0]
             # 日付・時刻部分を除去
             line = re.sub(r'^(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?[\-〜~～](\d{1,2}):?(\d{2})?', '', line)
@@ -246,7 +247,9 @@ def extract_title(text: str, operation_type: str = None) -> Optional[str]:
                 return None
             if any(kw == line for kw in time_keywords):
                 return None
-            return line.strip()
+            # 1行目に日本語・英字が含まれていればそれを返す
+            if re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z]', line):
+                return line.strip()
         # どの行にもタイトルらしきものがなければNone
         return None
     except Exception as e:
