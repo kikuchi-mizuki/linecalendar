@@ -608,8 +608,10 @@ class MessageParser:
                     'end_time': None,
                     'is_range': False
                 }
+            logger.debug(f"[MessageParser.parse_message] extract_titleを呼び出し前: message={message}, operation_type={operation_type}")
             title = extract_title(message, operation_type)
             logger.debug(f"[MessageParser.parse_message] タイトル抽出結果: {title}")
+            logger.debug(f"[MessageParser.parse_message] タイトルの型: {type(title)}")
             # extract_datetime_from_messageを1回だけ呼ぶ
             datetime_info = extract_datetime_from_message(message)
             logger.debug(f"[MessageParser.parse_message] 日時情報: {datetime_info}")
