@@ -203,13 +203,13 @@ def normalize_text(text: str, keep_katakana: bool = False) -> str:
     テキストを正規化する
     """
     if not keep_katakana:
-    # 半角カタカナ→全角カタカナ
-    text = jaconv.h2z(text, kana=True)
+        # 半角カタカナ→全角カタカナ
+        text = jaconv.h2z(text, kana=True)
         # 全角カタカナ→ひらがな
         text = jaconv.kata2hira(text)
     else:
         # カタカナはそのまま、英数字のみ半角化
-    text = jaconv.z2h(text, ascii=True, digit=True)
+        text = jaconv.z2h(text, ascii=True, digit=True)
     # 全角スペースを半角に変換
     text = text.replace('　', ' ')
     # 半角カタカナの「キャンセル」をひらがなに変換（複数のパターンに対応）
@@ -385,8 +385,8 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
                 
                 if dt1.get('start_time') and dt2.get('start_time'):
                     # 2行目から新しい時間範囲を取得
-                new_start_time = dt2.get('start_time')
-                new_end_time = dt2.get('end_time')
+                    new_start_time = dt2.get('start_time')
+                    new_end_time = dt2.get('end_time')
                     
                     # 2行目にend_timeがなければ、デフォルトで1時間後を設定
                     if not new_end_time:
