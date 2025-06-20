@@ -87,4 +87,4 @@ def setup_logging():
         raise
 
 # グローバルなロガーインスタンス
-logger = setup_logging()
+# logger = setup_logging()  # この行を削除
