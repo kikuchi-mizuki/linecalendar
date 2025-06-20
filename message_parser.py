@@ -203,13 +203,13 @@ def normalize_text(text: str, keep_katakana: bool = False) -> str:
     テキストを正規化する
     """
     if not keep_katakana:
-        # 半角カタカナ→全角カタカナ
-        text = jaconv.h2z(text, kana=True)
+    # 半角カタカナ→全角カタカナ
+    text = jaconv.h2z(text, kana=True)
         # 全角カタカナ→ひらがな
         text = jaconv.kata2hira(text)
     else:
         # カタカナはそのまま、英数字のみ半角化
-        text = jaconv.z2h(text, ascii=True, digit=True)
+    text = jaconv.z2h(text, ascii=True, digit=True)
     # 全角スペースを半角に変換
     text = text.replace('　', ' ')
     # 半角カタカナの「キャンセル」をひらがなに変換（複数のパターンに対応）
@@ -385,8 +385,8 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
                 
                 if dt1.get('start_time') and dt2.get('start_time'):
                     # 2行目から新しい時間範囲を取得
-                    new_start_time = dt2.get('start_time')
-                    new_end_time = dt2.get('end_time')
+                new_start_time = dt2.get('start_time')
+                new_end_time = dt2.get('end_time')
                     
                     # 2行目にend_timeがなければ、デフォルトで1時間後を設定
                     if not new_end_time:
@@ -542,19 +542,19 @@ def extract_operation_type(text: str) -> Optional[str]:
     return None
 
 def extract_location(text: str) -> Optional[str]:
-    return None
-
+        return None
+        
 def extract_person(text: str) -> Optional[str]:
     return None
 
 def extract_recurrence(text: str) -> Optional[str]:
-    return None
+        return None
 
 class MessageParser:
     def _parse_date(self, message: str) -> dict:
         try:
             result = extract_datetime_from_message(message)
-            return {
+        return {
                 'date': result.get('start_time'),
                 'is_range': result.get('is_time_range', False)
             }
@@ -565,7 +565,7 @@ class MessageParser:
     def _parse_time(self, message: str) -> dict:
         try:
             result = extract_datetime_from_message(message)
-            return {
+        return {
                 'start_time': result.get('start_time'),
                 'end_time': result.get('end_time'),
                 'is_range': result.get('is_time_range', False)
@@ -576,6 +576,7 @@ class MessageParser:
 
     def parse_message(self, message: str, current_time: datetime = None) -> Dict:
         try:
+            print(f"[MessageParser.parse_message] 入力メッセージ: {message}")
             logger.debug(f"[MessageParser.parse_message] 入力メッセージ: {message}")
             now = current_time or datetime.now(JST)
             # 日付＋番号＋削除パターン
@@ -598,6 +599,7 @@ class MessageParser:
                 }
             # 通常のパース処理
             operation_type = extract_operation_type(message)
+            print(f"[MessageParser.parse_message] 操作タイプ: {operation_type}")
             logger.debug(f"[MessageParser.parse_message] 操作タイプ: {operation_type}")
             if not operation_type:
                 return {
@@ -608,12 +610,16 @@ class MessageParser:
                     'end_time': None,
                     'is_range': False
                 }
+            print(f"[MessageParser.parse_message] extract_titleを呼び出し前: message={message}, operation_type={operation_type}")
             logger.debug(f"[MessageParser.parse_message] extract_titleを呼び出し前: message={message}, operation_type={operation_type}")
             title = extract_title(message, operation_type)
+            print(f"[MessageParser.parse_message] タイトル抽出結果: {title}")
             logger.debug(f"[MessageParser.parse_message] タイトル抽出結果: {title}")
+            print(f"[MessageParser.parse_message] タイトルの型: {type(title)}")
             logger.debug(f"[MessageParser.parse_message] タイトルの型: {type(title)}")
             # extract_datetime_from_messageを1回だけ呼ぶ
             datetime_info = extract_datetime_from_message(message)
+            print(f"[MessageParser.parse_message] 日時情報: {datetime_info}")
             logger.debug(f"[MessageParser.parse_message] 日時情報: {datetime_info}")
             result = {
                 'operation_type': operation_type,
@@ -630,9 +636,11 @@ class MessageParser:
                 result['new_end_time'] = datetime_info['new_end_time']
             if 'update_index' in datetime_info:
                 result['update_index'] = datetime_info['update_index']
+            print(f"[MessageParser.parse_message] 最終結果: {result}")
             logger.debug(f"[MessageParser.parse_message] 最終結果: {result}")
             return result
         except Exception as e:
+            print(f"[MessageParser.parse_message] エラー: {str(e)}")
             logger.error(f"メッセージの解析中にエラーが発生: {str(e)}")
             return {
                 'operation_type': None,
