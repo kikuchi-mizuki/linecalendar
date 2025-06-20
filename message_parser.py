@@ -1,3 +1,5 @@
+# LINE Calendar Bot - Message Parser
+# Updated: 2025-06-20 - Fixed syntax errors
 import spacy
 import re
 from datetime import datetime, timedelta, timezone, date, time
@@ -554,7 +556,7 @@ class MessageParser:
     def _parse_date(self, message: str) -> dict:
         try:
             result = extract_datetime_from_message(message)
-        return {
+            return {
                 'date': result.get('start_time'),
                 'is_range': result.get('is_time_range', False)
             }
@@ -565,7 +567,7 @@ class MessageParser:
     def _parse_time(self, message: str) -> dict:
         try:
             result = extract_datetime_from_message(message)
-        return {
+            return {
                 'start_time': result.get('start_time'),
                 'end_time': result.get('end_time'),
                 'is_range': result.get('is_time_range', False)
