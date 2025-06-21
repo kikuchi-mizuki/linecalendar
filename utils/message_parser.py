@@ -311,9 +311,45 @@ def extract_title(message: str, operation_type: str = None) -> Optional[str]:
         logger.debug(f"[extract_title] 行数: {len(lines)}, 各行: {lines}")
         
         # タイトル抽出のロジック
-        title = title_extractor.extract_title(message, operation_type)
-        print(f"[extract_title] 抽出結果: '{title}'")
-        logger.debug(f"[extract_title] 抽出結果: '{title}'")
+        title = None
+        
+        # 2行目以降からタイトルを探す
+        for i, line in enumerate(lines[1:], 1):
+            print(f"[extract_title] 行{i}をチェック: '{line}'")
+            logger.debug(f"[extract_title] 行{i}をチェック: '{line}'")
+            
+            # 日時パターンを除外
+            if re.search(r'\d{1,2}[\/月]\d{1,2}|時|分|:\d{2}', line):
+                print(f"[extract_title] 行{i}は日時パターンのためスキップ")
+                logger.debug(f"[extract_title] 行{i}は日時パターンのためスキップ")
+                continue
+            
+            # 空でない行をタイトルとして使用
+            if line.strip():
+                title = line.strip()
+                print(f"[extract_title] タイトルとして抽出: '{title}'")
+                logger.debug(f"[extract_title] タイトルとして抽出: '{title}'")
+                break
+        
+        # タイトルが見つからない場合、1行目からも探す
+        if not title and lines:
+            first_line = lines[0]
+            print(f"[extract_title] 1行目をチェック: '{first_line}'")
+            logger.debug(f"[extract_title] 1行目をチェック: '{first_line}'")
+            
+            # 日時部分を除去してタイトルを抽出
+            # 日時パターンを削除
+            title_line = re.sub(r'\d{1,2}[\/月]\d{1,2}日?[\s　]*\d{1,2}:\d{2}[〜~～-]\d{1,2}:\d{2}', '', first_line)
+            title_line = re.sub(r'\d{1,2}[\/月]\d{1,2}日?', '', title_line)
+            title_line = title_line.strip()
+            
+            if title_line:
+                title = title_line
+                print(f"[extract_title] 1行目からタイトル抽出: '{title}'")
+                logger.debug(f"[extract_title] 1行目からタイトル抽出: '{title}'")
+        
+        print(f"[extract_title] 最終結果: '{title}'")
+        logger.debug(f"[extract_title] 最終結果: '{title}'")
         
         return title
         
@@ -322,6 +358,57 @@ def extract_title(message: str, operation_type: str = None) -> Optional[str]:
         logger.error(f"[extract_title] エラー: {str(e)}")
         logger.error(traceback.format_exc())
         return None
+
+def extract_operation_type(message: str) -> Optional[str]:
+    """
+    メッセージから操作タイプを抽出する
+    """
+    normalized = normalize_text(message)
+    
+    # キャンセル系
+    if re.search(r'きゃんせる|キャンセル|削除|消去|取り消し', normalized):
+        return 'cancel'
+    
+    # 確認系
+    if re.search(r'確認|教えて|見せて|表示|一覧|予定', normalized):
+        return 'read'
+    
+    # 追加系（日時が含まれている場合）
+    if re.search(r'\d{1,2}[\/月]\d{1,2}|\d{1,2}時|\d{1,2}:\d{2}', normalized):
+        return 'add'
+    
+    return None
+
+def detect_operation_type(message: str, extracted: Dict) -> Optional[str]:
+    """
+    抽出された情報から操作タイプを推測する
+    """
+    if extracted.get('start_time'):
+        return 'add'
+    elif extracted.get('title'):
+        return 'add'
+    return None
+
+def extract_location(message: str) -> Optional[str]:
+    """
+    メッセージから場所を抽出する
+    """
+    # 場所抽出のロジックを実装
+    return None
+
+def extract_person(message: str) -> Optional[str]:
+    """
+    メッセージから人物を抽出する
+    """
+    # 人物抽出のロジックを実装
+    return None
+
+def extract_recurrence(message: str) -> Optional[str]:
+    """
+    メッセージから繰り返し情報を抽出する
+    """
+    # 繰り返し抽出のロジックを実装
+    return None
 
 def parse_message(message: str, current_time: datetime = None) -> Dict:
     print(f"[parse_message] called: message={message}")
@@ -406,7 +493,48 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
             logger.info(f"[parse_message result] {result}")
             print(f"[parse_message result] {result}")
             return result
-        # ... existing code ...
+        
+        elif operation_type == 'read':
+            # 日時範囲を抽出
+            datetime_info = extract_datetime_from_message(normalized_message)
+            if datetime_info and datetime_info.get('start_time'):
+                return {
+                    'success': True,
+                    'operation_type': operation_type,
+                    'start_time': datetime_info['start_time'],
+                    'end_time': datetime_info['end_time'],
+                    'is_range': datetime_info.get('is_time_range', False)
+                }
+            else:
+                # 日時が指定されていない場合は今日の予定を表示
+                today = current_time.replace(hour=0, minute=0, second=0, microsecond=0)
+                tomorrow = today + timedelta(days=1)
+                return {
+                    'success': True,
+                    'operation_type': operation_type,
+                    'start_time': today,
+                    'end_time': tomorrow,
+                    'is_range': True
+                }
+        
+        elif operation_type == 'cancel':
+            # キャンセル処理
+            datetime_info = extract_datetime_from_message(normalized_message)
+            if datetime_info and datetime_info.get('start_time'):
+                return {
+                    'success': True,
+                    'operation_type': operation_type,
+                    'start_time': datetime_info['start_time'],
+                    'end_time': datetime_info['end_time'],
+                    'is_range': datetime_info.get('is_time_range', False)
+                }
+            else:
+                return {'success': False, 'error': 'キャンセルする予定の日時が特定できません。'}
+        
+        else:
+            return {'success': False, 'error': f'未対応の操作タイプ: {operation_type}'}
+            
     except Exception as e:
         logger.error(f"parse_message error: {str(e)}")
+        logger.error(traceback.format_exc())
         return {'success': False, 'error': '処理中にエラーが発生しました。'} 

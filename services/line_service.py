@@ -89,8 +89,11 @@ async def handle_message(user_id: str, message: str, reply_token: str):
     try:
         print(f"[handle_message] before parse_message: message={message}")
         parser = MessageParser()
+        print(f"[handle_message] MessageParser instance created")
         result = parser.parse_message(message)
         print(f"[handle_message] after parse_message: result={result}")
+        print(f"[handle_message] result['title']: {result.get('title')}")
+        print(f"[handle_message] result['title'] type: {type(result.get('title'))}")
         from services.calendar_service import get_calendar_manager
         calendar_manager = get_calendar_manager(user_id)
         operation = result.get('operation_type')
@@ -326,11 +329,22 @@ def save_one_time_code(code, user_id):
 
 async def handle_add_event(result, calendar_manager, user_id, reply_token):
     try:
+        print(f"[handle_add_event] 開始: result={result}")
+        print(f"[handle_add_event] result['title']: {result.get('title')}")
+        print(f"[handle_add_event] result['title'] type: {type(result.get('title'))}")
+        
         if not all(k in result for k in ['title', 'start_time', 'end_time']):
             await reply_text(reply_token, "予定の追加に必要な情報が不足しています。\nタイトル、開始時間、終了時間を指定してください。")
             return
+        
+        # タイトルが空文字列の場合はNoneに変換
+        title = result['title']
+        if title == '':
+            title = None
+            print(f"[handle_add_event] タイトルが空文字列のためNoneに変換")
+        
         add_result = await calendar_manager.add_event(
-            title=result['title'],
+            title=title,
             start_time=result['start_time'],
             end_time=result['end_time'],
             location=result.get('location'),
@@ -342,13 +356,14 @@ async def handle_add_event(result, calendar_manager, user_id, reply_token):
             day = result['start_time'].replace(hour=0, minute=0, second=0, microsecond=0)
             day_end = day.replace(hour=23, minute=59, second=59, microsecond=999999)
             events = await calendar_manager.get_events(start_time=day, end_time=day_end)
-            msg = f"✅ 予定を追加しました：\n{result['title']}\n\n" + format_event_list(events, day, day_end)
+            display_title = title if title else '（タイトルなし）'
+            msg = f"✅ 予定を追加しました：\n{display_title}\n\n" + format_event_list(events, day, day_end)
             await reply_text(reply_token, msg)
         else:
             if add_result.get('error') == 'duplicate':
                 pending_event = {
                     'operation_type': 'add',
-                    'title': result['title'],
+                    'title': title,
                     'start_time': result['start_time'].isoformat(),
                     'end_time': result['end_time'].isoformat(),
                     'location': result.get('location'),
