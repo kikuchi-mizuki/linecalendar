@@ -1,10 +1,10 @@
 import os
 import traceback
 from utils.db import db_manager
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, time
 from flask import session
 from typing import List, Dict, Union
-import time
+import time as time_mod
 import json
 import logging
 import pytz
@@ -70,8 +70,8 @@ def get_auth_url(user_id: str) -> str:
         # db_manager.delete_google_credentials(user_id)
         session.clear()
         session['line_user_id'] = user_id
-        session['auth_start_time'] = time.time()
-        session['last_activity'] = time.time()
+        session['auth_start_time'] = time_mod.time()
+        session['last_activity'] = time_mod.time()
         session['auth_state'] = 'started'
         session.permanent = True
         session.modified = True
