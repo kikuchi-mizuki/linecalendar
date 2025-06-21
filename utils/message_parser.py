@@ -4,6 +4,7 @@ import pytz
 import logging
 from typing import Dict, Optional
 import jaconv
+import traceback
 
 # ロガーの設定
 logger = logging.getLogger("app")
@@ -291,89 +292,35 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
         logger.error(f"extract_datetime_from_message error: {str(e)}")
         return {'start_time': None, 'end_time': None, 'is_time_range': False}
 
-def extract_title(text: str, operation_type: str = None) -> Optional[str]:
+def extract_title(message: str, operation_type: str = None) -> Optional[str]:
     """
-    メッセージからタイトルを抽出。delete/update時は抽出できなければ必ず「予定」を返す。
+    メッセージからタイトルを抽出する
     """
+    print(f"[extract_title] 開始: message='{message}', operation_type={operation_type}")
+    logger.debug(f"[extract_title] 開始: message='{message}', operation_type={operation_type}")
+    
     try:
-        print(f"[extract_title] 入力テキスト: {text}")
-        logger.debug(f"[extract_title] 入力テキスト: {text}")
-        normalized_text = normalize_text(text, keep_katakana=True)
-        print(f"[extract_title] 正規化後のテキスト: {normalized_text}")
-        logger.debug(f"[extract_title] 正規化後のテキスト: {normalized_text}")
+        # メッセージを正規化
+        normalized_message = normalize_text(message)
+        print(f"[extract_title] 正規化後: '{normalized_message}'")
+        logger.debug(f"[extract_title] 正規化後: '{normalized_message}'")
         
-        # 時間属性ワードリスト
-        time_keywords = ['終日', '午前', '午後', '朝', '夜', '昼', '夕方', '深夜']
-        # 削除・更新操作の場合の特別処理
-        if operation_type in ('delete', 'update'):
-            lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
-            for line in lines:
-                if any(kw in line for kw in DELETE_KEYWORDS + UPDATE_KEYWORDS):
-                    continue
-                if re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z]', line) and not any(kw == line for kw in time_keywords):
-                    return line
-            return '予定'
+        # 行に分割
+        lines = [line.strip() for line in normalized_message.splitlines() if line.strip()]
+        print(f"[extract_title] 行数: {len(lines)}, 各行: {lines}")
+        logger.debug(f"[extract_title] 行数: {len(lines)}, 各行: {lines}")
         
-        # 通常の抽出ロジック
-        lines = [line.strip() for line in normalized_text.splitlines() if line.strip()]
-        print(f"[extract_title] 分割後の行: {lines}")
-        logger.debug(f"[extract_title] 分割後の行: {lines}")
+        # タイトル抽出のロジック
+        title = title_extractor.extract_title(message, operation_type)
+        print(f"[extract_title] 抽出結果: '{title}'")
+        logger.debug(f"[extract_title] 抽出結果: '{title}'")
         
-        # 複数行の場合は2行目以降を優先
-        if len(lines) >= 2:
-            for i, line in enumerate(lines[1:], 1):
-                print(f"[extract_title] {i+1}行目を確認: {line}")
-                logger.debug(f"[extract_title] {i+1}行目を確認: {line}")
-                # 日本語・英字が1文字でも含まれ、かつtime_keywordsと完全一致しない行をタイトルとする
-                if re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z]', line):
-                    print(f"[extract_title] {i+1}行目に日本語・英字を検出: {line}")
-                    logger.debug(f"[extract_title] {i+1}行目に日本語・英字を検出: {line}")
-                    if not any(kw == line for kw in time_keywords):
-                        print(f"[extract_title] {i+1}行目をタイトルとして採用: {line}")
-                        logger.debug(f"[extract_title] {i+1}行目をタイトルとして採用: {line}")
-                        return line.strip()
-                    else:
-                        print(f"[extract_title] {i+1}行目は時間属性ワードと一致したためスキップ: {line}")
-                        logger.debug(f"[extract_title] {i+1}行目は時間属性ワードと一致したためスキップ: {line}")
+        return title
         
-        # 1行目のみの場合、または2行目以降でタイトルが見つからなかった場合
-        if len(lines) >= 1:
-            line = lines[0]
-            print(f"[extract_title] 1行目を処理: {line}")
-            logger.debug(f"[extract_title] 1行目を処理: {line}")
-            # 日付・時刻部分を除去
-            line = re.sub(r'^(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?[\-〜~～](\d{1,2}):?(\d{2})?', '', line)
-            line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時[\-〜~～](\d{1,2})時', '', line)
-            line = re.sub(r'^(\d{1,2}):?(\d{2})?[\-〜~～](\d{1,2}):?(\d{2})?', '', line)
-            line = re.sub(r'^(\d{1,2})時[\-〜~～](\d{1,2})時', '', line)
-            line = re.sub(r'^(\d{1,2})[\/月](\d{1,2})[日\s　]*(\d{1,2}):?(\d{2})?', '', line)
-            line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時(\d{1,2})分?', '', line)
-            line = re.sub(r'^(\d{1,2})月(\d{1,2})日(\d{1,2})時', '', line)
-            line = re.sub(r'^(\d{1,2})[\/](\d{1,2})[\s　]*(\d{1,2}):?(\d{2})?', '', line)
-            line = re.sub(r'^[\s　:：,、。]+', '', line)
-            print(f"[extract_title] 1行目から日付・時刻を除去後: {line}")
-            logger.debug(f"[extract_title] 1行目から日付・時刻を除去後: {line}")
-            
-            if not line or re.fullmatch(r'[\d/:年月日時分\-〜~～\s　]+', line):
-                print("[extract_title] 1行目は日付・時刻のみ")
-                logger.debug("[extract_title] 1行目は日付・時刻のみ")
-                return None
-            if any(kw == line for kw in time_keywords):
-                print(f"[extract_title] 1行目は時間属性ワード: {line}")
-                logger.debug(f"[extract_title] 1行目は時間属性ワード: {line}")
-                return None
-            # 1行目に日本語・英字が含まれていればそれを返す
-            if re.search(r'[\u3040-\u30ff\u4e00-\u9fffA-Za-z]', line):
-                print(f"[extract_title] 1行目をタイトルとして採用: {line}")
-                logger.debug(f"[extract_title] 1行目をタイトルとして採用: {line}")
-                return line.strip()
-            
-        print("[extract_title] タイトルが見つかりませんでした")
-        logger.debug("[extract_title] タイトルが見つかりませんでした")
-        return None
     except Exception as e:
-        print(f"[extract_title][EXCEPTION] {e}")
-        logger.error(f"タイトル抽出エラー: {str(e)}")
+        print(f"[extract_title] エラー: {str(e)}")
+        logger.error(f"[extract_title] エラー: {str(e)}")
+        logger.error(traceback.format_exc())
         return None
 
 def parse_message(message: str, current_time: datetime = None) -> Dict:
