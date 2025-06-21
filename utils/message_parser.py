@@ -300,8 +300,8 @@ def extract_title(message: str, operation_type: str = None) -> Optional[str]:
     logger.debug(f"[extract_title] 開始: message='{message}', operation_type={operation_type}")
     
     try:
-        # メッセージを正規化
-        normalized_message = normalize_text(message)
+        # メッセージを正規化（カタカナを保持）
+        normalized_message = normalize_text(message, keep_katakana=True)
         print(f"[extract_title] 正規化後: '{normalized_message}'")
         logger.debug(f"[extract_title] 正規化後: '{normalized_message}'")
         
