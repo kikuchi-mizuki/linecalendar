@@ -195,19 +195,16 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             for month_str, day_str in date_strs:
                 month = int(month_str)
                 day = int(day_str)
-                this_year_date_naive = datetime(year, month, day, 0, 0, 0)
-                today_naive = now.replace(hour=0, minute=0, second=0, microsecond=0).replace(tzinfo=None)
+                this_year_date_naive = datetime(year, month, day)
+                today_naive = now.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
                 # 今日より前なら翌年
                 if this_year_date_naive < today_naive:
-                    date_obj = JST.localize(datetime(year+1, month, day, 0, 0, 0))
+                    date_obj = JST.localize(datetime(year+1, month, day))
                 else:
-                    date_obj = JST.localize(datetime(year, month, day, 0, 0, 0))
+                    date_obj = JST.localize(datetime(year, month, day))
                 date_objs.append(date_obj)
-            # 最小日付と最大日付を範囲として返す
-            start_time = min(date_objs)
-            end_time = max(date_objs).replace(hour=23, minute=59, second=59, microsecond=999999)
-            logger.debug(f"[DEBUG] 複数日(3個以上)パターン return: start_time={start_time}, end_time={end_time}")
-            return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True}
+            logger.debug(f"[DEBUG] 複数日(3個以上)パターン return: dates={date_objs}")
+            return {'dates': date_objs, 'is_time_range': False, 'is_multiple_days': True}
         # --- 複数日指定パターン（2個） ---
         multiple_dates_pattern = r'(\d{1,2})[\/月](\d{1,2})(?:日)?\s*と\s*(\d{1,2})[\/月](\d{1,2})(?:日)?'
         multiple_dates_match = re.search(multiple_dates_pattern, message)
@@ -217,24 +214,20 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
             day1 = int(multiple_dates_match.group(2))
             month2 = int(multiple_dates_match.group(3))
             day2 = int(multiple_dates_match.group(4))
+            now = datetime.now(JST)
             year = now.year
+            today_naive = now.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None)
+
+            this_year_date1_naive = datetime(year, month1, day1)
+            year1 = year + 1 if this_year_date1_naive < today_naive else year
+            date1 = JST.localize(datetime(year1, month1, day1))
+
+            this_year_date2_naive = datetime(year, month2, day2)
+            year2 = year + 1 if this_year_date2_naive < today_naive else year
+            date2 = JST.localize(datetime(year2, month2, day2))
             
-            # 最初の日付の年を決定
-            this_year_date1_naive = datetime(year, month1, day1, 0, 0, 0)
-            today_naive = now.replace(hour=0, minute=0, second=0, microsecond=0).replace(tzinfo=None)
-            if this_year_date1_naive < today_naive:
-                year += 1
-            
-            # 2番目の日付の年を決定（最初の日付より前なら翌年）
-            this_year_date2_naive = datetime(year, month2, day2, 0, 0, 0)
-            this_year_date1_naive = datetime(year, month1, day1, 0, 0, 0)
-            if this_year_date2_naive < this_year_date1_naive:
-                year += 1
-            
-            start_time = JST.localize(datetime(year, month1, day1, 0, 0, 0))
-            end_time = JST.localize(datetime(year, month2, day2, 23, 59, 59, 999999))
-            logger.debug(f"[DEBUG] 複数日パターン return: start_time={start_time}, end_time={end_time}")
-            return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True}
+            logger.debug(f"[DEBUG] 複数日パターン return: dates={[date1, date2]}")
+            return {'dates': [date1, date2], 'is_time_range': False, 'is_multiple_days': True}
         # --- 月日指定パターンを最優先で抽出 ---
         m = re.search(r'(\d{1,2})[\/月](\d{1,2})(?:日)?(?=\D|$)', message)
         if m:

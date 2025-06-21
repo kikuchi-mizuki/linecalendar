@@ -110,6 +110,19 @@ async def handle_message(user_id: str, message: str, reply_token: str):
         if operation == 'add':
             await handle_add_event(result, calendar_manager, user_id, reply_token)
         elif operation == 'read':
+            # 複数日指定の場合
+            if result.get('is_multiple_days'):
+                dates = result.get('dates', [])
+                all_events = []
+                for date in dates:
+                    start_of_day = date.replace(hour=0, minute=0, second=0, microsecond=0)
+                    end_of_day = date.replace(hour=23, minute=59, second=59, microsecond=999999)
+                    events = await calendar_manager.get_events(start_of_day, end_of_day)
+                    all_events.extend(events)
+                msg = format_event_list(all_events, dates=dates)
+                await reply_text(reply_token, msg)
+                return
+
             # 日付範囲の取得
             start_time = result.get('start_time')
             end_time = result.get('end_time')
@@ -123,7 +136,7 @@ async def handle_message(user_id: str, message: str, reply_token: str):
                 end_time = start_time.replace(hour=23, minute=59, second=59, microsecond=999999)
             
             events = await calendar_manager.get_events(start_time, end_time)
-            msg = format_event_list(events, start_time, end_time)
+            msg = format_event_list(events, start_time=start_time, end_time=end_time)
             await reply_text(reply_token, msg)
         elif operation == 'delete':
             await handle_delete_event(result, calendar_manager, user_id, reply_token)
@@ -201,51 +214,57 @@ async def handle_message(user_id: str, message: str, reply_token: str):
         logger.error(traceback.format_exc())
         await reply_text(reply_token, "エラーが発生しました。しばらく経ってから再度お試しください。")
 
-def format_event_list(events: List[Dict], start_time: datetime = None, end_time: datetime = None) -> str:
+def format_event_list(events: List[Dict], start_time: datetime = None, end_time: datetime = None, dates: List[datetime] = None) -> str:
     def border():
         return '━━━━━━━━━━'
     lines = []
     date_list = []
-    if start_time and end_time:
-        current = start_time
-        while current <= end_time:
+
+    if dates:
+        date_list = sorted(list(set(d.date() for d in dates)))
+    elif start_time and end_time:
+        current = start_time.date()
+        while current <= end_time.date():
             date_list.append(current)
             current += timedelta(days=1)
     elif start_time:
-        date_list.append(start_time)
+        date_list.append(start_time.date())
     else:
+        # イベントから日付リストを作成
+        event_dates = set()
         for event in events:
-            start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date'))
-            if start:
-                date = datetime.fromisoformat(start.replace('Z', '+00:00')).date()
-                if date not in date_list:
-                    date_list.append(date)
-    for date in date_list:
-        if isinstance(date, datetime):
-            date_str = date.strftime('%Y/%m/%d (%a)')
-            date_key = date.strftime('%Y/%m/%d (%a)')
-        else:
-            date_str = date.strftime('%Y/%m/%d (%a)')
-            date_key = date.strftime('%Y/%m/%d (%a)')
+            start_str = event.get('start', {}).get('dateTime', event.get('start', {}).get('date'))
+            if start_str:
+                dt = datetime.fromisoformat(start_str.replace('Z', '+00:00')).astimezone(JST)
+                event_dates.add(dt.date())
+        date_list = sorted(list(event_dates))
+
+    for d in date_list:
+        date_str = d.strftime('%Y/%m/%d (%a)')
         lines.append(f'📅 {date_str}')
         lines.append(border())
         day_events = []
         for event in events:
-            start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date'))
-            if start:
-                event_date = datetime.fromisoformat(start.replace('Z', '+00:00')).strftime('%Y/%m/%d (%a)')
-                if event_date == date_key:
+            start_str = event.get('start', {}).get('dateTime', event.get('start', {}).get('date'))
+            if start_str:
+                event_date = datetime.fromisoformat(start_str.replace('Z', '+00:00')).astimezone(JST).date()
+                if event_date == d:
                     day_events.append(event)
+        
         if day_events:
-            for i, event in enumerate(day_events, 1):
+            sorted_events = sorted(day_events, key=lambda x: x.get('start', {}).get('dateTime', x.get('start', {}).get('date')))
+            for i, event in enumerate(sorted_events, 1):
                 summary = event.get('summary', '（タイトルなし）')
                 start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date'))
                 end = event.get('end', {}).get('dateTime', event.get('end', {}).get('date'))
                 if start and end:
-                    start_dt = datetime.fromisoformat(start.replace('Z', '+00:00'))
-                    end_dt = datetime.fromisoformat(end.replace('Z', '+00:00'))
-                    lines.append(f"{i}. {summary}")
-                    lines.append(f"⏰ {start_dt.strftime('%H:%M')}～{end_dt.strftime('%H:%M')}")
+                    start_dt = datetime.fromisoformat(start.replace('Z', '+00:00')).astimezone(JST)
+                    end_dt = datetime.fromisoformat(end.replace('Z', '+00:00')).astimezone(JST)
+                    if start_dt.date() == end_dt.date() and start_dt.time() == time(0, 0) and end_dt.time() == time(0, 0):
+                        lines.append(f"{i}. {summary}（終日）")
+                    else:
+                        lines.append(f"{i}. {summary}")
+                        lines.append(f"⏰ {start_dt.strftime('%H:%M')}～{end_dt.strftime('%H:%M')}")
                     lines.append("")
                 else:
                     lines.append(f"{i}. {summary}（終日）")
@@ -253,7 +272,13 @@ def format_event_list(events: List[Dict], start_time: datetime = None, end_time:
         else:
             lines.append("予定はありません。")
             lines.append("")
-        lines.append(border())
+        if d != date_list[-1]:
+             lines.append(border())
+    
+    # 最後のボーダーを削除
+    if lines and lines[-1] == border():
+        lines.pop()
+
     return "\n".join(lines)
 
 def get_user_credentials(user_id: str):
