@@ -623,14 +623,28 @@ class MessageParser:
             datetime_info = extract_datetime_from_message(message)
             print(f"[MessageParser.parse_message] 日時情報: {datetime_info}")
             logger.debug(f"[MessageParser.parse_message] 日時情報: {datetime_info}")
-            result = {
-                'operation_type': operation_type,
-                'title': title,
-                'date': datetime_info.get('start_time'),
-                'start_time': datetime_info.get('start_time'),
-                'end_time': datetime_info.get('end_time'),
-                'is_range': datetime_info.get('is_time_range', False)
-            }
+
+            if datetime_info.get('is_multiple_days'):
+                result = {
+                    'operation_type': operation_type,
+                    'title': title,
+                    'dates': datetime_info.get('dates'),
+                    'is_multiple_days': True,
+                    'date': None,
+                    'start_time': None,
+                    'end_time': None,
+                    'is_range': False
+                }
+            else:
+                result = {
+                    'operation_type': operation_type,
+                    'title': title,
+                    'date': datetime_info.get('start_time'),
+                    'start_time': datetime_info.get('start_time'),
+                    'end_time': datetime_info.get('end_time'),
+                    'is_range': datetime_info.get('is_time_range', False)
+                }
+
             # new_start_time, new_end_timeがあれば追加
             if 'new_start_time' in datetime_info:
                 result['new_start_time'] = datetime_info['new_start_time']

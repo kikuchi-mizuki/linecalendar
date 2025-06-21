@@ -291,6 +291,9 @@ def extract_title(message: str, operation_type: str = None) -> Optional[str]:
     """
     print(f"[extract_title] 開始: message='{message}', operation_type={operation_type}")
     logger.debug(f"[extract_title] 開始: message='{message}', operation_type={operation_type}")
+
+    if operation_type == 'read':
+        return None
     
     try:
         # メッセージを正規化（カタカナを保持）
