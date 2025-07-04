@@ -103,6 +103,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
     まずルールベース抽出を試行し、失敗した場合はGPT補助機能を使用
     """
     try:
+        logger.debug(f"[DEBUG][extract_datetime_from_message] message={message}, operation_type={operation_type}")
         now = datetime.now(JST)
         logger.debug(f"[now] サーバー現在日時: {now}")
         
@@ -110,6 +111,7 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
         # 例: "空き時間教えて\n\n7/4 8:00〜9:00\n7/5 12:00〜14:00"
         # ただし、予定追加時（operation_type='add'）の場合は、単一時間範囲を複数時間範囲として扱わない
         multi_time_ranges = extract_multiple_time_ranges(message)
+        logger.debug(f"[DEBUG][extract_datetime_from_message] multi_time_ranges={multi_time_ranges}")
         if multi_time_ranges and operation_type != 'add':
             logger.debug(f"[extract_datetime_from_message] 複数時間範囲パターン matched: {multi_time_ranges}")
             return {
