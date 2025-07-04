@@ -152,23 +152,8 @@ def format_simple_free_time(free_slots_by_day: dict, specified_ranges: List[Dict
         else:
             simple_date = date_str
         
-        # 指定された時間範囲がある場合は、その範囲を表示
-        if specified_ranges:
-            # この日付に対応する時間範囲を探す
-            matching_range = None
-            for time_range in specified_ranges:
-                if time_range['date'].strftime('%Y年%m月%d日') in date_str:
-                    matching_range = time_range
-                    break
-            
-            if matching_range:
-                start_time = matching_range['start_time']
-                end_time = matching_range['end_time']
-                lines.append(f"{simple_date} {start_time.strftime('%-H:%M')}〜{end_time.strftime('%-H:%M')}内の空き時間:")
-            else:
-                lines.append(simple_date)
-        else:
-            lines.append(simple_date)
+        # 日付を表示（指定された時間範囲があっても、シンプルに日付のみ表示）
+        lines.append(simple_date)
         
         for slot in slots:
             start_time = slot['start'].strftime('%-H:%M') if hasattr(slot['start'], 'strftime') else str(slot['start'])
