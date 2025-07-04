@@ -675,11 +675,7 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
 
         # 操作タイプごとの処理
         if operation_type == 'add':
-            lines = normalized_message.splitlines()
-            if len(lines) >= 2:
-                datetime_info = extract_datetime_from_message(lines[0], operation_type)
-            else:
-                datetime_info = extract_datetime_from_message(normalized_message, operation_type)
+            datetime_info = extract_datetime_from_message(normalized_message, operation_type)
             if not datetime_info or not datetime_info.get('start_time'):
                 return {'success': False, 'error': '日時情報が特定できません。'}
             
