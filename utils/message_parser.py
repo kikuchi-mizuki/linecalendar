@@ -2,7 +2,7 @@ import re
 from datetime import datetime, timedelta, time
 import pytz
 import logging
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 import jaconv
 import traceback
 
@@ -106,6 +106,17 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
         now = datetime.now(JST)
         logger.debug(f"[now] サーバー現在日時: {now}")
         
+        # 複数行の時間範囲指定パターンを最優先で抽出
+        # 例: "空き時間教えて\n\n7/4 8:00〜9:00\n7/5 12:00〜14:00"
+        multi_time_ranges = extract_multiple_time_ranges(message)
+        if multi_time_ranges:
+            logger.debug(f"[extract_datetime_from_message] 複数時間範囲パターン matched: {multi_time_ranges}")
+            return {
+                'time_ranges': multi_time_ranges,
+                'is_multiple_ranges': True,
+                'extraction_method': 'rule_based'
+            }
+        
         # まずルールベース抽出を試行
         rule_based_result = _extract_datetime_rule_based(message, now, operation_type)
         
@@ -133,6 +144,86 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
     except Exception as e:
         logger.error(f"extract_datetime_from_message error: {str(e)}")
         return {'start_time': None, 'end_time': None, 'is_time_range': False, 'extraction_method': 'error'}
+
+def extract_multiple_time_ranges(message: str) -> List[Dict]:
+    """
+    メッセージから複数の時間範囲を抽出する
+    
+    Args:
+        message: 解析対象のメッセージ
+        
+    Returns:
+        時間範囲のリスト [{'date': datetime, 'start_time': time, 'end_time': time}, ...]
+    """
+    try:
+        # 行に分割
+        lines = [line.strip() for line in message.splitlines() if line.strip()]
+        
+        time_ranges = []
+        now = datetime.now(JST)
+        
+        for line in lines:
+            # 日付と時間範囲のパターンを検索
+            # 例: "7/4 8:00〜9:00", "7月4日 14:00-16:00"
+            patterns = [
+                r'(\d{1,2})[\/月](\d{1,2})日?\s+(\d{1,2}):(\d{2})[〜~～-](\d{1,2}):(\d{2})',
+                r'(\d{1,2})[\/月](\d{1,2})日?\s+(\d{1,2})時(\d{2})分?[〜~～-](\d{1,2})時(\d{2})分?',
+                r'(\d{1,2})[\/月](\d{1,2})日?\s+(\d{1,2})時[〜~～-](\d{1,2})時',
+            ]
+            
+            for pattern in patterns:
+                match = re.search(pattern, line)
+                if match:
+                    groups = match.groups()
+                    
+                    if len(groups) == 6:  # "7/4 8:00〜9:00" パターン
+                        month = int(groups[0])
+                        day = int(groups[1])
+                        start_hour = int(groups[2])
+                        start_minute = int(groups[3])
+                        end_hour = int(groups[4])
+                        end_minute = int(groups[5])
+                    elif len(groups) == 6:  # "7/4 8時30分〜9時30分" パターン
+                        month = int(groups[0])
+                        day = int(groups[1])
+                        start_hour = int(groups[2])
+                        start_minute = int(groups[3])
+                        end_hour = int(groups[4])
+                        end_minute = int(groups[5])
+                    elif len(groups) == 4:  # "7/4 8時〜9時" パターン
+                        month = int(groups[0])
+                        day = int(groups[1])
+                        start_hour = int(groups[2])
+                        start_minute = 0
+                        end_hour = int(groups[3])
+                        end_minute = 0
+                    else:
+                        continue
+                    
+                    # 年を決定
+                    year = now.year
+                    if (month < now.month) or (month == now.month and day < now.day):
+                        year += 1
+                    
+                    # 日付と時刻を構築
+                    date_obj = JST.localize(datetime(year, month, day))
+                    start_time = time(start_hour, start_minute)
+                    end_time = time(end_hour, end_minute)
+                    
+                    time_ranges.append({
+                        'date': date_obj,
+                        'start_time': start_time,
+                        'end_time': end_time
+                    })
+                    
+                    logger.debug(f"[extract_multiple_time_ranges] 抽出: {date_obj.date()} {start_time}〜{end_time}")
+                    break
+        
+        return time_ranges
+        
+    except Exception as e:
+        logger.error(f"extract_multiple_time_ranges error: {str(e)}")
+        return []
 
 def _extract_datetime_rule_based(message: str, now: datetime, operation_type: str = None) -> Dict:
     """

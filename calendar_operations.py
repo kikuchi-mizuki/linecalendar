@@ -1259,3 +1259,46 @@ class CalendarManager:
             logger.error(f"空き時間の取得中にエラーが発生: {str(e)}")
             logger.error(traceback.format_exc())
             return [] 
+
+    async def get_free_time_slots_in_specified_ranges(self, time_ranges: List[Dict], min_duration: int = 30) -> Dict[str, List[Dict]]:
+        """
+        指定された時間範囲内での空き時間を取得する
+        
+        Args:
+            time_ranges: 時間範囲のリスト [{'date': datetime, 'start_time': time, 'end_time': time}, ...]
+            min_duration: 最小空き時間（分）
+            
+        Returns:
+            Dict[str, List[Dict]]: {日付文字列: 空き時間リスト}
+        """
+        result = {}
+        
+        for time_range in time_ranges:
+            date_obj = time_range['date']
+            start_time = time_range['start_time']
+            end_time = time_range['end_time']
+            
+            # 指定された時間範囲の開始と終了をdatetimeに変換
+            range_start = date_obj.replace(
+                hour=start_time.hour, 
+                minute=start_time.minute, 
+                second=0, 
+                microsecond=0
+            )
+            range_end = date_obj.replace(
+                hour=end_time.hour, 
+                minute=end_time.minute, 
+                second=0, 
+                microsecond=0
+            )
+            
+            # その時間範囲内での空き時間を取得
+            free_slots = await self.get_free_time_slots_in_range(range_start, range_end, min_duration)
+            
+            # 日付文字列を生成
+            day_str = date_obj.strftime('%Y年%m月%d日 (%a)')
+            result[day_str] = free_slots
+            
+            logger.info(f"[get_free_time_slots_in_specified_ranges] {day_str} {start_time}〜{end_time}: {len(free_slots)}件の空き時間")
+        
+        return result 

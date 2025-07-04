@@ -151,6 +151,23 @@ async def handle_message(event):
                 return
             try:
                 calendar_manager = get_calendar_manager(user_id)
+                
+                # 日時抽出を実行
+                from utils.message_parser import extract_datetime_from_message
+                datetime_info = extract_datetime_from_message(message_text)
+                
+                # 複数時間範囲が指定されている場合
+                if datetime_info.get('is_multiple_ranges') and datetime_info.get('time_ranges'):
+                    logger.info(f"[handle_message] 複数時間範囲での空き時間検索: {datetime_info['time_ranges']}")
+                    free_slots_by_day = await calendar_manager.get_free_time_slots_in_specified_ranges(
+                        datetime_info['time_ranges']
+                    )
+                    msg = format_simple_free_time(free_slots_by_day, datetime_info['time_ranges'])
+                    await reply_text(reply_token, msg)
+                    logger.info(f"[handle_message] 指定時間範囲内空き時間案内送信: user_id={user_id}")
+                    return
+                
+                # 従来の単一日付での空き時間検索
                 # 現在の日付をJSTで取得
                 JST = pytz.timezone('Asia/Tokyo')
                 today = datetime.now(JST)

@@ -100,11 +100,12 @@ def format_free_time_calendar(free_slots_by_day: Dict[str, List[Dict]]) -> str:
         lines.append(border())
     return "\n".join(lines)
 
-def format_simple_free_time(free_slots_by_day: dict) -> str:
+def format_simple_free_time(free_slots_by_day: dict, specified_ranges: List[Dict] = None) -> str:
     """
     シンプルな空き時間表示（例: 6/18（水）\n・8:00〜22:00）
     Args:
         free_slots_by_day (dict): {日付文字列: 空き時間リスト}
+        specified_ranges (List[Dict], optional): 指定された時間範囲のリスト
     Returns:
         str: 整形された空き時間情報
     """
@@ -116,7 +117,25 @@ def format_simple_free_time(free_slots_by_day: dict) -> str:
     
     # すべての日に空き時間がない場合
     if not days_with_slots:
-        return "空き時間はありません"
+        if specified_ranges:
+            # 指定された時間範囲がある場合は、その範囲内に空き時間がないことを明示
+            lines.append("指定された時間範囲内に空き時間はありません")
+            for time_range in specified_ranges:
+                date_obj = time_range['date']
+                start_time = time_range['start_time']
+                end_time = time_range['end_time']
+                m = re.match(r'(\d{4})年(\d{2})月(\d{2})日', date_obj.strftime('%Y年%m月%d日'))
+                if m:
+                    month = int(m.group(2))
+                    day = int(m.group(3))
+                    youbi = WEEKDAYS[date_obj.weekday()]
+                    simple_date = f"{month}/{day}（{youbi}）"
+                else:
+                    simple_date = date_obj.strftime('%m/%d')
+                lines.append(f"・{simple_date} {start_time.strftime('%-H:%M')}〜{end_time.strftime('%-H:%M')}")
+        else:
+            lines.append("空き時間はありません")
+        return "\n".join(lines)
     
     # 空き時間がある日のみを表示
     for date_str, slots in days_with_slots.items():
@@ -132,7 +151,25 @@ def format_simple_free_time(free_slots_by_day: dict) -> str:
             simple_date = f"{month}/{day}（{youbi}）"
         else:
             simple_date = date_str
-        lines.append(simple_date)
+        
+        # 指定された時間範囲がある場合は、その範囲を表示
+        if specified_ranges:
+            # この日付に対応する時間範囲を探す
+            matching_range = None
+            for time_range in specified_ranges:
+                if time_range['date'].strftime('%Y年%m月%d日') in date_str:
+                    matching_range = time_range
+                    break
+            
+            if matching_range:
+                start_time = matching_range['start_time']
+                end_time = matching_range['end_time']
+                lines.append(f"{simple_date} {start_time.strftime('%-H:%M')}〜{end_time.strftime('%-H:%M')}内の空き時間:")
+            else:
+                lines.append(simple_date)
+        else:
+            lines.append(simple_date)
+        
         for slot in slots:
             start_time = slot['start'].strftime('%-H:%M') if hasattr(slot['start'], 'strftime') else str(slot['start'])
             end_time = slot['end'].strftime('%-H:%M') if hasattr(slot['end'], 'strftime') else str(slot['end'])
