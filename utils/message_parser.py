@@ -108,12 +108,42 @@ def extract_datetime_from_message(message: str, operation_type: str = None) -> D
         
         # 複数行の時間範囲指定パターンを最優先で抽出
         # 例: "空き時間教えて\n\n7/4 8:00〜9:00\n7/5 12:00〜14:00"
+        # ただし、予定追加時（operation_type='add'）の場合は、単一時間範囲を複数時間範囲として扱わない
         multi_time_ranges = extract_multiple_time_ranges(message)
-        if multi_time_ranges:
+        if multi_time_ranges and operation_type != 'add':
             logger.debug(f"[extract_datetime_from_message] 複数時間範囲パターン matched: {multi_time_ranges}")
             return {
                 'time_ranges': multi_time_ranges,
                 'is_multiple_ranges': True,
+                'extraction_method': 'rule_based'
+            }
+        
+        # 予定追加時で単一時間範囲が検出された場合、通常の形式に変換
+        if multi_time_ranges and operation_type == 'add' and len(multi_time_ranges) == 1:
+            time_range = multi_time_ranges[0]
+            date_obj = time_range['date']
+            start_time_obj = time_range['start_time']
+            end_time_obj = time_range['end_time']
+            
+            # datetimeに変換
+            start_time = date_obj.replace(
+                hour=start_time_obj.hour,
+                minute=start_time_obj.minute,
+                second=0,
+                microsecond=0
+            )
+            end_time = date_obj.replace(
+                hour=end_time_obj.hour,
+                minute=end_time_obj.minute,
+                second=0,
+                microsecond=0
+            )
+            
+            logger.debug(f"[extract_datetime_from_message] 予定追加用に変換: start_time={start_time}, end_time={end_time}")
+            return {
+                'start_time': start_time,
+                'end_time': end_time,
+                'is_time_range': True,
                 'extraction_method': 'rule_based'
             }
         
