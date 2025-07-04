@@ -656,7 +656,7 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
         # 操作タイプが特定できない場合、内容から推論
         if not operation_type:
             # 日時やタイトルを抽出して推論
-            datetime_info = extract_datetime_from_message(normalized_message)
+            datetime_info = extract_datetime_from_message(normalized_message, operation_type)
             title = extract_title(normalized_message)
             logger.debug(f"[parse_message] タイトル抽出結果: {title}")
             extracted = {}
@@ -716,7 +716,7 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
         
         elif operation_type == 'read':
             # 日時範囲を抽出
-            datetime_info = extract_datetime_from_message(normalized_message)
+            datetime_info = extract_datetime_from_message(normalized_message, operation_type)
             if datetime_info and datetime_info.get('start_time'):
                 return {
                     'success': True,
@@ -739,7 +739,7 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
         
         elif operation_type == 'cancel':
             # キャンセル処理
-            datetime_info = extract_datetime_from_message(normalized_message)
+            datetime_info = extract_datetime_from_message(normalized_message, operation_type)
             if datetime_info and datetime_info.get('start_time'):
                 return {
                     'success': True,
