@@ -313,6 +313,70 @@ def _extract_datetime_rule_based(message: str, now: datetime, operation_type: st
             start_time = start_time.replace(hour=0, minute=0, second=0, microsecond=0)
             end_time = start_time + timedelta(days=6, hours=23, minutes=59, seconds=59, microseconds=999999)
             return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True, 'extraction_method': 'rule_based'}
+        
+        # --- 相対日付表現パターンを追加 ---
+        # 「一昨日」（「昨日」より先に配置）
+        if re.search(r'一昨日', message):
+            logger.debug(f"[_extract_datetime_rule_based] 一昨日 matched: message={message}")
+            day_before_yesterday = now - timedelta(days=2)
+            start_time = day_before_yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_time = day_before_yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
+            return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True, 'extraction_method': 'rule_based'}
+        
+        # 「昨日」
+        if re.search(r'昨日', message):
+            logger.debug(f"[_extract_datetime_rule_based] 昨日 matched: message={message}")
+            yesterday = now - timedelta(days=1)
+            start_time = yesterday.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_time = yesterday.replace(hour=23, minute=59, second=59, microsecond=999999)
+            return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True, 'extraction_method': 'rule_based'}
+        
+        # 「明日」
+        if re.search(r'明日', message):
+            logger.debug(f"[_extract_datetime_rule_based] 明日 matched: message={message}")
+            tomorrow = now + timedelta(days=1)
+            start_time = tomorrow.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_time = tomorrow.replace(hour=23, minute=59, second=59, microsecond=999999)
+            return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True, 'extraction_method': 'rule_based'}
+        
+        # 「明後日」
+        if re.search(r'明後日', message):
+            logger.debug(f"[_extract_datetime_rule_based] 明後日 matched: message={message}")
+            day_after_tomorrow = now + timedelta(days=2)
+            start_time = day_after_tomorrow.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_time = day_after_tomorrow.replace(hour=23, minute=59, second=59, microsecond=999999)
+            return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True, 'extraction_method': 'rule_based'}
+        
+        # 「今日」
+        if re.search(r'今日', message):
+            logger.debug(f"[_extract_datetime_rule_based] 今日 matched: message={message}")
+            start_time = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_time = now.replace(hour=23, minute=59, second=59, microsecond=999999)
+            return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True, 'extraction_method': 'rule_based'}
+        
+        # 「今日から1週間」
+        if re.search(r'今日から1週間', message):
+            logger.debug(f"[_extract_datetime_rule_based] 今日から1週間 matched: message={message}")
+            start_time = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_time = (start_time + timedelta(days=6)).replace(hour=23, minute=59, second=59, microsecond=999999)
+            return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True, 'extraction_method': 'rule_based'}
+        
+        # 「今週」
+        if re.search(r'今週', message):
+            logger.debug(f"[_extract_datetime_rule_based] 今週 matched: message={message}")
+            start_time = now - timedelta(days=now.weekday())
+            start_time = start_time.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_time = start_time + timedelta(days=6, hours=23, minutes=59, seconds=59, microseconds=999999)
+            return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True, 'extraction_method': 'rule_based'}
+        
+        # 「来週」
+        if re.search(r'来週', message):
+            logger.debug(f"[_extract_datetime_rule_based] 来週 matched: message={message}")
+            start_time = now - timedelta(days=now.weekday()) + timedelta(days=7)
+            start_time = start_time.replace(hour=0, minute=0, second=0, microsecond=0)
+            end_time = start_time + timedelta(days=6, hours=23, minutes=59, seconds=59, microseconds=999999)
+            return {'start_time': start_time, 'end_time': end_time, 'is_time_range': True, 'extraction_method': 'rule_based'}
+        
         # --- 3個以上の複数日指定パターンを最優先で抽出（例：6/21と6/22と6/23の予定） ---
         multiple_dates_all_pattern = r'((?:\d{1,2}[\/月]\d{1,2}(?:日)?)(?:\s*と\s*\d{1,2}[\/月]\d{1,2}(?:日)?)+)'
         multiple_dates_all_match = re.search(multiple_dates_all_pattern, message)
