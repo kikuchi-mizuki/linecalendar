@@ -676,6 +676,8 @@ def parse_message(message: str, current_time: datetime = None) -> Dict:
         # 操作タイプごとの処理
         if operation_type == 'add':
             datetime_info = extract_datetime_from_message(normalized_message, operation_type)
+            print(f"[DEBUG][parse_message] datetime_info: {datetime_info}")
+            logger.debug(f"[DEBUG][parse_message] datetime_info: {datetime_info}")
             if not datetime_info or not datetime_info.get('start_time'):
                 return {'success': False, 'error': '日時情報が特定できません。'}
             
