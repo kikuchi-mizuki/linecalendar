@@ -91,6 +91,7 @@ async def handle_message(user_id: str, message: str, reply_token: str):
         parser = MessageParser()
         print(f"[handle_message] MessageParser instance created")
         result = parser.parse_message(message)
+        print(f"[DEBUG][handle_message] result: {result}")
         print(f"[handle_message] after parse_message: result={result}")
         print(f"[handle_message] result['title']: {result.get('title')}")
         print(f"[handle_message] result['title'] type: {type(result.get('title'))}")
