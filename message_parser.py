@@ -620,7 +620,7 @@ class MessageParser:
             print(f"[MessageParser.parse_message] タイトルの型: {type(title)}")
             logger.debug(f"[MessageParser.parse_message] タイトルの型: {type(title)}")
             # extract_datetime_from_messageを1回だけ呼ぶ
-            datetime_info = extract_datetime_from_message(message)
+            datetime_info = extract_datetime_from_message(message, operation_type)
             print(f"[MessageParser.parse_message] 日時情報: {datetime_info}")
             logger.debug(f"[MessageParser.parse_message] 日時情報: {datetime_info}")
 
